@@ -5,6 +5,7 @@
  */
 import { ChangeRequest, githubReviewDecision, HostClient, HostError, HostKind, RemoteInfo, ReviewStatus } from '../hosting/core';
 import { request } from '../hosting/http';
+import { t } from '../i18n';
 
 type Fetch = typeof fetch;
 
@@ -74,12 +75,12 @@ const DAY = 86400;
 
 /** Texto curto para listas: sem markdown pesado, uma linha só. */
 export function shortText(s: string, max = 140): string {
-  const t = (s ?? '')
-    .replace(/```[\s\S]*?```/g, '[código]')
+  const text = (s ?? '')
+    .replace(/```[\s\S]*?```/g, t('[code]'))
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 /** Agrupa: "meus" (autor), "pedem minha revisão", todos os abertos e mesclados nos últimos dias. */
@@ -115,7 +116,7 @@ export function countDiff(diff: string): { additions: number; deletions: number 
   return { additions, deletions };
 }
 
-async function limited<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+async function limited<T, R>(items: T[], n: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let i = 0;
   const worker = async () => {
@@ -244,7 +245,7 @@ export class GitHubPrBrowser implements PrBrowser {
   }
 
   async setDraft(pr: PullRequestInfo, draft: boolean) {
-    if (!pr.nodeId) throw new HostError(0, 'O GitHub não informou o id do PR para trocar o rascunho.');
+    if (!pr.nodeId) throw new HostError(0, t('GitHub did not return the PR id needed to toggle draft.'));
     const mutation = draft
       ? 'mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{isDraft}}}'
       : 'mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}';
@@ -402,7 +403,7 @@ export class ListOnlyPrBrowser implements PrBrowser {
   }
 
   private unsupported(): never {
-    throw new HostError(0, 'Ainda não disponível nesta plataforma; abra no navegador.');
+    throw new HostError(0, t('Not available on this platform yet; open it in the browser.'));
   }
 
   async files(): Promise<PrFile[]> {

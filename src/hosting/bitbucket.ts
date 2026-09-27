@@ -5,6 +5,7 @@
 import type { Issue, IssueScope, NewIssue } from '../issues/core';
 import { ChangeRequest, HostClient, HostError, NewChangeRequest, RemoteInfo, ReviewStatus, bitbucketCloudReview, bitbucketServerReview } from './core';
 import { authHeader, request } from './http';
+import { t } from '../i18n';
 import type { Pipeline, PipelineClient, PipelineJob, PipelineStatus, Workflow } from './pipelines';
 
 type Fetch = typeof fetch;
@@ -122,7 +123,7 @@ export class BitbucketCloudClient extends BitbucketBase implements HostClient {
     try {
       return this.mapIssue(await this.call('POST', `/repositories/${this.repo}/issues`, { title: n.title, content: { raw: n.body }, kind: 'task' }));
     } catch (e) {
-      if (e instanceof HostError && e.status === 404) throw new HostError(404, 'O issue tracker está desativado neste repositório do Bitbucket (Repository settings → Issue tracker).');
+      if (e instanceof HostError && e.status === 404) throw new HostError(404, t('The issue tracker is disabled in this Bitbucket repository (Repository settings → Issue tracker).'));
       throw e;
     }
   }
@@ -181,7 +182,7 @@ export class BitbucketServerClient extends BitbucketBase implements HostClient {
   /** Servlet de identidade do Bitbucket Server: devolve o nome do usuário em texto puro. */
   async whoami() {
     const name = await this.call('GET', `${this.remote.webBase}/plugins/servlet/applinks/whoami`, undefined, true);
-    if (!String(name).trim()) throw new HostError(401, '401: token não identificou nenhum usuário');
+    if (!String(name).trim()) throw new HostError(401, t('401: the token did not identify any user'));
     return String(name).trim();
   }
 
@@ -191,7 +192,7 @@ export class BitbucketServerClient extends BitbucketBase implements HostClient {
   }
 
   async createIssue(): Promise<Issue> {
-    throw new HostError(0, 'O Bitbucket Server não tem issues; conecte o Jira na view Issues.');
+    throw new HostError(0, t('Bitbucket Server has no issues; connect Jira in the Issues view.'));
   }
 }
 
@@ -267,7 +268,7 @@ export class BitbucketCloudPipelines extends BitbucketBase implements PipelineCl
       this.stepOf.set(id, { pipeline: this.uuid(p), step: s.uuid });
       return {
         id,
-        name: s.name ?? `Passo ${i + 1}`,
+        name: s.name ?? t('Step {0}', i + 1),
         status: bitbucketPipelineStatus(s.state?.name, s.state?.result?.name),
         url: p.url,
         durationSec: s.duration_in_seconds ?? undefined,
@@ -285,7 +286,7 @@ export class BitbucketCloudPipelines extends BitbucketBase implements PipelineCl
 
   async log(job: PipelineJob): Promise<string> {
     const s = this.stepOf.get(job.id);
-    if (!s) throw new HostError(0, 'Abra os passos do pipeline antes de ver o log.');
+    if (!s) throw new HostError(0, t('Open the pipeline steps before viewing the log.'));
     return this.call('GET', `/repositories/${this.remote.projectPath}/pipelines/${encodeURIComponent(s.pipeline)}/steps/${encodeURIComponent(s.step)}/log`, undefined, true);
   }
 
@@ -300,7 +301,7 @@ export class BitbucketCloudPipelines extends BitbucketBase implements PipelineCl
   }
 
   async play(): Promise<void> {
-    throw new HostError(0, 'Passos manuais do Bitbucket Pipelines são iniciados pelo navegador.');
+    throw new HostError(0, t('Bitbucket Pipelines manual steps are started in the browser.'));
   }
 }
 
@@ -354,7 +355,7 @@ export class BitbucketServerBuilds extends BitbucketBase implements PipelineClie
   }
 
   private readOnly(): never {
-    throw new HostError(0, 'No Bitbucket Server os builds vêm do servidor de CI (Jenkins, Bamboo…); abra-o pelo link do build.');
+    throw new HostError(0, t('On Bitbucket Server, builds come from the CI server (Jenkins, Bamboo…); open it via the build link.'));
   }
 
   async retry() {

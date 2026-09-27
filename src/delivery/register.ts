@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { commitsIn, rangeOf, RangeId } from '../activity';
 import type { ActivityService } from '../activityPanel';
 import type { Controller } from '../controller';
+import { locale, t } from '../i18n';
 import type { Pipeline } from '../hosting/pipelines';
 import {
   applyRelease,
@@ -88,7 +89,7 @@ export class DeliveryService implements vscode.Disposable {
 
   async openTimeline() {
     if (!this.panel) {
-      this.panel = vscode.window.createWebviewPanel('worktreeGraph.timeline', 'Linha do tempo', vscode.ViewColumn.Active, { enableScripts: true });
+      this.panel = vscode.window.createWebviewPanel('worktreeGraph.timeline', t('Timeline'), vscode.ViewColumn.Active, { enableScripts: true });
       this.panel.iconPath = vscode.Uri.joinPath(this.ctl.ctx.extensionUri, 'media', 'icon.svg');
       this.panel.onDidDispose(() => (this.panel = undefined));
       this.panel.webview.onDidReceiveMessage(async m => {
@@ -112,23 +113,23 @@ export class DeliveryService implements vscode.Disposable {
     const from = now - this.days * 86_400_000;
     const W = 900;
     const X = (ms: number) => Math.max(0, Math.min(W, ((ms - from) / (now - from)) * W));
-    const day = (ms: number) => new Date(ms).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    const full = (ms?: number) => (ms ? new Date(ms).toLocaleString('pt-BR') : '—');
+    const day = (ms: number) => new Date(ms).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit' });
+    const full = (ms?: number) => (ms ? new Date(ms).toLocaleString(locale()) : '—');
     const ticks = Array.from({ length: 7 }, (_, i) => from + ((now - from) * i) / 6);
     const axis = `<svg width="100%" viewBox="0 0 ${W} 22" preserveAspectRatio="none" class="axis">${ticks
-      .map(t => `<line x1="${X(t)}" y1="0" x2="${X(t)}" y2="6" /><text x="${Math.min(W - 30, X(t))}" y="18">${day(t)}</text>`)
+      .map(tk => `<line x1="${X(tk)}" y1="0" x2="${X(tk)}" y2="6" /><text x="${Math.min(W - 30, X(tk))}" y="18">${day(tk)}</text>`)
       .join('')}</svg>`;
     const body = rows
       .map(r => {
         const start = Math.max(from, r.born ?? r.commits[0] ?? r.last);
         const end = r.merged ?? (r.worktree ? now : r.last);
         const tip = [
-          `nasceu: ${full(r.born)}`,
-          `${r.commits.length} commit(s) fora da base`,
-          r.worktreeCreated ? `worktree criada: ${full(r.worktreeCreated)}` : '',
-          r.prRef ? `${r.prRef} ${r.prState ?? ''}${r.prOpened ? ` · aberto ${full(r.prOpened)}` : ''}` : '',
-          r.approved ? 'aprovado' : '',
-          r.merged ? `mesclada: ${full(r.merged)}` : r.worktree ? 'worktree ativa' : 'worktree removida / sem worktree',
+          t('born: {0}', full(r.born)),
+          t('{0} commit(s) outside the base', r.commits.length),
+          r.worktreeCreated ? t('worktree created: {0}', full(r.worktreeCreated)) : '',
+          r.prRef ? `${r.prRef} ${r.prState ?? ''}${r.prOpened ? ` · ${t('opened {0}', full(r.prOpened))}` : ''}` : '',
+          r.approved ? t('approved') : '',
+          r.merged ? t('merged: {0}', full(r.merged)) : r.worktree ? t('active worktree') : t('worktree removed / no worktree'),
         ]
           .filter(Boolean)
           .join('\n');
@@ -145,7 +146,7 @@ export class DeliveryService implements vscode.Disposable {
       })
       .join('');
     const nonce = crypto.randomBytes(12).toString('base64');
-    this.panel.webview.html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    this.panel.webview.html = `<!DOCTYPE html><html lang="${locale()}"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
 body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:0 16px 24px;font-size:13px}
@@ -162,12 +163,12 @@ svg{display:block;height:22px}.axis line{stroke:var(--vscode-descriptionForegrou
 .tag{font-size:10px;border:1px solid var(--vscode-widget-border,#555);border-radius:3px;padding:0 4px;color:var(--vscode-descriptionForeground)}.ok{color:#4fbf7a}
 .legend{color:var(--vscode-descriptionForeground);font-size:11px}.empty{color:var(--vscode-descriptionForeground);padding:24px 0}
 </style></head><body>
-<header><h1>Linha do tempo</h1>
-${[7, 30, 90].map(d => `<button data-days="${d}" class="${d === this.days ? 'on' : ''}">${d} dias</button>`).join('')}
-<input id="pat" placeholder="Filtrar branches (ex.: ai/*)" value="${esc(this.pattern)}" />
+<header><h1>${esc(t('Timeline'))}</h1>
+${[7, 30, 90].map(d => `<button data-days="${d}" class="${d === this.days ? 'on' : ''}">${esc(t('{0} days', d))}</button>`).join('')}
+<input id="pat" placeholder="${esc(t('Filter branches (e.g. {0})', 'ai/*'))}" value="${esc(this.pattern)}" />
 <button id="ref">↻</button>
-<span class="legend">● commit · ▮ PR/MR aberto · ◆ mesclado · barra azul: worktree ativa, verde: mesclada</span></header>
-${rows.length ? `<table><tr><td></td><td>${axis}</td></tr>${body}</table>` : '<div class="empty">Nenhuma branch com atividade no período.</div>'}
+<span class="legend">${esc(t('● commit · ▮ PR/MR opened · ◆ merged · blue bar: active worktree, green: merged'))}</span></header>
+${rows.length ? `<table><tr><td></td><td>${axis}</td></tr>${body}</table>` : `<div class="empty">${esc(t('No branch with activity in the period.'))}</div>`}
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 document.querySelectorAll('[data-days]').forEach(b => b.onclick = () => vscode.postMessage({ action: 'days', value: b.dataset.days }));
@@ -208,9 +209,9 @@ document.querySelectorAll('tr[data-branch]').forEach(tr => tr.onclick = () => vs
     });
     const mer = await repo.run(['log', '--merges', '--first-parent', s.baseRef, `--since=${new Date(range.from).toISOString()}`, `--until=${new Date(range.to).toISOString()}`, '--format=%x1e%H%x1f%at%x1f%P%x1f%s%x1f%b']);
     const merged = mer.code === 0 ? parseMergeLog(mer.stdout) : [];
-    const usdTotal = act.costs.some(c => c.usd !== undefined) ? act.costs.reduce((t, c) => t + (c.usd ?? 0), 0) : undefined;
+    const usdTotal = act.costs.some(c => c.usd !== undefined) ? act.costs.reduce((sum, c) => sum + (c.usd ?? 0), 0) : undefined;
     const md = renderReport({
-      title: `Relatório de ${range.label}`,
+      title: t('Report for {0}', range.label),
       repo: s.repoName,
       base: s.base,
       generatedAt: Date.now(),
@@ -227,36 +228,40 @@ document.querySelectorAll('tr[data-branch]').forEach(tr => tr.onclick = () => vs
   async openReport() {
     const pick = await vscode.window.showQuickPick(
       [
-        { label: 'Hoje', id: 'today' as RangeId },
-        { label: 'Ontem', id: 'yesterday' as RangeId },
-        { label: 'Últimos 7 dias', id: 'week' as RangeId },
+        { label: t('Today'), id: 'today' as RangeId },
+        { label: t('Yesterday'), id: 'yesterday' as RangeId },
+        { label: t('Last 7 days'), id: 'week' as RangeId },
       ],
-      { title: 'Relatório de qual período?' },
+      { title: t('Report for which period?') },
     );
     if (!pick) return;
-    const md = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Montando o relatório…' }, () => this.report(pick.id));
+    const md = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Building the report…') }, () => this.report(pick.id));
     const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: md });
     await vscode.window.showTextDocument(doc, { preview: false });
-    const actions = ['Copiar', 'Salvar em docs/relatorios', ...(this.ctl.cfg().get('report.agentSummary', false) ? ['✦ Redigir resumo com o agente'] : [])];
-    const go = await vscode.window.showInformationMessage('Relatório pronto.', ...actions);
-    if (go === 'Copiar') await vscode.env.clipboard.writeText(doc.getText());
-    if (go === 'Salvar em docs/relatorios') {
+    const copy = t('Copy');
+    const save = t('Save to {0}', 'docs/relatorios');
+    const summarize = t('✦ Write a summary with the agent');
+    const actions = [copy, save, ...(this.ctl.cfg().get('report.agentSummary', false) ? [summarize] : [])];
+    const go = await vscode.window.showInformationMessage(t('Report ready.'), ...actions);
+    if (go === copy) await vscode.env.clipboard.writeText(doc.getText());
+    if (go === save) {
       const d = new Date();
       const name = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.md`;
       const file = path.join(this.ctl.repo!.root, 'docs', 'relatorios', name);
       if (fs.existsSync(file)) {
-        const ok = await vscode.window.showWarningMessage(`${name} já existe.`, { modal: true }, 'Sobrescrever');
-        if (!ok) return;
+        const overwrite = t('Overwrite');
+        const ok = await vscode.window.showWarningMessage(t('{0} already exists.', name), { modal: true }, overwrite);
+        if (ok !== overwrite) return;
       }
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, doc.getText());
       await vscode.window.showTextDocument(vscode.Uri.file(file));
     }
-    if (go?.startsWith('✦')) {
+    if (go === summarize) {
       const branch = this.ctl.state?.worktrees.find(w => w.isMain)?.branch;
       await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', {
         branch,
-        prompt: `Redija um resumo curto (5 a 10 linhas, pt-BR, para um sócio ou cliente) do relatório abaixo. Não altere arquivos.\n\n${doc.getText()}`,
+        prompt: `${t('Write a short summary (5 to 10 lines, for a partner or client) of the report below. Do not change any files.')}\n\n${doc.getText()}`,
       });
     }
   }
@@ -270,7 +275,7 @@ document.querySelectorAll('tr[data-branch]').forEach(tr => tr.onclick = () => vs
     const baseWt = s.worktrees.find(w => w.branch === s.base);
     const cwd = opts.cwd ?? baseWt?.path;
     if (!cwd) {
-      vscode.window.showWarningMessage(`${s.base} não está aberta numa worktree; crie uma para preparar a versão.`);
+      vscode.window.showWarningMessage(t('{0} isn\'t open in a worktree; create one to prepare the release.', s.base));
       return undefined;
     }
     const titles = new Map([...this.ctl.requests.byBranch.values()].map(r => [r.source, r.title]));
@@ -285,10 +290,12 @@ document.querySelectorAll('tr[data-branch]').forEach(tr => tr.onclick = () => vs
     }
 
     const version = await vscode.window.showInputBox({
-      title: `Preparar versão (${plan.entries.length} mudança(s) desde ${plan.lastTag ?? 'o início'})`,
-      prompt: 'Número da versão (sugerido pelo tipo das mudanças: feat → minor, fix → patch, BREAKING → major)',
+      title: plan.lastTag
+        ? t('Prepare release ({0} change(s) since {1})', plan.entries.length, plan.lastTag)
+        : t('Prepare release ({0} change(s) since the beginning)', plan.entries.length),
+      prompt: t('Version number (suggested from the change types: {0})', 'feat → minor, fix → patch, BREAKING → major'),
       value: plan.version,
-      validateInput: v => (/^\d+\.\d+\.\d+([-+].+)?$/.test(v.trim()) ? undefined : 'Use o formato 1.2.3'),
+      validateInput: v => (/^\d+\.\d+\.\d+([-+].+)?$/.test(v.trim()) ? undefined : t('Use the format {0}', '1.2.3')),
     });
     if (!version) return undefined;
     const tag = plan.tag.replace(plan.version, version.trim());
@@ -296,26 +303,34 @@ document.querySelectorAll('tr[data-branch]').forEach(tr => tr.onclick = () => vs
     const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: block });
     await vscode.window.showTextDocument(doc, { preview: false });
     const st = await repo.status(cwd);
+    const apply = t('Write, commit and create tag');
     const go = await vscode.window.showInformationMessage(
-      `Revise/edite o bloco aberto. Gravar no CHANGELOG.md, commitar "Versão ${version}" em ${s.base} e criar a tag ${tag} (local)?`,
-      { modal: true, detail: st.changes ? `⚠ A worktree de ${s.base} tem ${st.changes} alteração(ões) não commitada(s); limpe antes.` : 'Nada é enviado ao remoto sem você pedir.' },
-      ...(st.changes ? [] : ['Gravar, commitar e criar tag']),
+      t('Review/edit the open block. Write it to {0}, commit "{1}" on {2} and create the tag {3} (local)?', 'CHANGELOG.md', t('Version {0}', version), s.base, tag),
+      {
+        modal: true,
+        detail: st.changes
+          ? t('⚠ The {0} worktree has {1} uncommitted change(s); clean it up first.', s.base, st.changes)
+          : t('Nothing is sent to the remote unless you ask.'),
+      },
+      ...(st.changes ? [] : [apply]),
     );
-    if (!go) return plan;
+    if (go !== apply) return plan;
     await applyRelease(repo, cwd, version.trim(), tag, doc.getText());
     this.ctl.scheduleRefresh(50);
-    const next = await vscode.window.showInformationMessage(`Versão ${version} criada: commit e tag ${tag} locais.`, 'Enviar commit e tag…');
-    if (next) {
+    const pushLabel = t('Push commit and tag…');
+    const next = await vscode.window.showInformationMessage(t('Version {0} created: local commit and tag {1}.', version, tag), pushLabel);
+    if (next === pushLabel) {
+      const send = t('Push');
       const ok = await vscode.window.showWarningMessage(
-        `Enviar ${s.base} e a tag ${tag} para o remoto?`,
-        { modal: true, detail: 'Isso publica a versão. A criação de release no GitHub/GitLab fica por sua conta na página do repositório.' },
-        'Enviar',
+        t('Push {0} and the tag {1} to the remote?', s.base, tag),
+        { modal: true, detail: t('This publishes the release. Creating the release on GitHub/GitLab is up to you, on the repository\'s page.') },
+        send,
       );
-      if (ok) {
+      if (ok === send) {
         const remote = this.ctl.cfg().get<string>('remote', 'origin');
         const r = await repo.run(['push', remote, s.base, tag], cwd, 300_000);
-        if (r.code !== 0) vscode.window.showErrorMessage(`O push falhou: ${(r.stderr || r.stdout).trim()}`);
-        else vscode.window.showInformationMessage(`${s.base} e ${tag} enviados para ${remote}.`);
+        if (r.code !== 0) vscode.window.showErrorMessage(t('Push failed: {0}', (r.stderr || r.stdout).trim()));
+        else vscode.window.showInformationMessage(t('{0} and {1} pushed to {2}.', s.base, tag, remote));
       }
     }
     return { ...plan, version: version.trim(), tag };

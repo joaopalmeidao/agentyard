@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { locale, t } from './i18n';
 import { createWorktree } from './actions';
 import { fillTemplate } from './agents';
 import type { Controller } from './controller';
@@ -24,7 +25,7 @@ export function ensureExcluded(commonDir: string) {
   }
   if (text.split(/\r?\n/).some(l => l.trim() === `${REVIEW_DIR}/`)) return;
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}# AgentYard (revisões de agente)\n${REVIEW_DIR}/\n`);
+  fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}# AgentYard (agent reviews)\n${REVIEW_DIR}/\n`);
 }
 
 /**
@@ -57,7 +58,7 @@ export class ReviewService implements vscode.Disposable {
     }
     const label = this.ctl.requests.label;
     const stat = await repo.run(['diff', '--stat', '--stat-width=120', `${base}...${branch}`]);
-    const diffStat = stat.code === 0 ? stat.stdout.trim().split(/\r?\n/).slice(-40).join('\n') : '(não consegui calcular)';
+    const diffStat = stat.code === 0 ? stat.stdout.trim().split(/\r?\n/).slice(-40).join('\n') : t('(could not calculate)');
 
     ensureExcluded(repo.commonDir);
     const dir = path.join(wtPath, REVIEW_DIR);
@@ -67,15 +68,15 @@ export class ReviewService implements vscode.Disposable {
 
     const template = this.ctl.cfg().get<string>('prompts.review', '') || DEFAULT_REVIEW_PROMPT;
     const prompt = fillTemplate(template, {
-      kind: req ? label : 'a branch',
+      kind: req ? label : t('the branch'),
       title: req?.title ?? branch,
-      url: req?.url ?? '(ainda sem PR/MR)',
+      url: req?.url ?? t('(no PR/MR yet)'),
       branch,
       base,
       diffStat,
     });
     await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: wtPath, branch, prompt });
-    vscode.window.setStatusBarMessage(`$(eye) Revisão de ${branch}: o painel abre quando o agente gravar ${REVIEW_DIR}/${REVIEW_FILE}`, 8000);
+    vscode.window.setStatusBarMessage(t('$(eye) Review of {0}: the panel opens when the agent writes {1}', branch, `${REVIEW_DIR}/${REVIEW_FILE}`), 8000);
   }
 
   watch(wtPath: string, branch: string) {
@@ -96,7 +97,7 @@ export class ReviewService implements vscode.Disposable {
       review = parseReviewFile(fs.readFileSync(file, 'utf8'));
     } catch (e) {
       // o agente pode estar no meio da gravação; o próximo evento de alteração tenta de novo
-      this.ctl.log(`Revisão de ${branch}: ${(e as Error).message}`);
+      this.ctl.log(t('Review of {0}: {1}', branch, (e as Error).message));
       return;
     }
     if (!this.panel || this.panel.disposed) this.panel = new ReviewPanel(this.ctl, this);
@@ -106,7 +107,7 @@ export class ReviewService implements vscode.Disposable {
   async post(branch: string, review: ReviewFile) {
     const creds = await this.ctl.requests.credentials(true);
     if (!creds) {
-      vscode.window.showWarningMessage('Sem GitHub/GitLab conectado para postar a revisão.');
+      vscode.window.showWarningMessage(t('No GitHub/GitLab connected to post the review.'));
       return;
     }
     let req = this.request(branch);
@@ -115,15 +116,17 @@ export class ReviewService implements vscode.Disposable {
       req = await client?.findForBranch(branch);
     }
     if (!req || (req.state !== 'open' && req.state !== 'draft')) {
-      vscode.window.showWarningMessage(`${branch} não tem ${this.ctl.requests.label} aberto para receber a revisão.`);
+      vscode.window.showWarningMessage(t('{0} has no open {1} to receive the review.', branch, this.ctl.requests.label));
       return;
     }
     const poster = reviewPoster(creds.remote, creds.token, creds.apiBase);
-    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Postando revisão em ${req.ref}…` }, () => poster.post(req!.id, review));
-    this.ctl.log(`Revisão postada em ${req.ref}: ${r.inline} em linha, ${r.general} no texto geral.`);
+    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Posting review to {0}…', req.ref) }, () => poster.post(req!.id, review));
+    this.ctl.log(t('Review posted to {0}: {1} inline, {2} in the general text.', req.ref, r.inline, r.general));
     const go = await vscode.window.showInformationMessage(
-      `Revisão postada em ${req.ref}: ${r.inline} comentário(s) em linha${r.general ? `, ${r.general} no texto geral (fora das linhas alteradas)` : ''}.`,
-      'Abrir no navegador',
+      r.general
+        ? t('Review posted to {0}: {1} inline comment(s), {2} in the general text (outside the changed lines).', req.ref, r.inline, r.general)
+        : t('Review posted to {0}: {1} inline comment(s).', req.ref, r.inline),
+      t('Open in browser'),
     );
     if (go) vscode.env.openExternal(vscode.Uri.parse(r.url ?? req.url));
   }
@@ -140,7 +143,7 @@ export class ReviewPanel implements vscode.Disposable {
   current?: { wtPath: string; branch: string; review: ReviewFile };
 
   constructor(private readonly ctl: Controller, private readonly svc: ReviewService) {
-    this.panel = vscode.window.createWebviewPanel('worktreeGraph.review', 'Revisão', vscode.ViewColumn.Active, {
+    this.panel = vscode.window.createWebviewPanel('worktreeGraph.review', t('Agent review'), vscode.ViewColumn.Active, {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(ctl.ctx.extensionUri, 'media')],
     });
@@ -151,7 +154,7 @@ export class ReviewPanel implements vscode.Disposable {
 
   show(wtPath: string, branch: string, review: ReviewFile, req?: ChangeRequest) {
     this.current = { wtPath, branch, review };
-    this.panel.title = `Revisão: ${branch}`;
+    this.panel.title = t('Review: {0}', branch);
     this.panel.webview.html = this.html(branch, review, req);
     this.panel.reveal(undefined, true);
   }
@@ -181,20 +184,20 @@ export class ReviewPanel implements vscode.Disposable {
     const rows = r.comments
       .map(
         (c, i) => `<tr>
-          <td><input type="checkbox" data-i="${i}" ${c.severity === 'nit' ? '' : 'checked'} aria-label="Postar comentário ${i + 1}"></td>
+          <td><input type="checkbox" data-i="${i}" ${c.severity === 'nit' ? '' : 'checked'} aria-label="${t('Post comment {0}', i + 1)}"></td>
           <td>${c.severity ? `<span class="chip ${sevCls[c.severity] ?? 'muted'}">${esc(c.severity)}</span>` : ''}</td>
           <td class="p"><a href="#" data-open="${i}">${esc(c.path)}${c.line ? `:${c.line}` : ''}</a><div>${esc(c.body)}</div></td></tr>`,
       )
       .join('');
-    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    return `<!DOCTYPE html><html lang="${locale()}"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${w.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${css}"></head><body class="review-page">
-<header class="toolbar"><div class="title"><span class="repo">Revisão do agente</span> <span class="ref ref-head">${esc(branch)}</span>
-  ${req ? `<span class="muted">${esc(req.ref)} · ${esc(req.title)}</span>` : '<span class="muted">sem PR/MR aberto</span>'}</div>
-  <div class="tools"><button id="post" class="primary" ${req ? '' : 'disabled title="Abra um PR/MR para postar"'}>Postar selecionados no ${host}</button></div></header>
-<div class="verdict ${r.comments.some(c => c.severity === 'bug') ? 'bad' : 'ok'}">${esc(r.summary || 'Sem resumo.')}</div>
-<section><h2>Comentários <span class="count">${r.comments.length}</span><span class="hint">marque o que vai para o ${host}; linhas fora do diff vão no texto geral</span></h2>
-<table class="files review-list">${rows || '<tr><td class="muted">Nenhum comentário: o agente não encontrou problemas.</td></tr>'}</table></section>
+<header class="toolbar"><div class="title"><span class="repo">${t('Agent review')}</span> <span class="ref ref-head">${esc(branch)}</span>
+  ${req ? `<span class="muted">${esc(req.ref)} · ${esc(req.title)}</span>` : `<span class="muted">${t('no open PR/MR')}</span>`}</div>
+  <div class="tools"><button id="post" class="primary" ${req ? '' : `disabled title="${t('Open a PR/MR to post')}"`}>${t('Post selected to {0}', host)}</button></div></header>
+<div class="verdict ${r.comments.some(c => c.severity === 'bug') ? 'bad' : 'ok'}">${esc(r.summary || t('No summary.'))}</div>
+<section><h2>${t('Comments')} <span class="count">${r.comments.length}</span><span class="hint">${t('check what goes to {0}; lines outside the diff go in the general text', host)}</span></h2>
+<table class="files review-list">${rows || `<tr><td class="muted">${t('No comments: the agent found no problems.')}</td></tr>`}</table></section>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 document.addEventListener('click', e => {
@@ -225,7 +228,7 @@ export function registerReview(ctx: vscode.ExtensionContext, ctl: Controller, gu
       withReq.length
         ? withReq.map(r => ({ label: r.source, description: `${r.ref} ${r.title}` }))
         : (ctl.state?.worktrees ?? []).filter(w => w.branch && !w.isBase).map(w => ({ label: w.branch!, description: w.path })),
-      { placeHolder: 'Revisar qual PR/MR (ou branch)?' },
+      { placeHolder: t('Review which PR/MR (or branch)?') },
     );
     return pick?.label;
   };

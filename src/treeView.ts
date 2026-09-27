@@ -7,11 +7,13 @@ import { gitUri } from './diff';
 import { discardEffect, KIND_LABEL, parseNumstat, parseUncommitted, Uncommitted } from './gitops/core';
 import { BranchView, WorktreeView } from './model';
 import { LOG_FORMAT, parseLog } from './summary/core';
+import { t } from './i18n';
 
 type Node = OrphansGroup | WorktreeItem | UncommittedGroup | UncommittedFileItem | CommitsItem | CommitItem | ChangesItem | ChangeItem | DirItem | FileItem | BranchesGroup | BranchItem | TreeEntryItem;
 
 const HIDDEN = new Set(['.git']);
-const STATUS_LABEL: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', '?': 'novo, não rastreado', T: 'tipo alterado' };
+const statusLabel = (s: string): string | undefined =>
+  ({ A: t('added'), M: t('modified'), D: t('deleted'), '?': t('new, untracked'), T: t('type changed') })[s];
 
 /** Último pipeline de uma branch (preenchido pelo provider a partir do estado). */
 let pipelineOf: ((branch: string) => { status: string } | undefined) | undefined;
@@ -41,16 +43,16 @@ export class WorktreeItem extends vscode.TreeItem {
     if (!wt.isBase && wt.behind) parts.push(`↓${wt.behind}`);
     if (!wt.isBase && wt.ahead) parts.push(`↑${wt.ahead}`);
     if (wt.changes) parts.push(`●${wt.changes}`);
-    if (wt.branch && !wt.isBase && !wt.remote.published) parts.push('☁ não publicada');
+    if (wt.branch && !wt.isBase && !wt.remote.published) parts.push(t('☁ unpublished'));
     else if (wt.remote.ahead) parts.push(`☁↑${wt.remote.ahead}`);
     if (wt.operation) parts.push(wt.operation);
-    if (wt.preview?.conflict) parts.push('⚠ conflito');
+    if (wt.preview?.conflict) parts.push(t('⚠ conflict'));
     if (wt.agents.length) parts.push(`✦ ${agentsLabel(wt.agents)}`);
-    if (wt.review) parts.push('✓ revisar');
+    if (wt.review) parts.push(t('✓ review'));
     if (wt.tasks) parts.push(`☰${wt.tasks.waiting + (wt.tasks.running ? 1 : 0)}`);
-    if (wt.overlap) parts.push(`⚠ sobrepõe ${wt.overlap.with.length}`);
-    if (wt.budget) parts.push(wt.budget.level === 'over' ? '$ estourado' : `$ ${wt.budget.pct}%`);
-    if (wt.request) parts.push(`${wt.request.ref}${wt.request.state === 'draft' ? ' rascunho' : ''}`);
+    if (wt.overlap) parts.push(t('⚠ overlaps {0}', wt.overlap.with.length));
+    if (wt.budget) parts.push(wt.budget.level === 'over' ? t('$ over budget') : `$ ${wt.budget.pct}%`);
+    if (wt.request) parts.push(`${wt.request.ref}${wt.request.state === 'draft' ? ` ${t('draft')}` : ''}`);
     if (wt.branch && pipelineOf?.(wt.branch)) {
       const p = pipelineOf(wt.branch)!;
       parts.push(`${{ success: '✓', failed: '✗', running: '⟳', queued: '…', canceled: '⊘', skipped: '↷', manual: '▶' }[p.status] ?? '?'} CI`);
@@ -75,14 +77,21 @@ export class WorktreeItem extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon(icon, color ? new vscode.ThemeColor(color) : undefined);
 
     const md = new vscode.MarkdownString(undefined, true);
-    md.appendMarkdown(`**${wt.name}**${wt.isCurrent ? ' — esta janela' : ''}\n\n`);
+    md.appendMarkdown(`**${wt.name}**${wt.isCurrent ? ` — ${t('this window')}` : ''}\n\n`);
     md.appendMarkdown(`\`${wt.path}\`\n\n`);
-    if (wt.subject) md.appendMarkdown(`Último commit: ${wt.subject}\n\n`);
-    if (!wt.isBase) md.appendMarkdown(`${wt.behind} atrás e ${wt.ahead} à frente de \`${baseRef}\`\n\n`);
-    md.appendMarkdown(wt.changes ? `${wt.changes} alteração(ões) não commitada(s)\n\n` : 'Worktree limpa\n\n');
-    if (wt.branch) md.appendMarkdown(!wt.remote.published ? 'Não publicada no remoto\n\n' : wt.remote.ahead || wt.remote.behind ? `Remoto: ${wt.remote.ahead} a enviar, ${wt.remote.behind} a receber\n\n` : 'Em dia com o remoto\n\n');
-    if (wt.preview?.conflict) md.appendMarkdown(`⚠ Mesclar \`${base}\` conflita em: ${wt.preview.files.join(', ')}\n\n`);
-    if (wt.agents.length) md.appendMarkdown(`Agentes abertos: ${agentsLabel(wt.agents)}\n\n`);
+    if (wt.subject) md.appendMarkdown(t('Last commit: {0}', wt.subject) + '\n\n');
+    if (!wt.isBase) md.appendMarkdown(t('{0} behind and {1} ahead of {2}', wt.behind, wt.ahead, `\`${baseRef}\``) + '\n\n');
+    md.appendMarkdown((wt.changes ? t('{0} uncommitted change(s)', wt.changes) : t('Clean worktree')) + '\n\n');
+    if (wt.branch)
+      md.appendMarkdown(
+        (!wt.remote.published
+          ? t('Not published to the remote')
+          : wt.remote.ahead || wt.remote.behind
+            ? t('Remote: {0} to push, {1} to pull', wt.remote.ahead, wt.remote.behind)
+            : t('Up to date with the remote')) + '\n\n',
+      );
+    if (wt.preview?.conflict) md.appendMarkdown(t('⚠ Merging {0} conflicts in: {1}', `\`${base}\``, wt.preview.files.join(', ')) + '\n\n');
+    if (wt.agents.length) md.appendMarkdown(t('Open agents: {0}', agentsLabel(wt.agents)) + '\n\n');
     if (wt.sync) md.appendMarkdown(`Sync: ${wt.sync.message}\n\n`);
     if (wt.request) md.appendMarkdown(`[${wt.request.ref} ${wt.request.title}](${wt.request.url})\n\n`);
     this.tooltip = md;
@@ -95,14 +104,14 @@ class UncommittedGroup extends vscode.TreeItem {
   readonly path: string;
   readonly branch?: string;
   constructor(readonly wt: WorktreeView) {
-    super('Não commitadas', vscode.TreeItemCollapsibleState.Collapsed);
+    super(t('Uncommitted'), vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `uncommitted:${wt.path}`;
     this.path = wt.path;
     this.branch = wt.branch;
     this.description = String(wt.changes);
     this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'));
     this.contextValue = 'uncommitted';
-    this.tooltip = 'Alterações em disco ainda não commitadas (inclui o stage e os arquivos novos). Clique num arquivo para ver o diff com o último commit.';
+    this.tooltip = t('Changes on disk not committed yet (includes staged changes and new files). Click a file to see the diff against the last commit.');
   }
 }
 
@@ -122,12 +131,12 @@ class UncommittedFileItem extends vscode.TreeItem {
     const dir = path.dirname(u.path) === '.' ? '' : path.dirname(u.path);
     const lines = u.binary ? 'bin' : u.added || u.deleted ? `+${u.added ?? 0} −${u.deleted ?? 0}` : '';
     this.description = [dir, u.letter, lines, KIND_LABEL[u.kind]].filter(Boolean).join('  ');
-    this.tooltip = `${u.path}\n${STATUS_LABEL[u.letter] ?? (u.kind === 'conflict' ? 'em conflito' : u.letter)}${KIND_LABEL[u.kind] ? ` (${KIND_LABEL[u.kind]})` : ''}\nSe descartar: ${discardEffect(u)}`;
+    this.tooltip = `${u.path}\n${statusLabel(u.letter) ?? (u.kind === 'conflict' ? t('conflicted') : u.letter)}${KIND_LABEL[u.kind] ? ` (${KIND_LABEL[u.kind]})` : ''}\n${t('If discarded: {0}', discardEffect(u))}`;
     this.contextValue = u.kind === 'conflict' ? 'uncommittedFile-conflict' : 'uncommittedFile';
     const file = vscode.Uri.file(path.join(cwd, u.path));
     const left = u.letter === '?' || u.letter === 'A' ? gitUri(cwd, '__empty__', u.path) : gitUri(cwd, 'HEAD', u.path);
     const right = u.letter === 'D' ? gitUri(cwd, '__empty__', u.path) : file;
-    this.command = { command: 'vscode.diff', title: 'Diff', arguments: [left, right, `${path.basename(u.path)} (último commit ↔ não commitado)`, { preview: true }] };
+    this.command = { command: 'vscode.diff', title: 'Diff', arguments: [left, right, t('{0} (last commit ↔ uncommitted)', path.basename(u.path)), { preview: true }] };
   }
 }
 
@@ -135,7 +144,7 @@ class UncommittedFileItem extends vscode.TreeItem {
 class ChangesItem extends vscode.TreeItem {
   readonly kind = 'changes';
   constructor(readonly wt: WorktreeView, readonly baseRef: string) {
-    super(`Alterações × ${baseRef}`, vscode.TreeItemCollapsibleState.Collapsed);
+    super(t('Changes × {0}', baseRef), vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `changes:${wt.path}`;
     this.iconPath = new vscode.ThemeIcon('diff');
     this.contextValue = 'changes';
@@ -151,7 +160,7 @@ class CommitsItem extends vscode.TreeItem {
     this.description = String(count);
     this.iconPath = new vscode.ThemeIcon('git-commit');
     this.contextValue = 'commits';
-    this.tooltip = 'Commits da branch que a base não tem (mais recente primeiro). Botão direito: resumo, perguntar ao agente.';
+    this.tooltip = t('Branch commits the base does not have (newest first). Right-click: summary, ask the agent.');
   }
 }
 
@@ -169,7 +178,7 @@ ${subject}${body ? `
 ${body}` : ''}`;
     this.iconPath = new vscode.ThemeIcon('git-commit');
     this.contextValue = 'commit';
-    this.command = { command: 'worktreeGraph.showCommitSha', title: 'Ver arquivos do commit', arguments: [sha] };
+    this.command = { command: 'worktreeGraph.showCommitSha', title: t('View commit files'), arguments: [sha] };
   }
 }
 
@@ -179,7 +188,7 @@ class ChangeItem extends vscode.TreeItem {
     super(vscode.Uri.file(path.join(cwd, file)), vscode.TreeItemCollapsibleState.None);
     this.label = path.basename(file);
     this.description = `${path.dirname(file) === '.' ? '' : path.dirname(file)}  ${status}`;
-    this.tooltip = `${file} — ${STATUS_LABEL[status] ?? status}`;
+    this.tooltip = `${file} — ${statusLabel(status) ?? status}`;
     const left = status === 'A' || status === '?' ? gitUri(cwd, '__empty__', file) : gitUri(cwd, mergeBase, file);
     const r = status === 'D' ? gitUri(cwd, '__empty__', file) : right;
     this.command = { command: 'vscode.diff', title: 'Diff', arguments: [left, r, `${path.basename(file)} (${title})`, { preview: true }] };
@@ -202,26 +211,26 @@ class FileItem extends vscode.TreeItem {
     const uri = vscode.Uri.file(file);
     super(uri, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'wtFile';
-    this.command = { command: 'vscode.open', title: 'Abrir', arguments: [uri, { preview: true }] };
+    this.command = { command: 'vscode.open', title: t('Open'), arguments: [uri, { preview: true }] };
   }
 }
 
 class OrphansGroup extends vscode.TreeItem {
   readonly kind = 'orphans';
   constructor(count: number) {
-    super(`Worktrees órfãs (pasta apagada)`, vscode.TreeItemCollapsibleState.None);
+    super(t('Orphaned worktrees (folder deleted)'), vscode.TreeItemCollapsibleState.None);
     this.id = 'orphans';
     this.description = String(count);
     this.iconPath = new vscode.ThemeIcon('trash');
-    this.tooltip = 'Registros de worktrees cuja pasta não existe mais. Clique para removê-los (git worktree prune).';
-    this.command = { command: 'worktreeGraph.pruneWorktrees', title: 'Remover órfãs' };
+    this.tooltip = t('Records of worktrees whose folder no longer exists. Click to remove them (git worktree prune).');
+    this.command = { command: 'worktreeGraph.pruneWorktrees', title: t('Remove orphans') };
   }
 }
 
 class BranchesGroup extends vscode.TreeItem {
   readonly kind = 'branches';
   constructor(count: number) {
-    super('Branches sem worktree', vscode.TreeItemCollapsibleState.Collapsed);
+    super(t('Branches without a worktree'), vscode.TreeItemCollapsibleState.Collapsed);
     this.id = 'branches';
     this.description = String(count);
     this.iconPath = new vscode.ThemeIcon('git-branch');
@@ -237,8 +246,8 @@ class BranchItem extends vscode.TreeItem {
     this.id = `branch:${b.name}`;
     this.branch = b.name;
     this.contextValue = 'branch';
-    this.description = [b.behind ? `↓${b.behind}` : '', b.ahead ? `↑${b.ahead}` : 'mesclada'].filter(Boolean).join(' ');
-    this.tooltip = `${b.name}\n${b.subject}\n(arquivos somente leitura, lidos do git)`;
+    this.description = [b.behind ? `↓${b.behind}` : '', b.ahead ? `↑${b.ahead}` : t('merged')].filter(Boolean).join(' ');
+    this.tooltip = `${b.name}\n${b.subject}\n${t('(read-only files, read from git)')}`;
     this.iconPath = new vscode.ThemeIcon('git-branch');
   }
 }
@@ -251,7 +260,7 @@ class TreeEntryItem extends vscode.TreeItem {
     this.description = isDir ? undefined : ref;
     if (!isDir) {
       const uri = gitUri(cwd, ref, entryPath);
-      this.command = { command: 'vscode.open', title: 'Abrir', arguments: [uri, { preview: true }] };
+      this.command = { command: 'vscode.open', title: t('Open'), arguments: [uri, { preview: true }] };
     }
   }
 }
@@ -344,7 +353,7 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
       }
       if (el instanceof TreeEntryItem && el.isDir) return lsTree(el.cwd, el.ref, el.entryPath, repo.exec.bind(repo));
     } catch (e) {
-      this.ctl.log(`Árvore: ${(e as Error).message}`);
+      this.ctl.log(t('Tree: {0}', (e as Error).message));
     }
     return [];
   }

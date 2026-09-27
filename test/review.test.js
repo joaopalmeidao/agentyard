@@ -23,7 +23,7 @@ const PATCH = ['@@ -10,4 +10,5 @@ export function login(u, s) {', ' const a = 1;
   await check('review.json: aceita cerca de markdown, ignora comentário vazio, normaliza caminho', () => {
     const r = parseReviewFile('```json\n{"summary":"ok","comments":[{"path":".\\\\src\\\\a.ts","line":"12","body":"x","severity":"bug"},{"path":"b","body":"  "}]}\n```');
     assert.deepStrictEqual(r, { summary: 'ok', comments: [{ path: 'src/a.ts', line: 12, body: 'x', severity: 'bug' }] });
-    assert.throws(() => parseReviewFile('{ quebrado'), /não é um JSON válido/);
+    assert.throws(() => parseReviewFile('{ quebrado'), /is not valid JSON/);
   });
 
   await check('linhas do lado novo do diff (adicionadas e de contexto)', () => {

@@ -12,6 +12,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { t } from '../i18n';
 
 export type Scope = 'user' | 'project';
 
@@ -95,22 +96,22 @@ export interface Frontmatter {
 }
 
 function unquote(v: string): string {
-  const t = v.trim();
-  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+  const s = v.trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     try {
-      return t.startsWith('"') ? JSON.parse(t) : t.slice(1, -1).replace(/''/g, "'");
+      return s.startsWith('"') ? JSON.parse(s) : s.slice(1, -1).replace(/''/g, "'");
     } catch {
-      return t.slice(1, -1);
+      return s.slice(1, -1);
     }
   }
-  return t;
+  return s;
 }
 
 /** YAML simples do frontmatter: chave: valor, e um nível de mapa aninhado (metadata:). */
 export function parseFrontmatter(text: string): Frontmatter {
-  const t = text.replace(/^\uFEFF/, '');
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(t);
-  if (!m) return { data: {}, body: t, present: false };
+  const src = text.replace(/^\uFEFF/, '');
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(src);
+  if (!m) return { data: {}, body: src, present: false };
   const data: Record<string, unknown> = {};
   let parent: Record<string, unknown> | undefined;
   for (const line of m[1].split(/\r?\n/)) {
@@ -130,7 +131,7 @@ export function parseFrontmatter(text: string): Frontmatter {
       data[top[1]] = unquote(top[2]);
     }
   }
-  return { data, body: t.slice(m[0].length), present: true };
+  return { data, body: src.slice(m[0].length), present: true };
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined ? '' : String(v));
@@ -154,7 +155,7 @@ function readSkill(file: string, scope: Scope, readOnly: boolean): SkillEntry {
       file,
       dir,
       readOnly,
-      error: fm.present ? undefined : 'SKILL.md sem frontmatter (--- name/description ---)',
+      error: fm.present ? undefined : t('SKILL.md has no frontmatter (--- name/description ---)'),
     };
   } catch (e) {
     return { kind: 'skill', scope, name: path.basename(dir), description: '', file, dir, readOnly, error: (e as Error).message };
@@ -219,9 +220,9 @@ export function listCommands(scope: Scope, claudeDir: string, projectDir?: strin
 }
 
 export function validSkillName(name: string): string | undefined {
-  if (!name.trim()) return 'Informe um nome.';
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) return 'Use letras minúsculas, números e hífens (ex.: revisar-pr).';
-  if (name.length > 64) return 'Até 64 caracteres.';
+  if (!name.trim()) return t('Enter a name.');
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) return t('Use lowercase letters, numbers and hyphens (e.g. review-pr).');
+  if (name.length > 64) return t('Up to 64 characters.');
   return undefined;
 }
 
@@ -229,9 +230,9 @@ export function createSkill(scope: Scope, claudeDir: string, projectDir: string 
   const err = validSkillName(name);
   if (err) throw new Error(err);
   const base = skillBase(scope, claudeDir, projectDir);
-  if (!base) throw new Error('Nenhum projeto ativo para criar a skill no escopo do projeto.');
+  if (!base) throw new Error(t('No active project to create the skill in the project scope.'));
   const dir = path.join(base, 'skills', name);
-  if (fs.existsSync(dir)) throw new Error(`Já existe a skill ${name} em ${dir}.`);
+  if (fs.existsSync(dir)) throw new Error(t('Skill {0} already exists in {1}.', name, dir));
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'SKILL.md');
   fs.writeFileSync(
@@ -239,16 +240,16 @@ export function createSkill(scope: Scope, claudeDir: string, projectDir: string 
     [
       '---',
       `name: ${name}`,
-      `description: ${yamlString(description || 'Descreva quando o Claude deve usar esta skill.')}`,
+      `description: ${yamlString(description || t('Describe when Claude should use this skill.'))}`,
       '---',
       '',
       `# ${name}`,
       '',
-      '## Quando usar',
+      t('## When to use'),
       '',
       '- ',
       '',
-      '## Como fazer',
+      t('## How to do it'),
       '',
       '1. ',
       '',
@@ -270,15 +271,15 @@ function copyDir(src: string, dst: string) {
 /** Copia a skill (pasta inteira) ou o comando para o outro escopo. Devolve o destino. */
 export function copyToScope(entry: SkillEntry, target: Scope, claudeDir: string, projectDir?: string): string {
   const base = skillBase(target, claudeDir, projectDir);
-  if (!base) throw new Error('Nenhum projeto ativo para o escopo do projeto.');
+  if (!base) throw new Error(t('No active project for the project scope.'));
   if (entry.kind === 'skill') {
     const dst = path.join(base, 'skills', path.basename(entry.dir!));
-    if (fs.existsSync(dst)) throw new Error(`Já existe ${dst}.`);
+    if (fs.existsSync(dst)) throw new Error(t('{0} already exists.', dst));
     copyDir(entry.dir!, dst);
     return path.join(dst, 'SKILL.md');
   }
   const dst = path.join(base, 'commands', ...entry.name.split(':').slice(0, -1), path.basename(entry.file));
-  if (fs.existsSync(dst)) throw new Error(`Já existe ${dst}.`);
+  if (fs.existsSync(dst)) throw new Error(t('{0} already exists.', dst));
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   fs.copyFileSync(entry.file, dst);
   return dst;
@@ -286,12 +287,12 @@ export function copyToScope(entry: SkillEntry, target: Scope, claudeDir: string,
 
 /** Renomeia a pasta da skill e o `name:` do frontmatter (ou o arquivo do comando). */
 export function renameEntry(entry: SkillEntry, newName: string): string {
-  if (entry.readOnly) throw new Error('Skill sincronizada: gerenciada pelo Claude.');
+  if (entry.readOnly) throw new Error(t('Synced skill: managed by Claude.'));
   if (entry.kind === 'skill') {
     const err = validSkillName(newName);
     if (err) throw new Error(err);
     const dst = path.join(path.dirname(entry.dir!), newName);
-    if (fs.existsSync(dst)) throw new Error(`Já existe ${dst}.`);
+    if (fs.existsSync(dst)) throw new Error(t('{0} already exists.', dst));
     fs.renameSync(entry.dir!, dst);
     const file = path.join(dst, 'SKILL.md');
     const text = fs.readFileSync(file, 'utf8');
@@ -299,13 +300,13 @@ export function renameEntry(entry: SkillEntry, newName: string): string {
     return file;
   }
   const dst = path.join(path.dirname(entry.file), `${newName.replace(/\.md$/, '')}.md`);
-  if (fs.existsSync(dst)) throw new Error(`Já existe ${dst}.`);
+  if (fs.existsSync(dst)) throw new Error(t('{0} already exists.', dst));
   fs.renameSync(entry.file, dst);
   return dst;
 }
 
 export function deleteEntry(entry: SkillEntry) {
-  if (entry.readOnly) throw new Error('Skill sincronizada: gerenciada pelo Claude.');
+  if (entry.readOnly) throw new Error(t('Synced skill: managed by Claude.'));
   if (entry.kind === 'skill') fs.rmSync(entry.dir!, { recursive: true, force: true });
   else fs.rmSync(entry.file, { force: true });
 }
@@ -314,14 +315,14 @@ export function deleteEntry(entry: SkillEntry) {
 
 export function configFiles(claudeDir: string, projectDir?: string): ConfigFile[] {
   const f = (scope: Scope, kind: ConfigFile['kind'], label: string, file: string): ConfigFile => ({ scope, kind, label, file, exists: fs.existsSync(file) });
-  const list = [f('user', 'settings', 'settings.json', path.join(claudeDir, 'settings.json')), f('user', 'claude-md', 'CLAUDE.md (todas as sessões)', path.join(claudeDir, 'CLAUDE.md'))];
+  const list = [f('user', 'settings', 'settings.json', path.join(claudeDir, 'settings.json')), f('user', 'claude-md', t('CLAUDE.md (all sessions)'), path.join(claudeDir, 'CLAUDE.md'))];
   if (projectDir) {
     list.push(
-      f('project', 'settings', '.claude/settings.json (compartilhado)', path.join(projectDir, '.claude', 'settings.json')),
-      f('project', 'settings-local', '.claude/settings.local.json (só você)', path.join(projectDir, '.claude', 'settings.local.json')),
-      f('project', 'mcp', '.mcp.json (servidores MCP)', path.join(projectDir, '.mcp.json')),
-      f('project', 'claude-md', 'CLAUDE.md (instruções do projeto)', path.join(projectDir, 'CLAUDE.md')),
-      f('project', 'claude-local-md', 'CLAUDE.local.md (só você)', path.join(projectDir, 'CLAUDE.local.md')),
+      f('project', 'settings', t('.claude/settings.json (shared)'), path.join(projectDir, '.claude', 'settings.json')),
+      f('project', 'settings-local', t('.claude/settings.local.json (just you)'), path.join(projectDir, '.claude', 'settings.local.json')),
+      f('project', 'mcp', t('.mcp.json (MCP servers)'), path.join(projectDir, '.mcp.json')),
+      f('project', 'claude-md', t('CLAUDE.md (project instructions)'), path.join(projectDir, 'CLAUDE.md')),
+      f('project', 'claude-local-md', t('CLAUDE.local.md (just you)'), path.join(projectDir, 'CLAUDE.local.md')),
     );
   }
   return list;
@@ -339,10 +340,10 @@ export function readSettings(file: string): SettingsRead {
   const raw = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
   try {
     const data = raw.trim() ? JSON.parse(stripJsonComments(raw)) : {};
-    if (typeof data !== 'object' || Array.isArray(data) || data === null) return { data: {}, exists: true, error: 'O arquivo não é um objeto JSON.' };
+    if (typeof data !== 'object' || Array.isArray(data) || data === null) return { data: {}, exists: true, error: t('The file is not a JSON object.') };
     return { data, exists: true };
   } catch (e) {
-    return { data: {}, exists: true, error: `JSON inválido: ${(e as Error).message}` };
+    return { data: {}, exists: true, error: t('Invalid JSON: {0}', (e as Error).message) };
   }
 }
 
@@ -376,7 +377,7 @@ export function stripJsonComments(text: string): string {
  */
 export function updateSettings(file: string, mutate: (data: Record<string, any>) => void): string | undefined {
   const cur = readSettings(file);
-  if (cur.error) throw new Error(`${path.basename(file)} está com erro e não foi alterado: ${cur.error}`);
+  if (cur.error) throw new Error(t('{0} has an error and was not changed: {1}', path.basename(file), cur.error));
   const data = JSON.parse(JSON.stringify(cur.data));
   mutate(data);
   const text = JSON.stringify(data, null, 2) + '\n';
@@ -402,7 +403,7 @@ export function listPermissions(file: string): Record<PermissionList, string[]> 
 
 export function addPermission(file: string, list: PermissionList, rule: string) {
   const r = rule.trim();
-  if (!r) throw new Error('Regra vazia.');
+  if (!r) throw new Error(t('Empty rule.'));
   return updateSettings(file, d => {
     d.permissions = d.permissions && typeof d.permissions === 'object' ? d.permissions : {};
     const cur: unknown[] = Array.isArray(d.permissions[list]) ? d.permissions[list] : [];
@@ -477,7 +478,7 @@ export function listMemories(memDir: string): MemoryEntry[] {
           description: str(fm.data.description),
           type: str(meta.type ?? fm.data.type) || '?',
           indexed: indexed.has(fileName.toLowerCase()),
-          error: fm.present ? undefined : 'sem frontmatter',
+          error: fm.present ? undefined : t('no frontmatter'),
         };
       } catch (e) {
         return { fileName, file, name: fileName.slice(0, -3), description: '', type: '?', indexed: indexed.has(fileName.toLowerCase()), error: (e as Error).message };
@@ -516,11 +517,11 @@ export interface NewMemory {
 /** Cria o arquivo de memória (frontmatter no formato do Claude Code) e a linha no MEMORY.md. */
 export function createMemory(memDir: string, m: NewMemory): string {
   const name = slugify(m.title);
-  if (!name) throw new Error('Informe um título.');
+  if (!name) throw new Error(t('Enter a title.'));
   fs.mkdirSync(memDir, { recursive: true });
   const fileName = `${name}.md`;
   const file = path.join(memDir, fileName);
-  if (fs.existsSync(file)) throw new Error(`Já existe ${fileName}.`);
+  if (fs.existsSync(file)) throw new Error(t('{0} already exists.', fileName));
   fs.writeFileSync(
     file,
     ['---', `name: ${name}`, `description: ${JSON.stringify(m.description)}`, 'metadata:', `  type: ${m.type}`, '---', '', m.body.trim(), ''].join('\n'),

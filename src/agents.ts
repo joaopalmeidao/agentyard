@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
+import { t } from './i18n';
 
 export interface AgentConfig {
   name: string;
@@ -73,12 +74,12 @@ export function agentsLabel(names: string[]): string {
 }
 
 /** "agora", "há 5 min", "há 2 h", "há 3 d". */
-export function sinceText(t: number, now = Date.now()): string {
-  const m = Math.max(0, Math.round((now - t) / 60000));
-  if (m < 1) return 'agora';
-  if (m < 60) return `há ${m} min`;
+export function sinceText(since: number, now = Date.now()): string {
+  const m = Math.max(0, Math.round((now - since) / 60000));
+  if (m < 1) return t('now');
+  if (m < 60) return t('{0} min ago', m);
   const h = Math.floor(m / 60);
-  return h < 24 ? `há ${h} h` : `há ${Math.floor(h / 24)} d`;
+  return h < 24 ? t('{0} h ago', h) : t('{0} d ago', Math.floor(h / 24));
 }
 
 const keyOf = (p: string) => path.normalize(p).toLowerCase();
@@ -101,8 +102,8 @@ export class AgentTerminals implements vscode.Disposable {
 
   constructor(private readonly ctl: Controller) {
     this.disposables.push(
-      vscode.window.onDidCloseTerminal(t => {
-        const i = this.open.findIndex(o => o.terminal === t);
+      vscode.window.onDidCloseTerminal(term => {
+        const i = this.open.findIndex(o => o.terminal === term);
         if (i >= 0) this.open.splice(i, 1);
         this.changed.fire();
         this.ctl.scheduleRefresh(50);
@@ -136,7 +137,7 @@ export class AgentTerminals implements vscode.Disposable {
     if (!agent) {
       const pick = await vscode.window.showQuickPick(
         list.map(a => ({ label: a.name, description: a.command, agent: a })),
-        { placeHolder: `Abrir qual agente em ${branch ?? path.basename(worktreePath)}?` },
+        { placeHolder: t('Open which agent in {0}?', branch ?? path.basename(worktreePath)) },
       );
       agent = pick?.agent;
     }
@@ -159,11 +160,11 @@ export class AgentTerminals implements vscode.Disposable {
   /** Nome do terminal; a partir do segundo do mesmo agente (e mesmo tipo) na worktree ganha "#n". */
   private terminalName(agent: string, worktreePath: string, branch: string | undefined, task = false) {
     const n = this.list(worktreePath, agent).filter(o => !!o.task === task).length;
-    return `${agent} · ${branch ?? path.basename(worktreePath)}${task ? ' · tarefa' : ''}${n ? ` #${n + 1}` : ''}`;
+    return `${agent} · ${branch ?? path.basename(worktreePath)}${task ? ` · ${t('task')}` : ''}${n ? ` #${n + 1}` : ''}`;
   }
 
   private describe(o: OpenAgent) {
-    return `aberto ${sinceText(o.started)}${o.task ? ' · com tarefa' : ''}`;
+    return o.task ? t('opened {0} · with a task', sinceText(o.started)) : t('opened {0}', sinceText(o.started));
   }
 
   /**
@@ -183,15 +184,15 @@ export class AgentTerminals implements vscode.Disposable {
       }
       if (pref !== 'new') {
         const items: (vscode.QuickPickItem & { o?: OpenAgent })[] = [
-          { label: `$(add) Abrir outro ${agent.name}`, description: 'novo terminal, sessão nova' },
-          { label: 'Já abertos', kind: vscode.QuickPickItemKind.Separator },
+          { label: `$(add) ${t('Open another {0}', agent.name)}`, description: t('new terminal, new session') },
+          { label: t('Already open'), kind: vscode.QuickPickItemKind.Separator },
           ...openHere
             .slice()
             .reverse()
             .map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: this.describe(o), o })),
         ];
         const pick = await vscode.window.showQuickPick(items, {
-          placeHolder: `${agent.name} já está aberto em ${branch ?? path.basename(worktreePath)}: ir para um deles ou abrir outro?`,
+          placeHolder: t('{0} is already open in {1}: go to one of them or open another?', agent.name, branch ?? path.basename(worktreePath)),
         });
         if (!pick) return;
         if (pick.o) {
@@ -204,8 +205,8 @@ export class AgentTerminals implements vscode.Disposable {
     let command = agent.command;
     if (command.includes('{prompt}')) {
       const prompt = await vscode.window.showInputBox({
-        title: `${agent.name} em ${branch ?? path.basename(worktreePath)}`,
-        prompt: 'Tarefa inicial para o agente (vazio = abrir sem tarefa)',
+        title: t('{0} in {1}', agent.name, branch ?? path.basename(worktreePath)),
+        prompt: t('Initial task for the agent (empty = open without a task)'),
         ignoreFocusOut: true,
       });
       if (prompt === undefined) return;
@@ -223,7 +224,7 @@ export class AgentTerminals implements vscode.Disposable {
     terminal.show();
     terminal.sendText(command);
     this.launched.fire({ path: worktreePath, branch, terminal, agent: agent.name });
-    this.ctl.log(`Agente ${agent.name} aberto em ${worktreePath}: ${command}`);
+    this.ctl.log(t('Agent {0} opened in {1}: {2}', agent.name, worktreePath, command));
     this.ctl.scheduleRefresh(50);
   }
 
@@ -239,7 +240,7 @@ export class AgentTerminals implements vscode.Disposable {
     terminal.show();
     terminal.sendText(command);
     this.launched.fire({ path: worktreePath, branch, terminal, agent: agent.name, prompt });
-    this.ctl.log(`Agente ${agent.name} com tarefa em ${worktreePath} (prompt em ${p.file})`);
+    this.ctl.log(t('Agent {0} with a task in {1} (prompt in {2})', agent.name, worktreePath, p.file));
     this.ctl.scheduleRefresh(50);
   }
 
@@ -247,7 +248,7 @@ export class AgentTerminals implements vscode.Disposable {
   async pickOpen(worktreePath?: string) {
     const all = this.list(worktreePath);
     if (!all.length) {
-      vscode.window.showInformationMessage(worktreePath ? 'Nenhum agente aberto nesta worktree.' : 'Nenhum agente aberto.');
+      vscode.window.showInformationMessage(worktreePath ? t('No agents open in this worktree.') : t('No agents open.'));
       return;
     }
     const items: (vscode.QuickPickItem & { o?: OpenAgent })[] = [];
@@ -255,7 +256,7 @@ export class AgentTerminals implements vscode.Disposable {
       items.push({ label: list[0].branch ?? path.basename(list[0].path), kind: vscode.QuickPickItemKind.Separator });
       for (const o of list) items.push({ label: `$(terminal) ${o.terminal.name}`, description: this.describe(o), detail: o.path, o });
     }
-    const pick = await vscode.window.showQuickPick(items, { placeHolder: `${all.length} terminal(is) de agente aberto(s)`, matchOnDetail: true });
+    const pick = await vscode.window.showQuickPick(items, { placeHolder: t('{0} open agent terminal(s)', all.length), matchOnDetail: true });
     pick?.o?.terminal.show();
   }
 
@@ -272,6 +273,6 @@ export function groupByWorktree(list: OpenAgent[]): OpenAgent[][] {
 }
 
 /** Troca ${nome} pelos valores; placeholders desconhecidos ficam como estão. */
-export function fillTemplate(t: string, vars: Record<string, string>): string {
-  return t.replace(/\$\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+export function fillTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\$\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
 }

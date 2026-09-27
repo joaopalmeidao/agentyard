@@ -1,65 +1,88 @@
 /** Modelos de tarefa para agentes, sem depender do VS Code (testado em test/env.test.js). */
+import { t } from '../i18n';
 
 export interface TaskTemplate {
   id: string;
   name: string;
   description?: string;
   prompt: string;
-  source: 'padrão' | 'configuração' | 'repositório';
+  source: 'default' | 'settings' | 'repository';
   /** Arquivo .md de origem (modelos do repositório). */
   file?: string;
 }
 
-export const DEFAULT_TEMPLATES: TaskTemplate[] = [
-  {
-    id: 'fix-tests',
-    name: 'Corrigir testes que falham',
-    description: 'Roda a suíte, investiga e corrige as falhas',
-    prompt:
-      'Na branch ${branch}, rode a suíte de testes do projeto, investigue cada falha e corrija a causa (não o teste, a menos que o teste esteja errado). Rode de novo até passar e faça commits pequenos explicando cada correção.',
-    source: 'padrão',
-  },
-  {
-    id: 'update-deps',
-    name: 'Atualizar dependências',
-    description: 'Atualiza dependências com segurança e roda os testes',
-    prompt:
-      'Na branch ${branch}, atualize as dependências do projeto para versões compatíveis (sem saltos de versão maior sem necessidade). Leia os changelogs relevantes, ajuste o código se algo quebrar, rode os testes e faça um commit por grupo de dependências.',
-    source: 'padrão',
-  },
-  {
-    id: 'write-tests',
-    name: 'Escrever testes para o arquivo aberto',
-    description: 'Testes para ${file}',
-    prompt:
-      'Escreva testes para ${file} na branch ${branch}, seguindo o padrão de testes que o projeto já usa. Cubra os caminhos principais e os casos de borda, rode os testes e faça commit.',
-    source: 'padrão',
-  },
-  {
-    id: 'simplify-diff',
-    name: 'Revisar e simplificar o diff',
-    description: 'Revisa o que a branch mudou em relação à base',
-    prompt:
-      'Revise o que a branch ${branch} mudou em relação a ${base} (git diff ${base}...HEAD). Simplifique o que estiver complexo demais, remova código morto e duplicação, sem mudar o comportamento. Rode os testes e faça commit.',
-    source: 'padrão',
-  },
-  {
-    id: 'document-branch',
-    name: 'Documentar a branch no README',
-    description: 'Atualiza a documentação com o que a branch traz',
-    prompt:
-      'Documente no README (ou na documentação do projeto) o que a branch ${branch} traz em relação a ${base}: como usar, configurações novas e limitações. Mantenha o estilo da documentação existente e faça commit.',
-    source: 'padrão',
-  },
-  {
-    id: 'investigate-error',
-    name: 'Investigar erro',
-    description: 'Investiga o erro selecionado no editor',
-    prompt:
-      'Investigue o erro abaixo na branch ${branch}. Encontre a causa, proponha a correção mínima, implemente, rode os testes e faça commit. Se não conseguir reproduzir, explique o que verificou.\n\n```\n${selection}\n```',
-    source: 'padrão',
-  },
-];
+/** Modelos padrão, no idioma da interface. Os placeholders `${…}` entram como argumentos do t(). */
+export function defaultTemplates(): TaskTemplate[] {
+  return [
+    {
+      id: 'fix-tests',
+      name: t('Fix failing tests'),
+      description: t('Runs the suite, investigates and fixes the failures'),
+      prompt: t('On branch {0}, run the project\'s test suite, investigate each failure and fix the cause (not the test, unless the test is wrong). Run it again until it passes and make small commits explaining each fix.',
+        '${branch}',
+      ),
+      source: 'default',
+    },
+    {
+      id: 'update-deps',
+      name: t('Update dependencies'),
+      description: t('Updates dependencies safely and runs the tests'),
+      prompt: t('On branch {0}, update the project\'s dependencies to compatible versions (no major version jumps unless needed). Read the relevant changelogs, adjust the code if something breaks, run the tests and make one commit per group of dependencies.',
+        '${branch}',
+      ),
+      source: 'default',
+    },
+    {
+      id: 'write-tests',
+      name: t('Write tests for the open file'),
+      description: t('Tests for {0}', '${file}'),
+      prompt: t(
+        'Write tests for {0} on branch {1}, following the testing pattern the project already uses. Cover the main paths and the edge cases, run the tests and commit.',
+        '${file}',
+        '${branch}',
+      ),
+      source: 'default',
+    },
+    {
+      id: 'simplify-diff',
+      name: t('Review and simplify the diff'),
+      description: t('Reviews what the branch changed compared to the base'),
+      prompt: t(
+        'Review what branch {0} changed compared to {1} (git diff {1}...HEAD). Simplify what is too complex, remove dead code and duplication, without changing the behavior. Run the tests and commit.',
+        '${branch}',
+        '${base}',
+      ),
+      source: 'default',
+    },
+    {
+      id: 'document-branch',
+      name: t('Document the branch in the README'),
+      description: t('Updates the documentation with what the branch brings'),
+      prompt: t('Document in the README (or in the project\'s documentation) what branch {0} brings compared to {1}: how to use it, new settings and limitations. Keep the style of the existing documentation and commit.',
+        '${branch}',
+        '${base}',
+      ),
+      source: 'default',
+    },
+    {
+      id: 'investigate-error',
+      name: t('Investigate error'),
+      description: t('Investigates the error selected in the editor'),
+      prompt:
+        t('Investigate the error below on branch {0}. Find the cause, propose the minimal fix, implement it, run the tests and commit. If you can\'t reproduce it, explain what you checked.',
+          '${branch}',
+        ) + '\n\n```\n${selection}\n```',
+      source: 'default',
+    },
+  ];
+}
+
+/** Nome do tipo de origem, para mostrar. */
+export function sourceLabel(source: TaskTemplate['source']): string {
+  if (source === 'settings') return t('settings');
+  if (source === 'repository') return t('repository');
+  return t('default');
+}
 
 /** Troca ${nome}; placeholders sem valor viram texto vazio (exceto os desconhecidos, que ficam). */
 export function renderTemplate(prompt: string, vars: Record<string, string | undefined>): string {
@@ -83,7 +106,7 @@ export function parseTemplateFile(text: string, fileName: string): TaskTemplate 
     name: field('name') ?? id,
     description: field('description'),
     prompt: (fm ? text.slice(fm[0].length) : text).trim(),
-    source: 'repositório',
+    source: 'repository',
   };
 }
 

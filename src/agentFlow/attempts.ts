@@ -5,6 +5,7 @@ import * as actions from '../actions';
 import type { AgentTerminals } from '../agents';
 import type { Controller } from '../controller';
 import { gitUri } from '../diff';
+import { locale, t } from '../i18n';
 
 /** Um grupo de tentativas da mesma tarefa, cada uma numa worktree `try/<slug>-a`, `-b`… */
 export interface AttemptGroup {
@@ -16,13 +17,15 @@ export interface AttemptGroup {
   attempts: { letter: string; branch: string; path: string; variation: string }[];
 }
 
-const DEFAULT_VARIATIONS = [
-  '',
-  'Priorize a solução mais simples possível, com o mínimo de código novo.',
-  'Priorize desempenho e robustez, mesmo que o código fique maior.',
-  'Priorize cobertura de testes: escreva os testes antes da implementação.',
-  'Siga ao máximo os padrões que já existem no código, sem abstrações novas.',
-];
+function defaultVariations(): string[] {
+  return [
+    '',
+    t('Favor the simplest possible solution, with as little new code as possible.'),
+    t('Favor performance and robustness, even if the code gets bigger.'),
+    t('Favor test coverage: write the tests before the implementation.'),
+    t('Follow the patterns already in the code as closely as possible, with no new abstractions.'),
+  ];
+}
 
 export function slugify(s: string) {
   return s
@@ -67,29 +70,30 @@ export class Attempts {
     const { base } = await this.ctl.base();
     let prompt = o.prompt;
     if (!prompt) {
-      prompt = await vscode.window.showInputBox({ title: 'Tentar várias abordagens', prompt: 'A tarefa que todos os agentes vão receber', ignoreFocusOut: true });
+      prompt = await vscode.window.showInputBox({ title: t('Try several approaches'), prompt: t('The task all the agents will get'), ignoreFocusOut: true });
       if (!prompt?.trim()) return undefined;
     }
     const title = o.title ?? prompt.split(/\r?\n/)[0].slice(0, 60);
     let n = o.n;
     if (!n) {
-      const pick = await vscode.window.showQuickPick(['2', '3', '4', '5'].map(l => ({ label: l, description: `${l} worktrees e ${l} agentes em paralelo` })), {
-        title: `Quantas abordagens para "${title}"?`,
+      const pick = await vscode.window.showQuickPick(['2', '3', '4', '5'].map(l => ({ label: l, description: t('{0} worktrees and {0} agents in parallel', l) })), {
+        title: t('How many approaches for "{0}"?', title),
       });
       if (!pick) return undefined;
       n = Number(pick.label);
     }
     const letters = 'abcdefgh'.slice(0, n).split('');
     const variations: string[] = [];
+    const defaults = defaultVariations();
     for (let i = 0; i < n; i++) {
-      const def = o.variations?.[i] ?? DEFAULT_VARIATIONS[i] ?? '';
+      const def = o.variations?.[i] ?? defaults[i] ?? '';
       if (o.quiet || o.variations) {
         variations.push(def);
         continue;
       }
       const v = await vscode.window.showInputBox({
-        title: `Abordagem ${letters[i].toUpperCase()} (${i + 1}/${n})`,
-        prompt: 'Orientação extra só para esta tentativa (vazio = só a tarefa)',
+        title: t('Approach {0} ({1}/{2})', letters[i].toUpperCase(), i + 1, n),
+        prompt: t('Extra guidance just for this attempt (empty = just the task)'),
         value: def,
         ignoreFocusOut: true,
       });
@@ -103,7 +107,7 @@ export class Attempts {
     for (let k = 2; letters.some(l => existing.has(`${prefix}-${l}`)); k++) prefix = `try/${slug}-${k}`;
 
     const group: AttemptGroup = { id: crypto.randomBytes(4).toString('hex'), title, prompt, base, created: Date.now(), attempts: [] };
-    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Criando ${n} tentativas…` }, async progress => {
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating {0} attempts…', n) }, async progress => {
       for (let i = 0; i < n!; i++) {
         const branch = `${prefix}-${letters[i]}`;
         progress.report({ message: branch, increment: 100 / n! });
@@ -115,7 +119,7 @@ export class Attempts {
     if (!group.attempts.length) return undefined;
     await this.saveGroup(group);
     for (const a of group.attempts) {
-      const text = a.variation ? `${prompt}\n\nAbordagem ${a.letter}: ${a.variation}` : prompt;
+      const text = a.variation ? `${prompt}\n\n${t('Approach {0}: {1}', a.letter, a.variation)}` : prompt;
       await this.agentTerms.launchWithPrompt(a.path, a.branch, text);
     }
     this.ctl.scheduleRefresh(50);
@@ -126,12 +130,12 @@ export class Attempts {
   async pickAndCompare() {
     const gs = this.groups();
     if (!gs.length) {
-      vscode.window.showInformationMessage('Nenhum grupo de tentativas ainda. Use "Tentar N abordagens…".');
+      vscode.window.showInformationMessage(t('No attempt groups yet. Use "Try N Approaches…".'));
       return;
     }
     const pick = await vscode.window.showQuickPick(
-      gs.map(g => ({ label: g.title, description: `${g.attempts.length} tentativas · ${new Date(g.created).toLocaleString('pt-BR')}`, g })),
-      { title: 'Comparar tentativas' },
+      gs.map(g => ({ label: g.title, description: t('{0} attempts · {1}', g.attempts.length, new Date(g.created).toLocaleString(locale())), g })),
+      { title: t('Compare attempts') },
     );
     if (pick) await ComparePanel.show(this.ctl, pick.g, this);
   }
@@ -164,7 +168,7 @@ export class ComparePanel {
       await cur.load();
       return cur;
     }
-    const panel = vscode.window.createWebviewPanel('worktreeGraph.attempts', `Tentativas: ${g.title}`, vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel('worktreeGraph.attempts', t('Attempts: {0}', g.title), vscode.ViewColumn.Active, {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(ctl.ctx.extensionUri, 'media')],
     });
@@ -231,7 +235,7 @@ export class ComparePanel {
         if (!a) return;
         const cmd = this.ctl.cfg().get<string>('autoSync.testCommand', '').trim();
         if (!cmd) {
-          const go = await vscode.window.showWarningMessage('Configure worktreeGraph.autoSync.testCommand para rodar os testes das tentativas.', 'Abrir configuração');
+          const go = await vscode.window.showWarningMessage(t('Configure worktreeGraph.autoSync.testCommand to run the attempts\' tests.'), t('Open settings'));
           if (go) vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.autoSync.testCommand');
           return;
         }
@@ -241,21 +245,21 @@ export class ComparePanel {
           exec(cmd, { cwd: a.path, timeout: 15 * 60_000, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, so, se) => r({ ok: !err, out: `${so}${se}` })),
         );
         this.tests.set(a.branch, { ok: res.ok, at: Date.now(), tail: res.out.split(/\r?\n/).slice(-15).join('\n') });
-        this.ctl.log(`[tentativa ${a.branch}] ${cmd} → ${res.ok ? 'ok' : 'falhou'}`);
+        this.ctl.log(`[${t('attempt {0}', a.branch)}] ${cmd} → ${res.ok ? 'ok' : t('failed')}`);
         return this.load();
       }
       case 'diff': {
         if (!a) return;
         const others = this.g.attempts.filter(x => x.branch !== a.branch);
-        const other = others.length === 1 ? others[0] : (await vscode.window.showQuickPick(others.map(o => ({ label: `${o.letter}: ${o.branch}`, o })), { title: `Comparar ${a.letter} com…` }))?.o;
+        const other = others.length === 1 ? others[0] : (await vscode.window.showQuickPick(others.map(o => ({ label: `${o.letter}: ${o.branch}`, o })), { title: t('Compare {0} with…', a.letter) }))?.o;
         if (!other) return;
         const files = (await repo.exec(['diff', '--name-only', other.branch, a.branch])).split(/\r?\n/).filter(Boolean);
         if (!files.length) {
-          vscode.window.showInformationMessage(`${a.branch} e ${other.branch} têm o mesmo conteúdo.`);
+          vscode.window.showInformationMessage(t('{0} and {1} have the same content.', a.branch, other.branch));
           return;
         }
         const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { f: string }>();
-        qp.title = `${other.letter} ↔ ${a.letter}: ${files.length} arquivo(s) diferentes`;
+        qp.title = t('{0} ↔ {1}: {2} different file(s)', other.letter, a.letter, files.length);
         qp.items = files.map(f => ({ label: f, f }));
         qp.ignoreFocusOut = true;
         qp.onDidAccept(() => {
@@ -271,16 +275,16 @@ export class ComparePanel {
         const L = this.ctl.requests.label;
         const pick = await vscode.window.showQuickPick(
           [
-            { label: `Mesclar ${a.branch} em ${this.g.base}`, v: 'merge' },
-            { label: `Publicar ${L} de ${a.branch}`, v: 'pr' },
+            { label: t('Merge {0} into {1}', a.branch, this.g.base), v: 'merge' },
+            { label: t('Publish {0} for {1}', L, a.branch), v: 'pr' },
           ],
-          { title: `Escolher a tentativa ${a.letter}` },
+          { title: t('Choose attempt {0}', a.letter) },
         );
         if (pick?.v === 'merge') await actions.mergeBranches(this.ctl, a.branch, this.g.base);
         if (pick?.v === 'pr') await this.ctl.requests.publish(a.branch, this.g.base);
         if (pick) {
           const others = this.g.attempts.filter(x => x.branch !== a.branch);
-          const drop = await vscode.window.showInformationMessage(`Descartar as outras ${others.length} tentativa(s)?`, 'Descartar as outras');
+          const drop = await vscode.window.showInformationMessage(t('Discard the other {0} attempt(s)?', others.length), t('Discard the others'));
           if (drop) await this.discardOthers(a.branch);
         }
         return this.load();
@@ -306,40 +310,40 @@ export class ComparePanel {
         const s = stats.get(a.branch)!;
         const test =
           s.test === 'running'
-            ? '<span class="chip info">testando…</span>'
+            ? `<span class="chip info">${t('testing…')}</span>`
             : s.test
-              ? `<span class="chip ${s.test.ok ? 'ok' : 'bad'}" title="${esc(s.test.tail)}">${s.test.ok ? '✓ testes passaram' : '✗ testes falharam'}</span>`
-              : '<span class="chip muted">testes não rodados</span>';
+              ? `<span class="chip ${s.test.ok ? 'ok' : 'bad'}" title="${esc(s.test.tail)}">${s.test.ok ? '✓ ' + t('tests passed') : '✗ ' + t('tests failed')}</span>`
+              : `<span class="chip muted">${t('tests not run')}</span>`;
         const b = esc(a.branch);
         return `<div class="card attempt ${s.exists ? '' : 'conflict'}">
           <div class="card-head"><span class="branch">${esc(a.letter)} · ${b}</span></div>
-          <div class="last">${a.variation ? esc(a.variation) : '<span class="muted">só a tarefa</span>'}</div>
+          <div class="last">${a.variation ? esc(a.variation) : `<span class="muted">${t('just the task')}</span>`}</div>
           ${s.exists
             ? `<div class="stats">
                 <div><b>${s.commits}</b><span>commits</span></div>
-                <div><b>${s.files}</b><span>arquivos</span></div>
-                <div><b><span class="add">+${s.added}</span> <span class="del">−${s.deleted}</span></b><span>linhas</span></div>
-                <div class="${s.changes ? 'warn' : ''}"><b>${s.changes}</b><span>não commitadas</span></div>
-                ${s.tokens !== undefined ? `<div><b>${fmt(s.tokens)}</b><span>tokens do Claude</span></div>` : ''}
+                <div><b>${s.files}</b><span>${t('files')}</span></div>
+                <div><b><span class="add">+${s.added}</span> <span class="del">−${s.deleted}</span></b><span>${t('lines')}</span></div>
+                <div class="${s.changes ? 'warn' : ''}"><b>${s.changes}</b><span>${t('uncommitted')}</span></div>
+                ${s.tokens !== undefined ? `<div><b>${fmt(s.tokens)}</b><span>${t('Claude tokens')}</span></div>` : ''}
               </div>
               <div class="chips">${test}</div>
               <div class="actions">
-                <button data-action="review" data-branch="${b}">Revisar</button>
-                <button data-action="diff" data-branch="${b}">Diff com outra</button>
-                <button data-action="test" data-branch="${b}">Rodar testes</button>
+                <button data-action="review" data-branch="${b}">${t('Review')}</button>
+                <button data-action="diff" data-branch="${b}">${t('Diff with another')}</button>
+                <button data-action="test" data-branch="${b}">${t('Run tests')}</button>
                 <button data-action="terminal" data-branch="${b}">Terminal</button>
-                <button data-action="choose" data-branch="${b}" class="primary">Escolher esta</button>
-                <button data-action="discard" data-branch="${b}" class="danger" title="Remove as worktrees das outras tentativas">Descartar as outras</button>
+                <button data-action="choose" data-branch="${b}" class="primary">${t('Choose this one')}</button>
+                <button data-action="discard" data-branch="${b}" class="danger" title="${t('Removes the worktrees of the other attempts')}">${t('Discard the others')}</button>
               </div>`
-            : '<div class="muted">worktree removida</div>'}
+            : `<div class="muted">${t('worktree removed')}</div>`}
         </div>`;
       })
       .join('');
-    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    return `<!DOCTYPE html><html lang="${locale()}"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${w.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${css}"></head><body class="attempts-page">
-<header class="toolbar"><div class="title"><span class="repo">Comparar tentativas</span><span class="muted">${esc(this.g.title)} · a partir de ${esc(this.g.base)}</span></div>
-<div class="tools"><button data-action="refresh" title="Atualizar números">↻</button></div></header>
+<header class="toolbar"><div class="title"><span class="repo">${t('Compare attempts')}</span><span class="muted">${esc(this.g.title)} · ${esc(t('from {0}', this.g.base))}</span></div>
+<div class="tools"><button data-action="refresh" title="${t('Refresh numbers')}">↻</button></div></header>
 <div class="verdict ok">${esc(this.g.prompt.split(/\r?\n/)[0])}</div>
 <div class="cards attempts">${cols}</div>
 <script nonce="${nonce}">

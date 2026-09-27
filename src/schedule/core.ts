@@ -1,7 +1,8 @@
 /**
- * Agendamentos: cron de 5 campos, atalhos em português, próximos horários e execuções perdidas.
- * Sem dependência do VS Code, para ser testado direto (test/schedule.test.js). Horário local.
+ * Agendamentos: cron de 5 campos, atalhos em português (e o equivalente em inglês), próximos horários
+ * e execuções perdidas. Sem dependência do VS Code, para ser testado direto (test/schedule.test.js). Horário local.
  */
+import { locale, t } from '../i18n';
 
 export type When = { kind: 'cron'; expr: string } | { kind: 'once'; at: number };
 
@@ -66,9 +67,9 @@ function parseField(text: string, f: Field): Set<number> {
   const out = new Set<number>();
   for (const part of text.split(',')) {
     const m = /^(\*|(\d+)(?:-(\d+))?)(?:\/(\d+))?$/.exec(part.trim());
-    if (!m) throw new Error(`campo inválido: "${part}"`);
+    if (!m) throw new Error(t('invalid field: "{0}"', part));
     const step = m[4] ? Number(m[4]) : 1;
-    if (step < 1) throw new Error(`passo inválido: "${part}"`);
+    if (step < 1) throw new Error(t('invalid step: "{0}"', part));
     let lo: number;
     let hi: number;
     if (m[1] === '*') {
@@ -78,7 +79,7 @@ function parseField(text: string, f: Field): Set<number> {
       lo = Number(m[2]);
       hi = m[3] !== undefined ? Number(m[3]) : m[4] ? f.max : lo;
     }
-    if (lo < f.min || hi > f.max || lo > hi) throw new Error(`fora do intervalo ${f.min}-${f.max}: "${part}"`);
+    if (lo < f.min || hi > f.max || lo > hi) throw new Error(t('out of range {0}-{1}: "{2}"', f.min, f.max, part));
     for (let v = lo; v <= hi; v += step) out.add(v);
   }
   return out;
@@ -86,7 +87,7 @@ function parseField(text: string, f: Field): Set<number> {
 
 export function parseCron(expr: string): Cron {
   const parts = expr.trim().split(/\s+/);
-  if (parts.length !== 5) throw new Error('o cron precisa de 5 campos: minuto hora dia mês dia-da-semana');
+  if (parts.length !== 5) throw new Error(t('cron needs 5 fields: minute hour day month weekday'));
   const [mi, h, d, mo, w] = parts.map((p, i) => parseField(p, FIELDS[i]));
   if (w.has(7)) w.add(0);
   return { minutes: mi, hours: h, days: d, months: mo, weekdays: w, domStar: parts[2] === '*', dowStar: parts[4] === '*' };
@@ -141,61 +142,75 @@ const WEEKDAYS: Record<string, number> = {
   domingo: 0, dom: 0, segunda: 1, seg: 1, 'segunda-feira': 1, terça: 2, terca: 2, ter: 2, 'terça-feira': 2,
   quarta: 3, qua: 3, 'quarta-feira': 3, quinta: 4, qui: 4, 'quinta-feira': 4, sexta: 5, sex: 5, 'sexta-feira': 5,
   sábado: 6, sabado: 6, sab: 6, sáb: 6,
+  // inglês
+  sunday: 0, sun: 0, monday: 1, mon: 1, tuesday: 2, tue: 2, tues: 2, wednesday: 3, wed: 3, thursday: 4, thu: 4, thur: 4, thurs: 4,
+  friday: 5, fri: 5, saturday: 6, sat: 6,
 };
 
+/** "9", "9h", "09:30", "8h30", e também "9am", "9:30 pm". */
 const hm = (s: string) => {
-  const m = /^(\d{1,2})(?:[:h](\d{2}))?h?$/.exec(s.trim());
+  const m = /^(\d{1,2})(?:[:h](\d{2}))?(?:h|\s?(am|pm))?$/.exec(s.trim());
   if (!m) return undefined;
-  const h = Number(m[1]);
+  let h = Number(m[1]);
   const mi = Number(m[2] ?? 0);
+  if (m[3]) {
+    if (h < 1 || h > 12) return undefined;
+    h = (h % 12) + (m[3] === 'pm' ? 12 : 0);
+  }
   return h <= 23 && mi <= 59 ? { h, mi } : undefined;
 };
 
 /**
  * Interpreta o "quando": um cron de 5 campos ou um atalho:
  *   "todo dia às 09:00", "dias úteis às 8h30", "toda segunda às 10:00", "a cada 2 h",
- *   "a cada 30 min", "de hora em hora", "uma vez em 2026-10-01 14:00".
+ *   "a cada 30 min", "de hora em hora", "uma vez em 2026-10-01 14:00";
+ * ou em inglês: "every day at 9am", "weekdays at 8:30", "every monday at 10:00", "every 2 hours",
+ *   "every 30 min", "hourly", "once on 2026-10-01 14:00".
  */
 export function parseWhen(text: string): When {
-  const t = text.trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!t) throw new Error('informe quando');
+  const s = text.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!s) throw new Error(t('enter when'));
+  const badTime = () => new Error(t('invalid time'));
   let m: RegExpExecArray | null;
-  if ((m = /^uma vez em (\d{4})-(\d{2})-(\d{2})(?:[ t](\d{1,2}[:h]\d{2}|\d{1,2}h?))?$/.exec(t))) {
+  if ((m = /^(?:uma vez em|once on|once at|once) (\d{4})-(\d{2})-(\d{2})(?:[ t](\d{1,2}[:h]\d{2}|\d{1,2}h?|\d{1,2}(?::\d{2})? ?(?:am|pm)))?$/.exec(s))) {
     const time = m[4] ? hm(m[4]) : { h: 9, mi: 0 };
-    if (!time) throw new Error('hora inválida');
+    if (!time) throw badTime();
     const at = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), time.h, time.mi).getTime();
-    if (Number.isNaN(at)) throw new Error('data inválida');
+    if (Number.isNaN(at)) throw new Error(t('invalid date'));
     return { kind: 'once', at };
   }
-  if ((m = /^(?:todo dia|todos os dias|diariamente) (?:às|as|a) (.+)$/.exec(t))) {
+  if ((m = /^(?:(?:todo dia|todos os dias|diariamente) (?:às|as|a)|(?:every day|everyday|daily) at) (.+)$/.exec(s))) {
     const x = hm(m[1]);
-    if (!x) throw new Error('hora inválida');
+    if (!x) throw badTime();
     return { kind: 'cron', expr: `${x.mi} ${x.h} * * *` };
   }
-  if ((m = /^(?:dias úteis|dias uteis|de segunda a sexta) (?:às|as|a) (.+)$/.exec(t))) {
+  if ((m = /^(?:(?:dias úteis|dias uteis|de segunda a sexta) (?:às|as|a)|(?:weekdays|every weekday|monday to friday|monday through friday) at) (.+)$/.exec(s))) {
     const x = hm(m[1]);
-    if (!x) throw new Error('hora inválida');
+    if (!x) throw badTime();
     return { kind: 'cron', expr: `${x.mi} ${x.h} * * 1-5` };
   }
-  if ((m = /^(?:todo|toda) ([a-zçáé-]+) (?:às|as|a) (.+)$/.exec(t)) && m[1] in WEEKDAYS) {
+  if (
+    ((m = /^(?:todo|toda) ([a-zçáé-]+) (?:às|as|a) (.+)$/.exec(s)) || (m = /^(?:every|on) ([a-z]+?)s? at (.+)$/.exec(s))) &&
+    m[1] in WEEKDAYS
+  ) {
     const x = hm(m[2]);
-    if (!x) throw new Error('hora inválida');
+    if (!x) throw badTime();
     return { kind: 'cron', expr: `${x.mi} ${x.h} * * ${WEEKDAYS[m[1]]}` };
   }
-  if (t === 'de hora em hora' || t === 'a cada hora') return { kind: 'cron', expr: '0 * * * *' };
-  if (t === 'a cada minuto') return { kind: 'cron', expr: '* * * * *' };
-  if ((m = /^a cada (\d+) ?(h|hora|horas)$/.exec(t))) {
+  if (s === 'de hora em hora' || s === 'a cada hora' || s === 'hourly' || s === 'every hour') return { kind: 'cron', expr: '0 * * * *' };
+  if (s === 'a cada minuto' || s === 'every minute') return { kind: 'cron', expr: '* * * * *' };
+  if ((m = /^(?:a cada|every) (\d+) ?(h|hora|horas|hr|hrs|hour|hours)$/.exec(s))) {
     const n = Number(m[1]);
-    if (n < 1 || n > 23) throw new Error('use de 1 a 23 horas');
+    if (n < 1 || n > 23) throw new Error(t('use 1 to 23 hours'));
     return { kind: 'cron', expr: `0 */${n} * * *` };
   }
-  if ((m = /^a cada (\d+) ?(min|minuto|minutos)$/.exec(t))) {
+  if ((m = /^(?:a cada|every) (\d+) ?(min|minuto|minutos|mins|minute|minutes)$/.exec(s))) {
     const n = Number(m[1]);
-    if (n < 1 || n > 59) throw new Error('use de 1 a 59 minutos');
+    if (n < 1 || n > 59) throw new Error(t('use 1 to 59 minutes'));
     return { kind: 'cron', expr: `*/${n} * * * *` };
   }
-  parseCron(t); // lança se não for cron válido
-  return { kind: 'cron', expr: t };
+  parseCron(s); // lança se não for cron válido
+  return { kind: 'cron', expr: s };
 }
 
 /** Próximo horário do agendamento depois de `from` (undefined: "uma vez" que já passou). */
@@ -232,22 +247,24 @@ export function missedSince(when: When, since: number, now: number): Date | unde
   return last;
 }
 
-/** Texto amigável: "hoje 14:00", "amanhã 09:00", "seg 08:30", "12/10 09:00". */
+/** Texto amigável: "hoje 14:00", "amanhã 09:00", "seg 08:30", "12/10 09:00" (traduzido). */
 export function relativeTime(d: Date, now = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(d) - day(now)) / 86400_000);
-  if (diff === 0) return `hoje ${time}`;
-  if (diff === 1) return `amanhã ${time}`;
-  if (diff === -1) return `ontem ${time}`;
-  if (diff > 1 && diff < 7) return `${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.getDay()]} ${time}`;
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}${d.getFullYear() !== now.getFullYear() ? `/${d.getFullYear()}` : ''} ${time}`;
+  if (diff === 0) return t('today {0}', time);
+  if (diff === 1) return t('tomorrow {0}', time);
+  if (diff === -1) return t('yesterday {0}', time);
+  // dia da semana abreviado no idioma da interface ("qua", "Wed"), sem o ponto do pt-BR
+  if (diff > 1 && diff < 7) return `${d.toLocaleDateString(locale(), { weekday: 'short' }).replace(/\.$/, '')} ${time}`;
+  const date = d.toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) });
+  return `${date} ${time}`;
 }
 
 /** Troca ${nome} pelos valores; placeholders desconhecidos ficam como estão. */
-export function renderTemplate(t: string, vars: Record<string, string>): string {
-  return t.replace(/\$\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+export function renderTemplate(tpl: string, vars: Record<string, string>): string {
+  return tpl.replace(/\$\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
 }
 
 export function slug(s: string): string {
@@ -268,8 +285,8 @@ export function newBranchName(prefix: string, name: string, at: Date): string {
   return `${(prefix || 'agendado').replace(/\/+$/, '')}/${slug(name)}-${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 }
 
-export function describeTarget(t: Target): string {
-  if (t.kind === 'branch') return t.branch;
-  if (t.kind === 'new') return `nova worktree (${t.prefix || 'agendado'}/…)`;
-  return `cada worktree ${t.pattern}`;
+export function describeTarget(target: Target): string {
+  if (target.kind === 'branch') return target.branch;
+  if (target.kind === 'new') return t('new worktree ({0}/…)', target.prefix || 'agendado');
+  return t('each worktree {0}', target.pattern);
 }

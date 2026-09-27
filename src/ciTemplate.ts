@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
 import { flowStages } from './flow';
+import { t } from './i18n';
 
 export interface CiOptions {
   base: string;
@@ -28,16 +29,16 @@ const slug = (s: string) => s.replace(/[^\w.-]+/g, '-');
 export function buildWorkflow(template: string, o: CiOptions): string {
   const test = o.testCommand.trim()
     ? [
-        '      # Prepare o ambiente antes da verificação, por exemplo:',
+        `      # ${t('Prepare the environment before the check, for example:')}`,
         '      # - uses: actions/setup-node@v4',
         '      #   with: { node-version: 20, cache: npm }',
         '      # - run: npm ci',
-        '      - name: Verificação',
+        `      - name: ${t('Check')}`,
         '        shell: bash',
         '        run: |',
         ...o.testCommand.split(/\r?\n/).map(l => `          ${l}`),
       ].join('\n')
-    : ['      # Sem verificação configurada. Para rodar testes antes do push, adicione aqui:', '      # - name: Verificação', '      #   run: npm test'].join('\n');
+    : [`      # ${t('No check configured. To run tests before the push, add them here:')}`, `      # - name: ${t('Check')}`, '      #   run: npm test'].join('\n');
   return template
     .replace(/__BASE__/g, o.base)
     .replace(/__PATTERNS__/g, toShPatterns(o.patterns))
@@ -52,7 +53,7 @@ export function buildGitLabCi(template: string, pairs: SyncPair[], testCommand: 
     [
       `# ${p.description}`,
       `wtgraph-${slug(p.name)}:`,
-      '  # O estágio "deploy" existe por padrão; se o seu .gitlab-ci.yml define "stages:", use um que exista.',
+      `  # ${t('The "deploy" stage exists by default; if your .gitlab-ci.yml defines "stages:", use one that exists.')}`,
       '  stage: deploy',
       `  image: ${image}`,
       '  rules:',
@@ -67,7 +68,7 @@ export function buildGitLabCi(template: string, pairs: SyncPair[], testCommand: 
       '  script:',
       '    - |',
       '      set -eu',
-      '      : "${SYNC_TOKEN:?defina a variável SYNC_TOKEN em Settings > CI/CD > Variables}"',
+      '      : "${SYNC_TOKEN:?' + t('set the SYNC_TOKEN variable in Settings > CI/CD > Variables') + '}"',
       '      command -v git >/dev/null 2>&1 || apk add --no-cache git',
       '      git config user.name "worktree-graph-sync"',
       '      git config user.email "worktree-graph-sync@${CI_SERVER_HOST}"',
@@ -85,20 +86,20 @@ export function buildGitLabCi(template: string, pairs: SyncPair[], testCommand: 
       '        if git merge-base --is-ancestor "origin/$BASE_BRANCH" "origin/$ref"; then continue; fi',
       '        echo "== $ref"',
       '        git checkout -q -B "$ref" "origin/$ref"',
-      '        if ! git merge --no-edit -m "Merge $BASE_BRANCH into $ref (sync automático)" "origin/$BASE_BRANCH"; then',
-      '          echo "conflito ao mesclar $BASE_BRANCH em $ref:"',
+      '        if ! git merge --no-edit -m "Merge $BASE_BRANCH into $ref (auto sync)" "origin/$BASE_BRANCH"; then',
+      `          echo "${t('conflict merging {0} into {1}:', '$BASE_BRANCH', '$ref')}"`,
       "          git diff --name-only --diff-filter=U | sed 's/^/  - /'",
       '          git merge --abort; failed="$failed $ref"; continue',
       '        fi',
       `        if ! ( ${test} ); then`,
-      '          echo "verificação falhou em $ref; nada foi enviado"',
+      `          echo "${t('check failed on {0}; nothing was pushed', '$ref')}"`,
       '          git reset -q --hard "origin/$ref"; failed="$failed $ref"; continue',
       '        fi',
       '        git push -q "$PUSH_URL" "HEAD:refs/heads/$ref"',
       '        synced="$synced $ref"',
       '      done',
-      '      echo "sincronizadas:${synced:- nenhuma}"',
-      '      if [ -n "$failed" ]; then echo "com conflito ou verificação falhando:$failed"; exit 1; fi',
+      '      echo "' + t('synced:') + '${synced:- ' + t('(none)') + '}"',
+      '      if [ -n "$failed" ]; then echo "' + t('with conflicts or failing check:') + '$failed"; exit 1; fi',
     ].join('\n'),
   );
   const desc = pairs.map(p => p.description).join('\n# ');
@@ -116,7 +117,7 @@ function guessImage(test: string): string {
 async function writeFile(root: string, rel: string, content: string): Promise<boolean> {
   const file = path.join(root, rel);
   if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') !== content) {
-    const ok = await vscode.window.showWarningMessage(`${rel} já existe.`, { modal: true }, 'Sobrescrever');
+    const ok = await vscode.window.showWarningMessage(t('{0} already exists.', rel), { modal: true }, t('Overwrite'));
     if (!ok) return false;
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -126,7 +127,7 @@ async function writeFile(root: string, rel: string, content: string): Promise<bo
 
 export async function generateCiWorkflow(ctl: Controller) {
   const repo = ctl.repo;
-  if (!repo) throw new Error('Nenhum repositório git aberto.');
+  if (!repo) throw new Error(t('No git repository open.'));
   const c = ctl.cfg();
   const { base: detectedBase } = await ctl.base();
   const stages = flowStages(ctl);
@@ -138,9 +139,9 @@ export async function generateCiWorkflow(ctl: Controller) {
     // Bitbucket Pipelines e Azure Pipelines ainda não têm template de sync
     const name = remote.kind === 'azure' ? 'Azure Pipelines' : 'Bitbucket Pipelines';
     const go = await vscode.window.showInformationMessage(
-      `Ainda não há template de sync para ${name}.`,
-      { modal: true, detail: 'O sync local da extensão funciona normalmente com este remoto. Se quiser, dá para gerar o workflow do GitHub Actions ou do GitLab CI como ponto de partida.' },
-      'Gerar para GitHub/GitLab mesmo assim',
+      t('There is no sync template for {0} yet.', name),
+      { modal: true, detail: t('The extension\'s local sync works normally with this remote. If you want, you can generate the GitHub Actions or GitLab CI workflow as a starting point.') },
+      t('Generate for GitHub/GitLab anyway'),
     );
     if (!go) return;
   }
@@ -148,9 +149,9 @@ export async function generateCiWorkflow(ctl: Controller) {
     const p = await vscode.window.showQuickPick(
       [
         { label: 'GitHub Actions', value: 'github' as const },
-        { label: 'GitLab CI', value: 'gitlab' as const, detail: 'GitLab.com ou self-hosted' },
+        { label: 'GitLab CI', value: 'gitlab' as const, detail: t('GitLab.com or self-hosted') },
       ],
-      { title: 'Gerar CI: para qual plataforma?' },
+      { title: t('Generate CI: for which platform?') },
     );
     if (!p) return;
     provider = p.value;
@@ -159,16 +160,16 @@ export async function generateCiWorkflow(ctl: Controller) {
   // 2. O quê
   type Mode = 'sync' | 'backmerge';
   const modes: (vscode.QuickPickItem & { value: Mode[] })[] = [
-    { label: 'Manter as branches de trabalho em dia com uma base', detail: 'A cada push na base, ela é mesclada nas branches que casam com os padrões.', value: ['sync'] },
+    { label: t('Keep work branches up to date with a base'), detail: t('On each push to the base, it is merged into the branches that match the patterns.'), value: ['sync'] },
   ];
   if (stages.length > 1) {
     const chain = [...stages].reverse().map(s => s.branch).join(' → ');
     modes.push(
-      { label: 'Back-merge do fluxo de ambientes', detail: `Correção que entra num estágio desce para os anteriores: ${chain}.`, value: ['backmerge'] },
-      { label: 'Os dois', value: ['sync', 'backmerge'] },
+      { label: t('Environment flow back-merge'), detail: t('A fix that lands in a stage flows down to the previous ones: {0}.', chain), value: ['backmerge'] },
+      { label: t('Sync and back-merge'), value: ['sync', 'backmerge'] },
     );
   }
-  const mode = modes.length === 1 ? modes[0] : await vscode.window.showQuickPick(modes, { title: 'Gerar CI: o que automatizar?' });
+  const mode = modes.length === 1 ? modes[0] : await vscode.window.showQuickPick(modes, { title: t('Generate CI: what to automate?') });
   if (!mode) return;
 
   const pairs: SyncPair[] = [];
@@ -179,15 +180,15 @@ export async function generateCiWorkflow(ctl: Controller) {
     const picked = await vscode.window.showQuickPick(
       names.map(n => ({
         label: n,
-        description: [n === detectedBase ? 'base atual' : '', stages.find(s => s.branch === n)?.label ?? ''].filter(Boolean).join(' · '),
+        description: [n === detectedBase ? t('current base') : '', stages.find(s => s.branch === n)?.label ?? ''].filter(Boolean).join(' · '),
       })),
-      { title: 'Gerar CI: qual branch é a base que desce para as branches de trabalho?', placeHolder: detectedBase },
+      { title: t('Generate CI: which branch is the base that flows down to the work branches?'), placeHolder: detectedBase },
     );
     if (!picked) return;
     const base = picked.label;
     const patternsRaw = await vscode.window.showInputBox({
-      title: `Gerar CI: quais branches recebem ${base}?`,
-      prompt: 'Padrões separados por espaço; * casa qualquer coisa, inclusive "/". Ex.: feat/* ai/* fix/*',
+      title: t('Generate CI: which branches receive {0}?', base),
+      prompt: t('Space-separated patterns; * matches anything, including "/". E.g. feat/* ai/* fix/*'),
       value: c.get<string[]>('autoSync.branches', ['**']).join(' '),
     });
     if (patternsRaw === undefined) return;
@@ -198,7 +199,7 @@ export async function generateCiWorkflow(ctl: Controller) {
       patterns: patternsRaw.split(/\s+/).filter(Boolean),
       exclude,
       name: `sync-${slug(base)}-into-branches`,
-      description: `Quando ${base} recebe commits, ${base} é mesclada em cada branch que casa com os padrões; roda a verificação e faz push.`,
+      description: t('When {0} receives commits, {0} is merged into each branch that matches the patterns; runs the check and pushes.', base),
     });
   }
   if (mode.value.includes('backmerge')) {
@@ -210,14 +211,14 @@ export async function generateCiWorkflow(ctl: Controller) {
         patterns: [to],
         exclude: [],
         name: `backmerge-${slug(from)}-into-${slug(to)}`,
-        description: `Back-merge: o que entra em ${from} (${stages[i].label}) desce para ${to} (${stages[i - 1].label}).`,
+        description: t('Back-merge: what lands in {0} ({1}) flows down to {2} ({3}).', from, stages[i].label, to, stages[i - 1].label),
       });
     }
   }
 
   const testCommand = await vscode.window.showInputBox({
-    title: 'Gerar CI: comando de verificação depois do merge',
-    prompt: 'Roda antes do push; se falhar, a branch não é alterada. Vazio = sem verificação. Ex.: npm ci && npm test',
+    title: t('Generate CI: check command after the merge'),
+    prompt: t('Runs before the push; if it fails, the branch is not changed. Empty = no check. E.g. npm ci && npm test'),
     value: c.get<string>('autoSync.testCommand', ''),
   });
   if (testCommand === undefined) return;
@@ -235,8 +236,8 @@ export async function generateCiWorkflow(ctl: Controller) {
     }
   } else {
     const image = await vscode.window.showInputBox({
-      title: 'Gerar CI: imagem Docker do job',
-      prompt: 'Precisa ter o que a verificação usa (git é instalado se faltar).',
+      title: t('Generate CI: Docker image for the job'),
+      prompt: t('It must have what the check uses (git is installed if missing).'),
       value: guessImage(testCommand),
     });
     if (!image) return;
@@ -247,8 +248,11 @@ export async function generateCiWorkflow(ctl: Controller) {
   }
   if (!written.length) return;
   for (const w of written) await vscode.window.showTextDocument(vscode.Uri.file(path.join(repo.root, w)), { preview: false });
-  const where = provider === 'gitlab' ? 'Crie a variável SYNC_TOKEN (write_repository) no projeto, faça' : 'Faça';
-  vscode.window.showInformationMessage(`${written.length} arquivo(s) de CI criado(s). ${where} commit e push para ativar.`);
+  vscode.window.showInformationMessage(
+    provider === 'gitlab'
+      ? t('{0} CI file(s) created. Create the SYNC_TOKEN variable (write_repository) in the project, commit and push to activate.', written.length)
+      : t('{0} CI file(s) created. Commit and push to activate.', written.length),
+  );
 }
 
 /** Garante o include no .gitlab-ci.yml sem estragar um pipeline que já existe. */
@@ -267,7 +271,7 @@ async function ensureGitLabInclude(root: string, rel: string) {
   }
   if (/^include:/m.test(text)) {
     await vscode.window.showTextDocument(vscode.Uri.file(main));
-    vscode.window.showWarningMessage(`Adicione "${rel}" ao include do .gitlab-ci.yml (o formato atual não dá para editar automaticamente).`);
+    vscode.window.showWarningMessage(t('Add "{0}" to the include in .gitlab-ci.yml (the current format cannot be edited automatically).', rel));
     return;
   }
   fs.writeFileSync(main, `include:\n${line}\n\n${text}`);

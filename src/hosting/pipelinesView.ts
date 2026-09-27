@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { createWorktree } from '../actions';
 import { fillTemplate } from '../agents';
 import type { Controller } from '../controller';
+import { t } from '../i18n';
 import { formatDuration, Pipeline, PipelineClient, pipelineClient, PipelineJob, PipelineStatus, tailLog } from './pipelines';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
@@ -10,17 +11,22 @@ type Scope = 'worktrees' | 'all';
 const IDLE_MS = 60_000;
 const BUSY_MS = 10_000;
 
-const DEFAULT_FIX_PROMPT = [
-  'O pipeline "${pipeline}" da branch ${branch} falhou (${url}).',
-  'Jobs com falha: ${jobs}.',
-  '',
-  'Final do log do primeiro job que falhou:',
-  '```',
-  '${log}',
-  '```',
-  '',
-  'Descubra a causa, corrija na branch ${branch}, rode localmente o que for possível (testes, lint, build) e faça commit. Não faça push sem me perguntar. Se a falha for de infraestrutura do CI e não do código, explique em vez de mudar o código.',
-].join('\n');
+function defaultFixPrompt() {
+  return [
+    t('The pipeline "{0}" on branch {1} failed ({2}).', '${pipeline}', '${branch}', '${url}'),
+    t('Failed jobs: {0}.', '${jobs}'),
+    '',
+    t('End of the log of the first failed job:'),
+    '```',
+    '${log}',
+    '```',
+    '',
+    t(
+      'Find the cause, fix it on branch {0}, run locally whatever you can (tests, lint, build) and commit. Do not push without asking me. If the failure is in the CI infrastructure and not in the code, explain instead of changing the code.',
+      '${branch}',
+    ),
+  ].join('\n');
+}
 
 /**
  * Pipelines do remoto, atualizados a cada 60 s (10 s enquanto algum estiver rodando). Só pede
@@ -158,11 +164,13 @@ export class PipelineService implements vscode.Disposable {
       this.notified.add(p.id);
       if (p.status !== 'failed' || !withWorktree.has(p.branch)) continue;
       const agent = this.agentName();
+      const viewLog = t('View log');
+      const rerun = t('Re-run');
       vscode.window
-        .showWarningMessage(`Pipeline "${p.name}" falhou em ${p.branch}.`, 'Ver log', 'Re-executar', `✦ Pedir ao ${agent} para corrigir`)
+        .showWarningMessage(t('Pipeline "{0}" failed on {1}.', p.name, p.branch), viewLog, rerun, t('✦ Ask {0} to fix it', agent))
         .then(pick => {
-          if (pick === 'Ver log') return this.showLog(p);
-          if (pick === 'Re-executar') return this.retry(p, true);
+          if (pick === viewLog) return this.showLog(p);
+          if (pick === rerun) return this.retry(p, true);
           if (pick) return this.fixWithAgent(p);
         });
     }
@@ -197,16 +205,16 @@ export class PipelineService implements vscode.Disposable {
   }
 
   retry(p: Pipeline, onlyFailed = false) {
-    return this.act(onlyFailed ? `Re-executando os jobs que falharam de ${p.name}…` : `Re-executando ${p.name}…`, c => c.retry(p, onlyFailed));
+    return this.act(onlyFailed ? t('Re-running the failed jobs of {0}…', p.name) : t('Re-running {0}…', p.name), c => c.retry(p, onlyFailed));
   }
 
   async cancel(p: Pipeline) {
-    const ok = await vscode.window.showWarningMessage(`Cancelar "${p.name}" em ${p.branch}?`, { modal: true }, 'Cancelar pipeline');
-    if (ok) await this.act(`Cancelando ${p.name}…`, c => c.cancel(p));
+    const ok = await vscode.window.showWarningMessage(t('Cancel "{0}" on {1}?', p.name, p.branch), { modal: true }, t('Cancel pipeline'));
+    if (ok) await this.act(t('Canceling {0}…', p.name), c => c.cancel(p));
   }
 
   playJob(job: PipelineJob) {
-    return this.act(`Iniciando o job manual ${job.name}…`, c => c.play(job));
+    return this.act(t('Starting manual job {0}…', job.name), c => c.play(job));
   }
 
   /** Dispara um pipeline para a branch; no GitHub (workflow_dispatch) e no Azure, escolhe qual. */
@@ -216,7 +224,7 @@ export class PipelineService implements vscode.Disposable {
       (
         await vscode.window.showQuickPick(
           [...this.relevantBranches()].map(x => ({ label: x })),
-          { placeHolder: 'Rodar pipeline em qual branch?' },
+          { placeHolder: t('Run the pipeline on which branch?') },
         )
       )?.label;
     if (!b) return;
@@ -227,20 +235,20 @@ export class PipelineService implements vscode.Disposable {
     if (client.kind === 'github' || client.kind === 'azure') {
       const wfs = await client.workflows().catch(() => []);
       if (!wfs.length) {
-        vscode.window.showWarningMessage(client.kind === 'azure' ? 'Nenhuma definição de pipeline encontrada neste projeto.' : 'Nenhum workflow ativo encontrado neste repositório.');
+        vscode.window.showWarningMessage(client.kind === 'azure' ? t('No pipeline definition found in this project.') : t('No active workflow found in this repository.'));
         return;
       }
       const pick = await vscode.window.showQuickPick(
         wfs.map(w => ({ label: w.name, description: w.path, id: w.id })),
         {
-          title: `Disparar pipeline em ${b}`,
-          placeHolder: client.kind === 'github' ? 'O workflow precisa ter o gatilho workflow_dispatch' : 'Qual pipeline rodar',
+          title: t('Trigger pipeline on {0}', b),
+          placeHolder: client.kind === 'github' ? t('The workflow must have the workflow_dispatch trigger') : t('Which pipeline to run'),
         },
       );
       if (!pick) return;
       workflowId = pick.id;
     }
-    await this.act(`Disparando pipeline em ${b}…`, c => c.trigger(b, workflowId));
+    await this.act(t('Triggering pipeline on {0}…', b), c => c.trigger(b, workflowId));
   }
 
   /** Job que falhou (ou o escolhido), para log e correção. */
@@ -251,13 +259,13 @@ export class PipelineService implements vscode.Disposable {
     if (failed.length === 1) return failed[0];
     const list = failed.length ? failed : jobs;
     if (list.length === 1) return list[0];
-    return (await vscode.window.showQuickPick(list.map(j => ({ label: j.name, description: `${j.stage ? `${j.stage} · ` : ''}${j.status}`, j })), { placeHolder: 'Log de qual job?' }))?.j;
+    return (await vscode.window.showQuickPick(list.map(j => ({ label: j.name, description: `${j.stage ? `${j.stage} · ` : ''}${statusLabel(j.status)}`, j })), { placeHolder: t('Log of which job?') }))?.j;
   }
 
   async showLog(p: Pipeline, job?: PipelineJob) {
     const j = await this.failedJob(p, job);
     if (!j) return;
-    const text = await this.act(`Baixando o log de ${j.name}…`, c => c.log(j));
+    const text = await this.act(t('Downloading the log of {0}…', j.name), c => c.log(j));
     if (text === undefined) return;
     // eslint-disable-next-line no-control-regex
     const clean = String(text).replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
@@ -272,19 +280,19 @@ export class PipelineService implements vscode.Disposable {
     let log = '';
     const client = await this.client(true);
     if (!client) return;
-    if (failed[0]) log = tailLog(String(await client.log(failed[0]).catch(e => `(não consegui baixar o log: ${(e as Error).message})`)), 150);
+    if (failed[0]) log = tailLog(String(await client.log(failed[0]).catch(e => t('(could not download the log: {0})', (e as Error).message))), 150);
     const wts = (await this.ctl.repo?.worktreesFast()) ?? [];
     if (!wts.some(w => w.branch === p.branch)) {
       const dir = await createWorktree(this.ctl, { existing: p.branch, quiet: true });
       if (!dir) return;
     }
-    const template = this.ctl.cfg().get<string>('prompts.fixPipeline', '') || DEFAULT_FIX_PROMPT;
+    const template = this.ctl.cfg().get<string>('prompts.fixPipeline', '') || defaultFixPrompt();
     const prompt = fillTemplate(template, {
       branch: p.branch,
       pipeline: p.name,
       url: p.url,
-      jobs: failed.map(j => j.name).join(', ') || '(não identificados)',
-      log: log || '(sem log)',
+      jobs: failed.map(j => j.name).join(', ') || t('(not identified)'),
+      log: log || t('(no log)'),
     });
     await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { branch: p.branch, prompt });
   }
@@ -309,16 +317,19 @@ const ICON: Record<PipelineStatus, [string, string | undefined]> = {
   other: ['question', undefined],
 };
 
-const LABEL: Record<PipelineStatus, string> = {
-  success: 'passou',
-  failed: 'falhou',
-  running: 'rodando',
-  queued: 'na fila',
-  canceled: 'cancelado',
-  skipped: 'pulado',
-  manual: 'aguardando ação manual',
-  other: 'outro',
-};
+function statusLabel(s: PipelineStatus): string {
+  const labels: Record<PipelineStatus, string> = {
+    success: t('passed'),
+    failed: t('failed'),
+    running: t('running'),
+    queued: t('queued'),
+    canceled: t('canceled'),
+    skipped: t('skipped'),
+    manual: t('waiting for manual action'),
+    other: t('other'),
+  };
+  return labels[s];
+}
 
 function icon(s: PipelineStatus) {
   const [id, color] = ICON[s];
@@ -327,10 +338,10 @@ function icon(s: PipelineStatus) {
 
 function ago(unix: number) {
   const s = Math.max(0, Date.now() / 1000 - unix);
-  if (s < 60) return 'agora';
-  if (s < 3600) return `${Math.floor(s / 60)} min`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h`;
-  return `${Math.floor(s / 86400)} d`;
+  if (s < 60) return t('now');
+  if (s < 3600) return t('{0} min', Math.floor(s / 60));
+  if (s < 86400) return t('{0} h', Math.floor(s / 3600));
+  return t('{0} d', Math.floor(s / 86400));
 }
 
 export class PipelineItem extends vscode.TreeItem {
@@ -341,7 +352,7 @@ export class PipelineItem extends vscode.TreeItem {
     this.iconPath = icon(pipeline.status);
     this.description = [pipeline.branch, formatDuration(pipeline.durationSec), ago(pipeline.createdAt)].filter(Boolean).join(' · ');
     this.tooltip = new vscode.MarkdownString(
-      `**${pipeline.name}** — ${LABEL[pipeline.status]}\n\nBranch \`${pipeline.branch}\` · \`${pipeline.sha.slice(0, 8)}\` · ${pipeline.event}\n\n[Abrir no navegador](${pipeline.url})`,
+      `**${pipeline.name}** — ${statusLabel(pipeline.status)}\n\nBranch \`${pipeline.branch}\` · \`${pipeline.sha.slice(0, 8)}\` · ${pipeline.event}\n\n[${t('Open in browser')}](${pipeline.url})`,
     );
     this.contextValue = `pipeline-${pipeline.status}-${pipeline.provider}`;
   }
@@ -353,9 +364,9 @@ export class JobItem extends vscode.TreeItem {
     super(job.name, vscode.TreeItemCollapsibleState.None);
     this.id = `job:${pipeline.provider}:${job.id}`;
     this.iconPath = icon(job.status);
-    this.description = [job.stage, LABEL[job.status], formatDuration(job.durationSec)].filter(Boolean).join(' · ');
+    this.description = [job.stage, statusLabel(job.status), formatDuration(job.durationSec)].filter(Boolean).join(' · ');
     this.contextValue = `pipelineJob-${job.status}-${pipeline.provider}`;
-    this.command = { command: 'worktreeGraph.pipelines.log', title: 'Ver log', arguments: [this] };
+    this.command = { command: 'worktreeGraph.pipelines.log', title: t('View log'), arguments: [this] };
   }
 }
 
@@ -384,14 +395,14 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<Node> {
 
   async getChildren(el?: Node): Promise<Node[]> {
     if (!el) {
-      if (this.svc.unavailable === 'noRemote') return [new InfoItem('Remoto não é GitHub, GitLab, Bitbucket nem Azure DevOps reconhecido', 'worktreeGraph.connectHosting', 'info')];
-      if (this.svc.unavailable === 'noAuth') return [new InfoItem('Conectar ao remoto para ver os pipelines…', 'worktreeGraph.connectHosting', 'plug')];
-      if (this.svc.error) return [new InfoItem(`Erro: ${this.svc.error}`, 'worktreeGraph.pipelines.refresh', 'error')];
+      if (this.svc.unavailable === 'noRemote') return [new InfoItem(t('Remote is not a recognized GitHub, GitLab, Bitbucket or Azure DevOps remote'), 'worktreeGraph.connectHosting', 'info')];
+      if (this.svc.unavailable === 'noAuth') return [new InfoItem(t('Connect to the remote to see pipelines…'), 'worktreeGraph.connectHosting', 'plug')];
+      if (this.svc.error) return [new InfoItem(t('Error: {0}', this.svc.error), 'worktreeGraph.pipelines.refresh', 'error')];
       const list = this.svc.visible();
       if (!list.length) {
         return [
           new InfoItem(
-            this.svc.scope === 'worktrees' ? 'Nenhum pipeline nas branches com worktree (mostrar todos no título)' : 'Nenhum pipeline',
+            this.svc.scope === 'worktrees' ? t('No pipelines on branches with a worktree (show all from the title bar)') : t('No pipelines'),
             'worktreeGraph.pipelines.refresh',
             'check',
           ),
@@ -402,9 +413,9 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<Node> {
     if (el instanceof PipelineItem) {
       try {
         const jobs = await this.svc.jobs(el.pipeline);
-        return jobs.length ? jobs.map(j => new JobItem(el.pipeline, j)) : [new InfoItem('Sem jobs', undefined, 'info')];
+        return jobs.length ? jobs.map(j => new JobItem(el.pipeline, j)) : [new InfoItem(t('No jobs'), undefined, 'info')];
       } catch (e) {
-        return [new InfoItem(`Erro: ${(e as Error).message}`, undefined, 'error')];
+        return [new InfoItem(t('Error: {0}', (e as Error).message), undefined, 'error')];
       }
     }
     return [];
@@ -426,7 +437,7 @@ export function registerPipelines(ctx: vscode.ExtensionContext, ctl: Controller,
       return svc.pipelines.find(p => String(p.id) === String(arg));
     }
     const list = svc.visible();
-    return (await vscode.window.showQuickPick(list.map(p => ({ label: p.name, description: `${p.branch} · ${LABEL[p.status]}`, p })), { placeHolder: 'Qual pipeline?' }))?.p;
+    return (await vscode.window.showQuickPick(list.map(p => ({ label: p.name, description: `${p.branch} · ${statusLabel(p.status)}`, p })), { placeHolder: t('Which pipeline?') }))?.p;
   };
 
   reg('pipelines.refresh', () => svc.refresh(true));

@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { AgentTerminals } from '../agents';
 import type { Controller } from '../controller';
+import { t } from '../i18n';
 import { keyOf } from './head';
 import type { AgentWatch } from './watch';
 
@@ -57,8 +58,8 @@ export class TaskQueue implements vscode.Disposable {
   summary(p: string): { waiting: number; running?: string } | undefined {
     const q = this.queue(p);
     if (!q) return undefined;
-    const waiting = q.tasks.filter(t => t.status === 'waiting').length;
-    const running = q.tasks.find(t => t.status === 'running')?.text;
+    const waiting = q.tasks.filter(x => x.status === 'waiting').length;
+    const running = q.tasks.find(x => x.status === 'running')?.text;
     return waiting || running ? { waiting, running } : undefined;
   }
 
@@ -68,18 +69,18 @@ export class TaskQueue implements vscode.Disposable {
 
   /** Acrescenta uma tarefa; se nada estiver rodando nessa worktree, já manda para o agente. */
   async add(p: string, branch: string | undefined, text?: string): Promise<Task | undefined> {
-    const t =
+    const typed =
       text ??
       (await vscode.window.showInputBox({
-        title: `Nova tarefa para ${branch ?? path.basename(p)}`,
-        prompt: 'O que o agente deve fazer. Ela entra na fila e roda quando a anterior ficar pronta.',
+        title: t('New task for {0}', branch ?? path.basename(p)),
+        prompt: t('What the agent should do. It goes into the queue and runs when the previous one is ready.'),
         ignoreFocusOut: true,
       }));
-    if (!t?.trim()) return undefined;
+    if (!typed?.trim()) return undefined;
     const all = this.all();
     const k = keyOf(p);
     const q = all[k] ?? { path: p, branch, tasks: [] };
-    const task: Task = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, text: t.trim(), status: 'waiting', created: Date.now() };
+    const task: Task = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, text: typed.trim(), status: 'waiting', created: Date.now() };
     q.tasks.push(task);
     q.branch = branch ?? q.branch;
     all[k] = q;
@@ -90,10 +91,10 @@ export class TaskQueue implements vscode.Disposable {
 
   async startNext(p: string) {
     if (this.ctl.taskBlocked?.(p)) {
-      this.ctl.log(`Fila de tarefas: ${p} parada por orçamento estourado.`);
+      this.ctl.log(t('Task queue: {0} stopped because the budget ran out.', p));
       return;
     }
-    const next = this.queue(p)?.tasks.find(t => t.status === 'waiting');
+    const next = this.queue(p)?.tasks.find(x => x.status === 'waiting');
     if (next) await this.run(p, next.id);
   }
 
@@ -101,9 +102,9 @@ export class TaskQueue implements vscode.Disposable {
   async run(p: string, id: string) {
     const all = this.all();
     const q = all[keyOf(p)];
-    const task = q?.tasks.find(t => t.id === id);
+    const task = q?.tasks.find(x => x.id === id);
     if (!q || !task) return;
-    for (const t of q.tasks) if (t.status === 'running' && t.id !== id) t.status = 'waiting';
+    for (const x of q.tasks) if (x.status === 'running' && x.id !== id) x.status = 'waiting';
     task.status = 'running';
     task.started = Date.now();
     await this.save(all);
@@ -113,7 +114,7 @@ export class TaskQueue implements vscode.Disposable {
   private async onFinished(p: string, ready: boolean) {
     const all = this.all();
     const q = all[keyOf(p)];
-    const cur = q?.tasks.find(t => t.status === 'running');
+    const cur = q?.tasks.find(x => x.status === 'running');
     if (!q || !cur) return;
     cur.status = ready ? 'done' : 'failed';
     cur.finished = Date.now();
@@ -123,10 +124,10 @@ export class TaskQueue implements vscode.Disposable {
 
   async setStatus(p: string, id: string, status: TaskStatus) {
     const all = this.all();
-    const t = all[keyOf(p)]?.tasks.find(x => x.id === id);
-    if (!t) return;
-    t.status = status;
-    if (status === 'done' || status === 'failed') t.finished = Date.now();
+    const task = all[keyOf(p)]?.tasks.find(x => x.id === id);
+    if (!task) return;
+    task.status = status;
+    if (status === 'done' || status === 'failed') task.finished = Date.now();
     await this.save(all);
   }
 
@@ -134,7 +135,7 @@ export class TaskQueue implements vscode.Disposable {
     const all = this.all();
     const q = all[keyOf(p)];
     if (!q) return;
-    const i = q.tasks.findIndex(t => t.id === id);
+    const i = q.tasks.findIndex(x => x.id === id);
     const j = i + delta;
     if (i < 0 || j < 0 || j >= q.tasks.length) return;
     [q.tasks[i], q.tasks[j]] = [q.tasks[j], q.tasks[i]];
@@ -145,13 +146,13 @@ export class TaskQueue implements vscode.Disposable {
     const all = this.all();
     const q = all[keyOf(p)];
     if (!q) return;
-    q.tasks = q.tasks.filter(t => t.id !== id);
+    q.tasks = q.tasks.filter(x => x.id !== id);
     await this.save(all);
   }
 
   async clearFinished() {
     const all = this.all();
-    for (const q of Object.values(all)) q.tasks = q.tasks.filter(t => t.status === 'waiting' || t.status === 'running');
+    for (const q of Object.values(all)) q.tasks = q.tasks.filter(x => x.status === 'waiting' || x.status === 'running');
     await this.save(all);
   }
 
@@ -166,15 +167,20 @@ const ICON: Record<TaskStatus, [string, string]> = {
   done: ['pass', 'testing.iconPassed'],
   failed: ['error', 'testing.iconFailed'],
 };
-const LABEL: Record<TaskStatus, string> = { waiting: 'esperando', running: 'rodando', done: 'pronta', failed: 'falhou' };
+function statusLabel(status: TaskStatus): string {
+  if (status === 'waiting') return t('waiting');
+  if (status === 'running') return t('running');
+  if (status === 'done') return t('done');
+  return t('failed');
+}
 
 class QueueItem extends vscode.TreeItem {
   readonly kind = 'taskQueue';
   constructor(readonly q: Queue) {
     super(q.branch ?? path.basename(q.path), vscode.TreeItemCollapsibleState.Expanded);
     this.id = `tq:${keyOf(q.path)}`;
-    const waiting = q.tasks.filter(t => t.status === 'waiting').length;
-    this.description = [q.tasks.some(t => t.status === 'running') ? 'rodando' : '', waiting ? `${waiting} na fila` : ''].filter(Boolean).join(' · ');
+    const waiting = q.tasks.filter(x => x.status === 'waiting').length;
+    this.description = [q.tasks.some(x => x.status === 'running') ? t('running') : '', waiting ? t('{0} in queue', waiting) : ''].filter(Boolean).join(' · ');
     this.iconPath = new vscode.ThemeIcon('list-ordered');
     this.contextValue = 'taskQueue';
   }
@@ -185,7 +191,7 @@ export class TaskItem extends vscode.TreeItem {
   constructor(readonly q: Queue, readonly task: Task, index: number) {
     super(`${index + 1}. ${task.text.split(/\r?\n/)[0].slice(0, 90)}`, vscode.TreeItemCollapsibleState.None);
     this.id = `task:${task.id}`;
-    this.description = LABEL[task.status];
+    this.description = statusLabel(task.status);
     const [icon, color] = ICON[task.status];
     this.iconPath = new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
     this.tooltip = task.text;
@@ -207,7 +213,7 @@ export class TasksProvider implements vscode.TreeDataProvider<QueueItem | TaskIt
 
   getChildren(el?: QueueItem | TaskItem): (QueueItem | TaskItem)[] {
     if (!el) return Object.values(this.tasks.all()).map(q => new QueueItem(q));
-    if (el instanceof QueueItem) return el.q.tasks.map((t, i) => new TaskItem(el.q, t, i));
+    if (el instanceof QueueItem) return el.q.tasks.map((x, i) => new TaskItem(el.q, x, i));
     return [];
   }
 }

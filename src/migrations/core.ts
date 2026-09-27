@@ -9,6 +9,8 @@
  *   migrations): renumera depois da maior do destino. Timestamps (12+ dígitos) não colidem e ficam de fora.
  */
 
+import { t } from '../i18n';
+
 export type MigrationKind = 'django' | 'alembic' | 'numbered';
 
 export interface MigFile {
@@ -118,17 +120,17 @@ function planAlembic(dir: string, target: MigFile[], added: MigFile[], out: Rech
   const stray = roots.filter(r => !(r.down.length === 1 && r.down[0] === heads[0] && heads.length === 1));
   if (!stray.length) return g;
   if (heads.length !== 1) {
-    return { ...g, status: 'manual', reason: `o destino tem ${heads.length} heads em ${dir}; rode "alembic merge heads" nele antes` };
+    return { ...g, status: 'manual', reason: t('the target has {0} heads in {1}; run "alembic merge heads" on it first', heads.length, dir) };
   }
   if (roots.length > 1) {
-    return { ...g, status: 'manual', reason: `a branch tem ${roots.length} migrations sem ligação entre si em ${dir}; rode "alembic merge heads" nela` };
+    return { ...g, status: 'manual', reason: t('the branch has {0} unconnected migrations in {1}; run "alembic merge heads" on it', roots.length, dir) };
   }
   const root = roots[0];
   if (root.down.length !== 1) {
-    return { ...g, status: 'manual', reason: `${baseOf(root.f.path)} ${root.down.length ? 'é um merge de revisões' : 'não tem down_revision'}; ajuste à mão` };
+    return { ...g, status: 'manual', reason: root.down.length ? t('{0} is a merge of revisions; fix it by hand', baseOf(root.f.path)) : t('{0} has no down_revision; fix it by hand', baseOf(root.f.path)) };
   }
   if (!revs.has(root.down[0])) {
-    return { ...g, status: 'manual', reason: `${baseOf(root.f.path)} depende de ${root.down[0]}, que o destino não tem` };
+    return { ...g, status: 'manual', reason: t('{0} depends on {1}, which the target does not have', baseOf(root.f.path), root.down[0]) };
   }
   const head = heads[0];
   out.writes.push({ path: root.f.path, content: setAlembicDown(root.f.content ?? '', head) });
@@ -171,7 +173,7 @@ function planDjango(dir: string, target: Classified[], added: { f: MigFile; c: C
   const needs = added.some(a => a.c.num! <= max) || roots.some(r => sameApp(r).some(d => d.name !== tips[0]));
   if (!needs) return g;
   if (tips.length > 1) {
-    return { ...g, status: 'manual', reason: `o destino tem ${tips.length} migrations ${String(max).padStart(4, '0')} em ${dir}; rode "makemigrations --merge" nele antes` };
+    return { ...g, status: 'manual', reason: t('the target has {0} migrations {1} in {2}; run "makemigrations --merge" on it first', tips.length, String(max).padStart(4, '0'), dir) };
   }
   const nums = [...new Set(added.map(a => a.c.num!))].sort((a, b) => a - b);
   const map = new Map<string, string>();
@@ -184,7 +186,7 @@ function planDjango(dir: string, target: Classified[], added: { f: MigFile; c: C
   const changes = [...map].filter(([a, b]) => a !== b).map(([a, b]) => `${a}.py → ${b}.py`);
   for (const r of roots) {
     const old = sameApp(r).filter(d => targetNames.has(d.name) && d.name !== tips[0]).map(d => d.name);
-    if (old.length) changes.push(`${map.get(baseOf(r.f.path).slice(0, -3))}: depende de ${tips[0]} (era ${old.join(', ')})`);
+    if (old.length) changes.push(t('{0}: depends on {1} (was {2})', map.get(baseOf(r.f.path).slice(0, -3)) ?? '', tips[0], old.join(', ')));
   }
   return { ...g, status: 'rechain', changes };
 }
@@ -266,14 +268,20 @@ export function planRechain(target: MigFile[], added: MigFile[]): RechainPlan {
 export const needsRechain = (p: RechainPlan) => p.groups.some(g => g.status === 'rechain');
 export const needsAttention = (p: RechainPlan) => p.groups.some(g => g.status !== 'ok');
 
-const KIND_LABEL: Record<MigrationKind, string> = { django: 'Django', alembic: 'Alembic', numbered: 'numeradas' };
+const KIND_LABEL: Record<MigrationKind, string> = {
+  django: 'Django',
+  alembic: 'Alembic',
+  get numbered() {
+    return t('numbered');
+  },
+};
 
 /** Linhas para diálogos e log. */
 export function describePlan(p: RechainPlan): string[] {
   const lines: string[] = [];
   for (const g of p.groups) {
     if (g.status === 'ok') continue;
-    lines.push(`${g.dir || '.'} (${KIND_LABEL[g.kind]}${g.tip ? `, última no destino: ${g.tip}` : ''})`);
+    lines.push(g.tip ? t('{0} ({1}, latest on the target: {2})', g.dir || '.', KIND_LABEL[g.kind], g.tip) : `${g.dir || '.'} (${KIND_LABEL[g.kind]})`);
     if (g.status === 'manual') lines.push(`  ⚠ ${g.reason}`);
     for (const c of g.changes) lines.push(`  ${c}`);
   }

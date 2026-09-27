@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
+import { t } from './i18n';
 
 /**
  * Cores e letras de status do git (M, U, A, D…) nos arquivos das outras worktrees, como o Explorer
@@ -52,11 +53,11 @@ export class WorktreeDecorations implements vscode.FileDecorationProvider {
 function decoration(code: string): vscode.FileDecoration {
   const x = code[0];
   const y = code[1];
-  if (code === '??') return deco('U', 'gitDecoration.untrackedResourceForeground', 'Não rastreado');
-  if (x === 'U' || y === 'U' || code === 'AA' || code === 'DD') return deco('!', 'gitDecoration.conflictingResourceForeground', 'Em conflito');
-  if (x === 'D' || y === 'D') return deco('D', 'gitDecoration.deletedResourceForeground', 'Removido');
-  if (x === 'A') return deco('A', 'gitDecoration.addedResourceForeground', 'Adicionado');
-  return deco('M', 'gitDecoration.modifiedResourceForeground', x !== ' ' && y === ' ' ? 'Modificado (no índice)' : 'Modificado');
+  if (code === '??') return deco('U', 'gitDecoration.untrackedResourceForeground', t('Untracked'));
+  if (x === 'U' || y === 'U' || code === 'AA' || code === 'DD') return deco('!', 'gitDecoration.conflictingResourceForeground', t('Conflicted'));
+  if (x === 'D' || y === 'D') return deco('D', 'gitDecoration.deletedResourceForeground', t('Deleted'));
+  if (x === 'A') return deco('A', 'gitDecoration.addedResourceForeground', t('Added'));
+  return deco('M', 'gitDecoration.modifiedResourceForeground', x !== ' ' && y === ' ' ? t('Modified (staged)') : t('Modified'));
 }
 
 function deco(badge: string, color: string, tooltip: string): vscode.FileDecoration {

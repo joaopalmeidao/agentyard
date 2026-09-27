@@ -7,6 +7,7 @@ import { HostError } from './core';
 import { AzurePipelines } from './azure';
 import { bitbucketPipelines } from './bitbucket';
 import { request } from './http';
+import { t } from '../i18n';
 
 export type PipelineStatus = 'queued' | 'running' | 'success' | 'failed' | 'canceled' | 'skipped' | 'manual' | 'other';
 
@@ -192,12 +193,12 @@ export class GitHubPipelines implements PipelineClient {
   }
 
   async trigger(branch: string, workflowId?: number) {
-    if (!workflowId) throw new HostError(0, 'Escolha um workflow com gatilho workflow_dispatch.');
+    if (!workflowId) throw new HostError(0, t('Choose a workflow with a workflow_dispatch trigger.'));
     await this.req('POST', `/actions/workflows/${workflowId}/dispatches`, { ref: branch });
   }
 
   async play(): Promise<void> {
-    throw new HostError(0, 'O GitHub Actions não tem jobs manuais; use re-executar.');
+    throw new HostError(0, t('GitHub Actions has no manual jobs; use re-run.'));
   }
 }
 

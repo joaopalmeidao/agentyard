@@ -6,6 +6,7 @@ import type { AgentTerminals } from '../agents';
 import type { TaskQueue } from '../agentFlow/tasks';
 import type { Controller } from '../controller';
 import { branchMatches } from '../git';
+import { t } from '../i18n';
 import { describeTarget, missedSince, newBranchName, nextRun, parseWhen, renderTemplate, RunRecord, Schedule } from './core';
 
 const LOCK_FILE = 'agentyard-schedule.lock';
@@ -62,7 +63,7 @@ export class Scheduler implements vscode.Disposable {
       const data = JSON.parse(fs.readFileSync(f, 'utf8'));
       return (Array.isArray(data) ? data : data.schedules ?? []).map((s: Schedule) => ({ ...s, scope: 'shared' as const }));
     } catch (e) {
-      this.ctl.log(`Agendamentos: ${f} inválido: ${(e as Error).message}`);
+      this.ctl.log(t('Schedules: {0} is invalid: {1}', f, (e as Error).message));
       return [];
     }
   }
@@ -120,7 +121,7 @@ export class Scheduler implements vscode.Disposable {
   private async record(r: RunRecord) {
     const h = [r, ...this.history()].slice(0, HISTORY_MAX);
     await this.ctl.ctx.globalState.update(this.key('history'), h);
-    this.ctl.log(`Agendamento "${r.name}" → ${r.target}: ${r.result}${r.message ? ` (${r.message})` : ''}`);
+    this.ctl.log(t('Schedule "{0}" → {1}: {2}', r.name, r.target, r.result) + (r.message ? ` (${r.message})` : ''));
   }
 
   /** Próximo horário de um agendamento ativo (undefined: pausado, inválido ou "uma vez" já feito). */
@@ -154,7 +155,7 @@ export class Scheduler implements vscode.Disposable {
     if (!this.ctl.repo) return;
     const times = this.list()
       .map(s => this.next(s)?.getTime())
-      .filter((t): t is number => t !== undefined);
+      .filter((x): x is number => x !== undefined);
     if (!times.length) return;
     const wait = Math.min(Math.max(0, Math.min(...times) - this.now()), 3600_000);
     this.timer = setTimeout(() => void this.tick(), wait + 500);
@@ -203,7 +204,7 @@ export class Scheduler implements vscode.Disposable {
         if (!due) continue;
         if (now - due.getTime() > LATE_MS && s.missed === 'skip') {
           await this.setRuntime(s.id, { lastRun: now });
-          await this.record({ at: now, scheduleId: s.id, name: s.name, target: describeTarget(s.target), result: 'skipped', message: 'horário perdido com o VS Code fechado' });
+          await this.record({ at: now, scheduleId: s.id, name: s.name, target: describeTarget(s.target), result: 'skipped', message: t('time missed while VS Code was closed') });
           continue;
         }
         await this.run(s);
@@ -229,15 +230,15 @@ export class Scheduler implements vscode.Disposable {
       const wt = wts.find(w => w.branch === b);
       if (wt) return [{ path: wt.path, branch: b }];
       const exists = (await repo.refs()).some(r => r.kind === 'head' && r.name === b);
-      if (!exists) return [{ branch: b, error: `a branch ${b} não existe` }];
+      if (!exists) return [{ branch: b, error: t('branch {0} does not exist', b) }];
       const dir = await createWorktree(this.ctl, { existing: b, quiet: true });
-      return [{ path: dir, branch: b, error: dir ? undefined : 'não consegui criar a worktree' }];
+      return [{ path: dir, branch: b, error: dir ? undefined : t('couldn\'t create the worktree') }];
     }
     const names = new Set((await repo.refs()).filter(r => r.kind === 'head').map(r => r.name));
     let name = newBranchName(s.target.prefix, s.name, now);
     for (let i = 2; names.has(name); i++) name = `${newBranchName(s.target.prefix, s.name, now)}-${i}`;
     const dir = await createWorktree(this.ctl, { branch: name, quiet: true });
-    return [{ path: dir, branch: name, error: dir ? undefined : 'não consegui criar a worktree' }];
+    return [{ path: dir, branch: name, error: dir ? undefined : t('couldn\'t create the worktree') }];
   }
 
   /** Executa um agendamento agora (pelo timer ou por "Executar agora"). */
@@ -257,37 +258,37 @@ export class Scheduler implements vscode.Disposable {
       const baseSha = (await repo.revParse(baseRef)) ?? '';
       if (s.conditions.onlyIfBaseMoved && !opts.manual && this.runtime(s.id).lastBaseSha === baseSha) {
         await this.setRuntime(s.id, { lastRun: nowMs });
-        await rec(describeTarget(s.target), 'skipped', `${base} não mudou desde a última execução`);
+        await rec(describeTarget(s.target), 'skipped', t('{0} hasn\'t changed since the last run', base));
         return out;
       }
       const running = this.agentTerms.running();
       const pad = (n: number) => String(n).padStart(2, '0');
       const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
       const targets = await this.targets(s, now);
-      if (!targets.length) await rec(describeTarget(s.target), 'skipped', 'nenhuma worktree casou com o alvo');
-      for (const t of targets) {
-        if (t.error || !t.path) {
-          await rec(t.branch, 'error', t.error ?? 'sem worktree');
+      if (!targets.length) await rec(describeTarget(s.target), 'skipped', t('no worktree matched the target'));
+      for (const tg of targets) {
+        if (tg.error || !tg.path) {
+          await rec(tg.branch, 'error', tg.error ?? t('no worktree'));
           continue;
         }
-        if (s.conditions.skipIfAgentOpen && (running.get(path.normalize(t.path).toLowerCase())?.length ?? 0) > 0) {
-          await rec(t.branch, 'skipped', 'já há um agente aberto nessa worktree');
+        if (s.conditions.skipIfAgentOpen && (running.get(path.normalize(tg.path).toLowerCase())?.length ?? 0) > 0) {
+          await rec(tg.branch, 'skipped', t('an agent is already open in this worktree'));
           continue;
         }
         if (s.conditions.onlyClean) {
-          const st = await repo.status(t.path);
+          const st = await repo.status(tg.path);
           if (st.changes || st.operation) {
-            await rec(t.branch, 'skipped', `worktree com ${st.operation ?? `${st.changes} alteração(ões)`}`);
+            await rec(tg.branch, 'skipped', st.operation ? t('worktree has {0} in progress', st.operation) : t('worktree has {0} change(s)', st.changes));
             continue;
           }
         }
-        const prompt = renderTemplate(s.prompt, { date, branch: t.branch, base, repo: this.ctl.state?.repoName ?? path.basename(repo.root) });
+        const prompt = renderTemplate(s.prompt, { date, branch: tg.branch, base, repo: this.ctl.state?.repoName ?? path.basename(repo.root) });
         if (s.delivery === 'queue') {
-          await this.tasks.add(t.path, t.branch, prompt);
-          await rec(t.branch, 'ok', 'tarefa colocada na fila');
+          await this.tasks.add(tg.path, tg.branch, prompt);
+          await rec(tg.branch, 'ok', t('task added to the queue'));
         } else {
-          await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: t.path, branch: t.branch, prompt, agent: s.agent });
-          await rec(t.branch, 'ok', `agente aberto${s.agent ? ` (${s.agent})` : ''}`);
+          await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: tg.path, branch: tg.branch, prompt, agent: s.agent });
+          await rec(tg.branch, 'ok', s.agent ? t('agent opened ({0})', s.agent) : t('agent opened'));
         }
       }
       await this.setRuntime(s.id, { lastRun: nowMs, lastBaseSha: baseSha });

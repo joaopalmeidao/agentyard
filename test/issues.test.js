@@ -90,9 +90,9 @@ const check = async (name, fn) => {
     assert.strictEqual(issueBranch({ provider: 'redmine', id: 4512, title: 'Relatório de prazos está lento' }, 'issue'), 'redmine/4512-relatorio-de-prazos-esta-lento');
     assert.strictEqual(issueTrailer({ provider: 'gitlab', id: 7 }), 'Closes #7');
     assert.strictEqual(issueTrailer({ provider: 'redmine', id: 4512 }), 'Refs #4512');
-    assert.strictEqual(suggestBody(['a'], 'PR', ['Closes #12']), '## Commits neste PR\n\n- a\n\nCloses #12');
+    assert.strictEqual(suggestBody(['a'], 'PR', ['Closes #12']), '## Commits in this PR\n\n- a\n\nCloses #12');
     const p = renderPrompt(DEFAULT_ISSUE_PROMPT, { key: '#12', title: 'T', body: 'B', url: 'U', branch: 'issue/12-t', base: 'main' });
-    assert.ok(p.startsWith('Trabalhe na issue #12: T') && p.includes('issue/12-t') && p.includes('main') && !p.includes('${'));
+    assert.ok(p.startsWith('Work on issue #12: T') && p.includes('issue/12-t') && p.includes('main') && !p.includes('${'));
   });
 
   server.close();

@@ -5,6 +5,7 @@ import { bytesOf } from './env/register';
 import { agents, fillTemplate } from './agents';
 import type { Controller } from './controller';
 import { flowStages } from './flow';
+import { t } from './i18n';
 import {
   checkCacheKey,
   CheckCache,
@@ -23,17 +24,20 @@ import {
 } from './guardsCore';
 import type { GraphState } from './model';
 
-const DEFAULT_FIX_PROMPT = [
-  'As checagens da branch ${branch} falharam antes de ${action}.',
-  'Comandos: ${commands}',
-  '',
-  'Final da saída:',
-  '```',
-  '${log}',
-  '```',
-  '',
-  'Corrija a causa, rode as checagens de novo até passarem e faça o commit. Se a correção exigir decidir algo de produto, pergunte antes.',
-].join('\n');
+/** Tarefa padrão para o agente corrigir as checagens; os ${…} são preenchidos por fillTemplate. */
+function defaultFixPrompt(): string {
+  return [
+    t('The checks on branch {0} failed before {1}.', '${branch}', '${action}'),
+    t('Commands: {0}', '${commands}'),
+    '',
+    t('End of the output:'),
+    '```',
+    '${log}',
+    '```',
+    '',
+    t('Fix the cause, run the checks again until they pass and commit. If the fix requires a product decision, ask first.'),
+  ].join('\n');
+}
 
 /** Diálogos usados pelas proteções. Os testes trocam por respostas prontas. */
 export interface GuardUi {
@@ -59,7 +63,7 @@ interface RunResult {
  * no fim do arquivo, que não fazem nada se as proteções não foram registradas.
  */
 export class Guards implements vscode.Disposable {
-  readonly out = vscode.window.createOutputChannel('AgentYard: checagens');
+  readonly out = vscode.window.createOutputChannel(t('AgentYard: checks'));
   readonly cache = new CheckCache();
   ui: GuardUi = vscodeUi;
   /** Últimos resultados, para os testes e o log. */
@@ -97,10 +101,10 @@ export class Guards implements vscode.Disposable {
   /** Pede para digitar o nome da branch: um botão só seria clicado no automático. */
   private async typeToConfirm(branch: string, what: string): Promise<boolean> {
     const v = await this.ui.input({
-      title: `${branch} é uma branch protegida`,
-      prompt: `${what}. Para confirmar, digite o nome da branch: ${branch}`,
+      title: t('{0} is a protected branch', branch),
+      prompt: t('{0}. To confirm, type the branch name: {1}', what, branch),
       ignoreFocusOut: true,
-      validateInput: x => (x.trim() === branch ? undefined : `Digite exatamente "${branch}"`),
+      validateInput: x => (x.trim() === branch ? undefined : t('Type exactly "{0}"', branch)),
     });
     return v?.trim() === branch;
   }
@@ -110,10 +114,10 @@ export class Guards implements vscode.Disposable {
     if (decision === 'allow') return true;
     if (decision === 'block') {
       await this.ui.warn(
-        `Push forçado em ${branch} bloqueado: a branch é protegida.`,
-        { modal: true, detail: 'Para permitir, mude worktreeGraph.protection.mode para "off" ou tire a branch de worktreeGraph.protectedBranches.' },
+        t('Force push to {0} blocked: the branch is protected.', branch),
+        { modal: true, detail: t('To allow it, set worktreeGraph.protection.mode to "off" or remove the branch from worktreeGraph.protectedBranches.') },
       );
-      this.ctl.log(`Proteção: push forçado em ${branch} bloqueado.`);
+      this.ctl.log(t('Protection: force push to {0} blocked.', branch));
       return false;
     }
     if (decision === 'require-pr') {
@@ -121,22 +125,24 @@ export class Guards implements vscode.Disposable {
       const L = this.ctl.requests.label;
       if (action === 'merge' && source && remote) {
         const pick = await this.ui.warn(
-          `${branch} é protegida: o merge de ${source} precisa passar por ${L}.`,
+          t('{0} is protected: merging {1} must go through a {2}.', branch, source, L),
           { modal: true, detail: 'worktreeGraph.protection.mode = "require-pr"' },
-          `Abrir ${L} ${source} → ${branch}`,
+          t('Open {0} {1} → {2}', L, source, branch),
         );
         if (pick) await this.ctl.requests.publish(source, branch);
       } else {
         await this.ui.warn(
-          action === 'merge' ? `${branch} é protegida: merge direto bloqueado; use ${L}.` : `${branch} é protegida: push direto bloqueado. Faça o trabalho numa branch e abra um ${L}.`,
+          action === 'merge'
+            ? t('{0} is protected: direct merge blocked; use a {1}.', branch, L)
+            : t('{0} is protected: direct push blocked. Work on a branch and open a {1}.', branch, L),
           { modal: true, detail: 'worktreeGraph.protection.mode = "require-pr"' },
         );
       }
-      this.ctl.log(`Proteção: ${action} direto em ${branch} bloqueado (require-pr).`);
+      this.ctl.log(t('Protection: direct {0} to {1} blocked (require-pr).', action, branch));
       return false;
     }
-    const ok = await this.typeToConfirm(branch, action === 'merge' ? `Merge direto de ${source ?? '?'} em ${branch}` : `Push direto em ${branch}`);
-    this.ctl.log(`Proteção: ${action} direto em ${branch} ${ok ? 'confirmado' : 'cancelado'}.`);
+    const ok = await this.typeToConfirm(branch, action === 'merge' ? t('Direct merge of {0} into {1}', source ?? '?', branch) : t('Direct push to {0}', branch));
+    this.ctl.log(ok ? t('Protection: direct {0} to {1} confirmed.', action, branch) : t('Protection: direct {0} to {1} cancelled.', action, branch));
     return ok;
   }
 
@@ -163,7 +169,7 @@ export class Guards implements vscode.Disposable {
         });
         output += `$ ${cmd}\n${r.text}\n`;
         this.out.append(r.text.endsWith('\n') || !r.text ? r.text : r.text + '\n');
-        this.out.appendLine(r.code === 0 ? '✓ ok' : `✗ saiu com ${r.code}`);
+        this.out.appendLine(r.code === 0 ? '✓ ok' : t('✗ exited with {0}', r.code));
         if (token.isCancellationRequested) return { ok: false, cancelled: true, output };
         if (r.code !== 0) return { ok: false, cancelled: false, failed: cmd, output };
       }
@@ -179,17 +185,18 @@ export class Guards implements vscode.Disposable {
     if (!commands.length) return true;
     const repo = this.ctl.repo;
     if (!repo) return true;
-    const action = kind === 'merge' ? `mesclar ${branch}` : `enviar ${branch}`;
+    const action = kind === 'merge' ? t('merging {0}', branch) : t('pushing {0}', branch);
 
     let wtPath = (await repo.worktreesFast()).find(w => w.branch === branch && !w.prunable)?.path;
     if (!wtPath) {
+      const skip = t('Skip checks');
       const pick = await this.ui.warn(
-        `${branch} não tem worktree para rodar as checagens antes de ${kind === 'merge' ? 'mesclar' : 'enviar'}.`,
+        kind === 'merge' ? t('{0} has no worktree to run the checks before merging.', branch) : t('{0} has no worktree to run the checks before pushing.', branch),
         { modal: true, detail: commands.join('\n') },
-        'Criar worktree e checar',
-        'Pular checagem',
+        t('Create worktree and check'),
+        skip,
       );
-      if (pick === 'Pular checagem') return true;
+      if (pick === skip) return true;
       if (!pick) return false;
       const { createWorktree } = await import('./actions');
       wtPath = await createWorktree(this.ctl, { existing: branch, quiet: true });
@@ -201,33 +208,36 @@ export class Guards implements vscode.Disposable {
     const key = checkCacheKey(wtPath, head, commands);
     if (clean && this.cache.has(key)) {
       this.lastCheck = { kind, branch, ok: true, cached: true };
-      this.out.appendLine(`✓ ${branch} @ ${head.slice(0, 7)}: checagens já passaram neste commit.`);
+      this.out.appendLine(t('✓ {0} @ {1}: checks already passed on this commit.', branch, head.slice(0, 7)));
       return true;
     }
 
-    this.out.appendLine(`\n== Checagens antes de ${action} (${new Date().toLocaleTimeString()})`);
-    const r = await this.run(commands, wtPath, `Checagens antes de ${action}`);
+    this.out.appendLine(`\n== ${t('Checks before {0}', action)} (${new Date().toLocaleTimeString()})`);
+    const r = await this.run(commands, wtPath, t('Checks before {0}', action));
     this.cache.record(key, r.ok, clean);
     this.lastCheck = { kind, branch, ok: r.ok, cached: false, failed: r.failed };
     if (r.cancelled) {
-      this.out.appendLine('checagens canceladas');
+      this.out.appendLine(t('checks cancelled'));
       return false;
     }
     if (r.ok) {
-      vscode.window.setStatusBarMessage(`$(pass) Checagens de ${branch} passaram`, 4000);
+      vscode.window.setStatusBarMessage(t('$(pass) Checks for {0} passed', branch), 4000);
       return true;
     }
 
-    const msg = `Checagens falharam em ${branch}: ${r.failed}`;
+    const msg = t('Checks failed on {0}: {1}', branch, r.failed ?? '');
+    const showOutput = t('Show output');
     if (mode === 'warn') {
-      void this.ui.warn(`${msg}. Seguindo, porque worktreeGraph.checks.mode é "warn".`, {}, 'Ver saída').then(p => p && this.out.show());
+      void this.ui.warn(t('{0}. Continuing because worktreeGraph.checks.mode is "warn".', msg), {}, showOutput).then(p => p && this.out.show());
       return true;
     }
-    const agent = agents(this.ctl)[0]?.name ?? 'agente';
-    const pick = await this.ui.warn(msg, {}, 'Ver saída', `✦ Corrigir com ${agent}`, 'Rodar no terminal', 'Continuar mesmo assim');
-    if (pick === 'Ver saída') this.out.show();
+    const agent = agents(this.ctl)[0]?.name ?? t('agent');
+    const runInTerminal = t('Run in terminal');
+    const continueAnyway = t('Continue anyway');
+    const pick = await this.ui.warn(msg, {}, showOutput, t('✦ Fix with {0}', agent), runInTerminal, continueAnyway);
+    if (pick === showOutput) this.out.show();
     else if (pick?.startsWith('✦')) {
-      const prompt = fillTemplate(this.cfg().get<string>('prompts.fixChecks', '') || DEFAULT_FIX_PROMPT, {
+      const prompt = fillTemplate(this.cfg().get<string>('prompts.fixChecks', '') || defaultFixPrompt(), {
         branch,
         action,
         commands: commands.join(' && '),
@@ -235,14 +245,15 @@ export class Guards implements vscode.Disposable {
         log: tailLines(r.output),
       });
       await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: wtPath, branch, prompt });
-    } else if (pick === 'Rodar no terminal') {
-      const t = vscode.window.createTerminal({ name: `checagens · ${branch}`, cwd: wtPath });
-      t.show();
-      for (const c of commands) t.sendText(c);
-    } else if (pick === 'Continuar mesmo assim') {
-      const sure = await this.ui.warn(`Continuar e ${action} com as checagens falhando?`, { modal: true, detail: r.failed }, 'Continuar');
-      if (sure === 'Continuar') {
-        this.ctl.log(`Checagens ignoradas por escolha: ${action}.`);
+    } else if (pick === runInTerminal) {
+      const term = vscode.window.createTerminal({ name: t('checks · {0}', branch), cwd: wtPath });
+      term.show();
+      for (const c of commands) term.sendText(c);
+    } else if (pick === continueAnyway) {
+      const go = t('Continue');
+      const sure = await this.ui.warn(t('Continue {0} with the checks failing?', action), { modal: true, detail: r.failed }, go);
+      if (sure === go) {
+        this.ctl.log(t('Checks skipped by choice: {0}.', action));
         return true;
       }
     }
@@ -259,7 +270,7 @@ export class Guards implements vscode.Disposable {
   maybeRemind(manual = false) {
     const s = this.ctl.state;
     if (!s || s.pending > 0 || !this.ctl.repo) {
-      if (manual) vscode.window.showInformationMessage('Ainda detalhando as worktrees; tente de novo em instantes.');
+      if (manual) vscode.window.showInformationMessage(t('Still loading the worktree details; try again in a moment.'));
       return;
     }
     const c = this.cfg();
@@ -269,7 +280,7 @@ export class Guards implements vscode.Disposable {
     const threshold = c.get<number>('cleanup.remindThreshold', 20);
     if (manual) {
       if (!total) {
-        vscode.window.showInformationMessage('Nenhuma worktree mesclada e parada, nem órfã.');
+        vscode.window.showInformationMessage(t('No merged and idle worktrees, and no orphans.'));
         return;
       }
     } else if (!shouldRemind(total, threshold, st)) {
@@ -277,22 +288,26 @@ export class Guards implements vscode.Disposable {
     }
     void this.ctl.ctx.globalState.update(this.remindKey(), { ...st, lastShown: Date.now() });
     this.lastReminder = { stale: stale.length, orphans: orphans.length, at: Date.now() };
-    const parts = [stale.length ? `${stale.length} mesclada(s) e parada(s) há mais de ${c.get<number>('cleanup.staleDays', 7)} dias` : '', orphans.length ? `${orphans.length} órfã(s)` : ''].filter(Boolean);
+    const parts = [stale.length ? t('{0} merged and idle for more than {1} days', stale.length, c.get<number>('cleanup.staleDays', 7)) : '', orphans.length ? t('{0} orphaned', orphans.length) : ''].filter(Boolean);
+    const bytes = bytesOf(stale.map(w => w.path));
+    const cleanUp = t('Clean up…');
+    const later = t('Remind me later');
+    const never = t('Do not remind me in this project');
     void this.ui
       .warn(
-        `${total} worktrees sobrando neste projeto: ${parts.join(' e ')}.${(b => (b ? ` Ocupam ~${formatBytes(b)}.` : ''))(bytesOf(stale.map(w => w.path)))}`,
+        t('{0} leftover worktrees in this project: {1}.', total, parts.length > 1 ? t('{0} and {1}', parts[0], parts[1]) : parts[0]) + (bytes ? ' ' + t('They take up ~{0}.', formatBytes(bytes)) : ''),
         {},
-        'Limpar…',
-        'Lembrar depois',
-        'Não lembrar neste projeto',
+        cleanUp,
+        later,
+        never,
       )
       .then(async pick => {
-        if (pick === 'Limpar…') {
+        if (pick === cleanUp) {
           if (orphans.length) await vscode.commands.executeCommand('worktreeGraph.pruneWorktrees');
           if (stale.length) await vscode.commands.executeCommand('worktreeGraph.cleanupWorktrees');
-        } else if (pick === 'Lembrar depois') {
+        } else if (pick === later) {
           await this.ctl.ctx.globalState.update(this.remindKey(), { ...st, lastShown: Date.now(), snoozeUntil: Date.now() + 7 * 86400_000 });
-        } else if (pick === 'Não lembrar neste projeto') {
+        } else if (pick === never) {
           await this.ctl.ctx.globalState.update(this.remindKey(), { ...st, disabled: true });
         }
       });

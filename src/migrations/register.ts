@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { Controller } from '../controller';
 import { pLimit } from '../git';
+import { t } from '../i18n';
 import { describePlan, needsAttention, needsRechain } from './core';
 import { checkMigrations, MigrationCheck } from './scan';
 
@@ -21,8 +22,8 @@ export async function applyRechain(ctl: Controller, check: MigrationCheck, opts:
   if (!repo || !needsRechain(check.plan)) return false;
   const { branch, onto, plan } = check;
   const fail = (msg: string) => {
-    ctl.log(`Migrations de ${branch}: ${msg}`);
-    if (!opts.quiet) vscode.window.showErrorMessage(`Não reencadeei as migrations de ${branch}: ${msg}`);
+    ctl.log(t('Migrations of {0}: {1}', branch, msg));
+    if (!opts.quiet) vscode.window.showErrorMessage(t('Did not rechain the migrations of {0}: {1}', branch, msg));
     return false;
   };
 
@@ -33,14 +34,14 @@ export async function applyRechain(ctl: Controller, check: MigrationCheck, opts:
     if (!wt) return false;
   }
   const head = await repo.revParse('HEAD', wt);
-  if (head !== check.branchSha) return fail('a branch andou desde a checagem; confira de novo.');
+  if (head !== check.branchSha) return fail(t('the branch moved since the check; check again.'));
   const st = await repo.status(wt);
-  if (st.operation) return fail(`a worktree está no meio de um ${st.operation}.`);
+  if (st.operation) return fail(t('the worktree is in the middle of a {0}.', st.operation));
   const touched = new Set([...plan.renames.flatMap(r => [r.from, r.to]), ...plan.writes.map(w => w.path)]);
   const dirty = (st.files ?? []).map(([, f]) => f.replace(/\\/g, '/')).filter(f => touched.has(f));
-  if (dirty.length) return fail(`há alterações não commitadas em ${dirty.join(', ')}.`);
+  if (dirty.length) return fail(t('there are uncommitted changes in {0}.', dirty.join(', ')));
   const clash = plan.renames.find(r => fs.existsSync(path.join(wt!, r.to)));
-  if (clash) return fail(`${clash.to} já existe.`);
+  if (clash) return fail(t('{0} already exists.', clash.to));
 
   for (const r of plan.renames) {
     const mv = await repo.run(['mv', r.from, r.to], wt);
@@ -55,11 +56,11 @@ export async function applyRechain(ctl: Controller, check: MigrationCheck, opts:
   const paths = [...touched];
   await repo.run(['add', '-A', '--', ...paths], wt);
   const summary = describePlan(plan);
-  ctl.log(`Migrations de ${branch} reencadeadas após ${onto}:\n${summary.join('\n')}`);
+  ctl.log(`${t('Migrations of {0} rechained after {1}:', branch, onto)}\n${summary.join('\n')}`);
   if (opts.commit) {
-    const msg = `Reencadeia migrations após ${onto}\n\n${summary.join('\n')}`;
+    const msg = `${t('Rechain migrations after {0}', onto)}\n\n${summary.join('\n')}`;
     const c = await repo.run(['commit', '-m', msg, '--', ...paths], wt);
-    if (c.code !== 0) return fail(`o commit falhou: ${(c.stderr || c.stdout).trim()}`);
+    if (c.code !== 0) return fail(t('the commit failed: {0}', (c.stderr || c.stdout).trim()));
   }
   ctl.scheduleRefresh(100);
   return true;
@@ -76,21 +77,23 @@ export async function migrationGate(ctl: Controller, source: string, target: str
   const check = await checkMigrations(repo, side.branch, side.onto).catch(() => undefined);
   if (!check || !needsAttention(check.plan)) return true;
   const can = needsRechain(check.plan);
+  const rechainMerge = t('Rechain and merge');
+  const mergeAnyway = t('Merge anyway');
   const pick = await vscode.window.showWarningMessage(
-    `As migrations de ${side.branch} colidem com as de ${side.onto}.`,
+    t('The migrations of {0} collide with those of {1}.', side.branch, side.onto),
     {
       modal: true,
       detail: [
         ...describePlan(check.plan),
         '',
-        can ? `"Reencadear" faz um commit em ${side.branch} com as mudanças acima e segue com o merge.` : 'Resolva à mão antes de mesclar.',
+        can ? t('"Rechain" makes a commit on {0} with the changes above and continues with the merge.', side.branch) : t('Resolve it by hand before merging.'),
       ].join('\n'),
     },
-    ...(can ? ['Reencadear e mesclar'] : []),
-    'Mesclar assim mesmo',
+    ...(can ? [rechainMerge] : []),
+    mergeAnyway,
   );
-  if (pick === 'Mesclar assim mesmo') return true;
-  if (pick !== 'Reencadear e mesclar') return false;
+  if (pick === mergeAnyway) return true;
+  if (pick !== rechainMerge) return false;
   return applyRechain(ctl, check, { commit: true });
 }
 
@@ -101,28 +104,31 @@ async function rechainCommand(ctl: Controller, branch: string, onto?: string) {
   onto ??= (await ctl.base()).baseRef;
   const check = await checkMigrations(repo, branch, onto);
   if (!check) {
-    vscode.window.showErrorMessage(`Não consegui comparar ${branch} com ${onto}.`);
+    vscode.window.showErrorMessage(t('Could not compare {0} with {1}.', branch, onto));
     return;
   }
   if (!needsAttention(check.plan)) {
     vscode.window.showInformationMessage(
-      check.plan.groups.length ? `As migrations de ${branch} já vêm depois das de ${onto}.` : `${branch} não adicionou migrations desde ${onto}.`,
+      check.plan.groups.length ? t('The migrations of {0} already come after those of {1}.', branch, onto) : t('{0} has not added migrations since {1}.', branch, onto),
     );
     return;
   }
   if (!needsRechain(check.plan)) {
-    vscode.window.showWarningMessage(`As migrations de ${branch} precisam de ajuste manual.`, { modal: true, detail: describePlan(check.plan).join('\n') });
+    vscode.window.showWarningMessage(t('The migrations of {0} need manual adjustment.', branch), { modal: true, detail: describePlan(check.plan).join('\n') });
     return;
   }
+  const andCommit = t('Rechain and commit');
   const pick = await vscode.window.showInformationMessage(
-    `Reencadear as migrations de ${branch} depois das de ${onto}?`,
+    t('Rechain the migrations of {0} after those of {1}?', branch, onto),
     { modal: true, detail: describePlan(check.plan).join('\n') },
-    'Reencadear e commitar',
-    'Só reencadear',
+    andCommit,
+    t('Rechain only'),
   );
   if (!pick) return;
-  if (await applyRechain(ctl, check, { commit: pick === 'Reencadear e commitar' })) {
-    vscode.window.showInformationMessage(`Migrations de ${branch} reencadeadas após ${onto}${pick === 'Só reencadear' ? ' (sem commit)' : ''}.`);
+  if (await applyRechain(ctl, check, { commit: pick === andCommit })) {
+    vscode.window.showInformationMessage(
+      pick === andCommit ? t('Migrations of {0} rechained after {1}.', branch, onto) : t('Migrations of {0} rechained after {1} (no commit).', branch, onto),
+    );
   }
 }
 
@@ -133,22 +139,22 @@ async function checkAll(ctl: Controller) {
   const { base, baseRef } = await ctl.base();
   const branches = (await repo.worktreesFast()).map(w => w.branch).filter((b): b is string => !!b && b !== base);
   const limit = pLimit(4);
-  const found = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Conferindo migrations contra ${baseRef}…` }, () =>
+  const found = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Checking migrations against {0}…', baseRef) }, () =>
     Promise.all(branches.map(b => limit(() => checkMigrations(repo, b, baseRef).catch(() => undefined)))),
   );
   const bad = found.filter((c): c is MigrationCheck => !!c && needsAttention(c.plan));
   if (!bad.length) {
-    vscode.window.showInformationMessage(`Nenhuma das ${branches.length} worktree(s) tem migrations colidindo com ${baseRef}.`);
+    vscode.window.showInformationMessage(t('None of the {0} worktree(s) has migrations colliding with {1}.', branches.length, baseRef));
     return;
   }
   const pick = await vscode.window.showQuickPick(
     bad.map(c => ({
       label: c.branch,
-      description: needsRechain(c.plan) ? 'dá para reencadear' : 'ajuste manual',
+      description: needsRechain(c.plan) ? t('can be rechained') : t('manual adjustment'),
       detail: describePlan(c.plan).join(' · '),
       check: c,
     })),
-    { title: `Migrations que colidem com ${baseRef}`, placeHolder: 'Escolha uma branch para reencadear' },
+    { title: t('Migrations colliding with {0}', baseRef), placeHolder: t('Choose a branch to rechain') },
   );
   if (pick) await rechainCommand(ctl, pick.check.branch, baseRef);
 }
@@ -161,7 +167,7 @@ export function registerMigrations(ctx: vscode.ExtensionContext, ctl: Controller
       let branch = branchOf(item);
       if (!branch) {
         const { pickBranch } = await import('../actions');
-        branch = await pickBranch(ctl, undefined, 'Reencadear as migrations de qual branch?', true);
+        branch = await pickBranch(ctl, undefined, t('Rechain the migrations of which branch?'), true);
       }
       if (branch) await rechainCommand(ctl, branch, onto);
     }),

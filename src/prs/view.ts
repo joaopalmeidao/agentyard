@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { createWorktree } from '../actions';
 import type { Controller } from '../controller';
 import { gitUri } from '../diff';
+import { t } from '../i18n';
 import {
   fetchSpecFor,
   GitHubPrBrowser,
@@ -24,9 +25,9 @@ const EMPTY: PrGroups = { mine: [], reviewRequested: [], open: [], recentlyMerge
 function ago(unix: number) {
   if (!unix) return '';
   const s = Math.max(0, Date.now() / 1000 - unix);
-  if (s < 3600) return `${Math.max(1, Math.floor(s / 60))} min`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h`;
-  return `${Math.floor(s / 86400)} d`;
+  if (s < 3600) return t('{0} min', Math.max(1, Math.floor(s / 60)));
+  if (s < 86400) return t('{0} h', Math.floor(s / 3600));
+  return t('{0} d', Math.floor(s / 86400));
 }
 
 /** Busca e guarda os PRs/MRs do remoto do projeto ativo. Não pede login sozinho. */
@@ -178,13 +179,17 @@ class GroupItem extends vscode.TreeItem {
   }
 }
 
-const REVIEW: Record<string, [string, string]> = {
-  approved: ['✓ aprovado', 'testing.iconPassed'],
-  changes: ['✎ mudanças pedidas', 'list.errorForeground'],
-  discussions: ['💬 conversas abertas', 'list.warningForeground'],
-  commented: ['💬 comentado', 'textLink.foreground'],
-  pending: ['◷ aguardando revisão', 'descriptionForeground'],
-};
+/** Rótulo e cor da situação da revisão (montado na hora, para sair no idioma da interface). */
+function review(state: string): [string, string] | undefined {
+  const all: Record<string, [string, string]> = {
+    approved: [t('✓ approved'), 'testing.iconPassed'],
+    changes: [t('✎ changes requested'), 'list.errorForeground'],
+    discussions: [t('💬 open discussions'), 'list.warningForeground'],
+    commented: [t('💬 commented'), 'textLink.foreground'],
+    pending: [t('◷ awaiting review'), 'descriptionForeground'],
+  };
+  return all[state];
+}
 
 export class PrItem extends vscode.TreeItem {
   readonly kind = 'pr';
@@ -193,25 +198,25 @@ export class PrItem extends vscode.TreeItem {
     this.id = `pr:${group}:${pr.ref}`;
     const parts: string[] = [];
     if (hasWorktree) parts.push('▣');
-    if (pr.state === 'draft') parts.push('rascunho');
-    if (pr.state === 'merged') parts.push(`mesclado ${ago(pr.mergedAt ?? 0)}`);
-    else if (pr.review) parts.push(REVIEW[pr.review.state]?.[0] ?? pr.review.state);
+    if (pr.state === 'draft') parts.push(t('draft'));
+    if (pr.state === 'merged') parts.push(t('merged {0}', ago(pr.mergedAt ?? 0)));
+    else if (pr.review) parts.push(review(pr.review.state)?.[0] ?? pr.review.state);
     if (ci) parts.push({ success: '✓ CI', failed: '✗ CI', running: '⟳ CI' }[ci.status] ?? `CI ${ci.status}`);
-    if (pr.conflicts) parts.push('⚠ conflito');
+    if (pr.conflicts) parts.push(t('⚠ conflict'));
     parts.push(`${pr.author}`, `${pr.source} → ${pr.target}`);
     if (pr.state !== 'merged' && pr.updatedAt) parts.push(ago(pr.updatedAt));
     this.description = parts.filter(Boolean).join(' · ');
     const icon = pr.state === 'merged' ? 'git-merge' : pr.state === 'draft' ? 'git-pull-request-draft' : 'git-pull-request';
-    const color = pr.state === 'merged' ? 'charts.purple' : pr.review ? REVIEW[pr.review.state]?.[1] : undefined;
+    const color = pr.state === 'merged' ? 'charts.purple' : pr.review ? review(pr.review.state)?.[1] : undefined;
     this.iconPath = new vscode.ThemeIcon(icon, color ? new vscode.ThemeColor(color) : undefined);
     this.contextValue = ['pr', pr.state, hasWorktree ? 'wt' : 'nowt', pr.fork ? 'fork' : ''].filter(Boolean).join('-');
     const md = new vscode.MarkdownString(undefined, true);
     md.appendMarkdown(`**${pr.ref} ${pr.title}**\n\n${pr.author} · \`${pr.source}\` → \`${pr.target}\`${pr.fork ? ' (fork)' : ''}\n\n`);
-    if (pr.review) md.appendMarkdown(`Revisão: ${REVIEW[pr.review.state]?.[0] ?? pr.review.state}${pr.review.by.length ? ` (${pr.review.by.join(', ')})` : ''}\n\n`);
-    if (pr.reviewers.length) md.appendMarkdown(`Revisores pedidos: ${pr.reviewers.join(', ')}\n\n`);
+    if (pr.review) md.appendMarkdown(`${t('Review: {0}', review(pr.review.state)?.[0] ?? pr.review.state)}${pr.review.by.length ? ` (${pr.review.by.join(', ')})` : ''}\n\n`);
+    if (pr.reviewers.length) md.appendMarkdown(`${t('Requested reviewers: {0}', pr.reviewers.join(', '))}\n\n`);
     if (ci) md.appendMarkdown(`CI: ${ci.name} — ${ci.status}\n\n`);
-    if (pr.conflicts) md.appendMarkdown('⚠ Conflito com o destino\n\n');
-    md.appendMarkdown(`[Abrir no navegador](${pr.url})`);
+    if (pr.conflicts) md.appendMarkdown(`${t('⚠ Conflict with the target')}\n\n`);
+    md.appendMarkdown(`[${t('Open in browser')}](${pr.url})`);
     this.tooltip = md;
   }
 }
@@ -236,7 +241,7 @@ class DetailItem extends vscode.TreeItem {
   }
 }
 
-const openUrl = (url?: string): vscode.Command | undefined => (url ? { command: 'vscode.open', title: 'Abrir', arguments: [vscode.Uri.parse(url)] } : undefined);
+const openUrl = (url?: string): vscode.Command | undefined => (url ? { command: 'vscode.open', title: t('Open'), arguments: [vscode.Uri.parse(url)] } : undefined);
 
 export class PrTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly emitter = new vscode.EventEmitter<void>();
@@ -255,17 +260,20 @@ export class PrTreeProvider implements vscode.TreeDataProvider<Node> {
     return n;
   }
 
-  private static readonly LABELS: Record<keyof PrGroups, string> = {
-    mine: 'Meus',
-    reviewRequested: 'Pedem minha revisão',
-    open: 'Abertos',
-    recentlyMerged: 'Mesclados (7 dias)',
-  };
+  private static label(key: keyof PrGroups): string {
+    const labels: Record<keyof PrGroups, string> = {
+      mine: t('Mine'),
+      reviewRequested: t('Awaiting my review'),
+      open: t('All open'),
+      recentlyMerged: t('Merged (7 days)'),
+    };
+    return labels[key];
+  }
 
   group(key: keyof PrGroups) {
     const g = this.svc.groups;
     const expanded = key === 'mine' || key === 'reviewRequested' || (key === 'open' && !g.mine.length && !g.reviewRequested.length);
-    return new GroupItem(key, PrTreeProvider.LABELS[key], g[key].filter(p => this.svc.matches(p)), expanded);
+    return new GroupItem(key, PrTreeProvider.label(key), g[key].filter(p => this.svc.matches(p)), expanded);
   }
 
   /** Necessário para view.reveal: PR → grupo; detalhes → PR. */
@@ -290,14 +298,14 @@ export class PrTreeProvider implements vscode.TreeDataProvider<Node> {
     if (!n) {
       if (s.connected === undefined) {
         void s.refresh();
-        return [new ActionItem('Carregando…', 'worktreeGraph.pullRequests.refresh', 'loading~spin')];
+        return [new ActionItem(t('Loading…'), 'worktreeGraph.pullRequests.refresh', 'loading~spin')];
       }
       if (!s.connected) {
-        return [new ActionItem('Conectar ao GitHub/GitLab…', 'worktreeGraph.connectHosting', 'plug', 'Para listar os PRs/MRs do remoto deste projeto')];
+        return [new ActionItem(t('Connect to GitHub/GitLab…'), 'worktreeGraph.connectHosting', 'plug', t('To list the PRs/MRs of this project\'s remote'))];
       }
       const out: Node[] = [];
-      if (s.error) out.push(new ActionItem(`Erro: ${s.error}`, 'worktreeGraph.pullRequests.refresh', 'error', 'Clique para tentar de novo'));
-      if (s.filter) out.push(new ActionItem(`Filtro: "${s.filter}" (limpar)`, 'worktreeGraph.pullRequests.clearFilter', 'filter'));
+      if (s.error) out.push(new ActionItem(t('Error: {0}', s.error), 'worktreeGraph.pullRequests.refresh', 'error', t('Click to try again')));
+      if (s.filter) out.push(new ActionItem(t('Filter: "{0}" (clear)', s.filter), 'worktreeGraph.pullRequests.clearFilter', 'filter'));
       out.push(this.group('mine'), this.group('reviewRequested'), this.group('open'), this.group('recentlyMerged'));
       return out;
     }
@@ -309,9 +317,9 @@ export class PrTreeProvider implements vscode.TreeDataProvider<Node> {
       const b = await s.browser();
       if (!b) return [];
       const out: Node[] = [];
-      if (b.can.files) out.push(new DetailGroupItem(n.pr, 'files', 'Arquivos', 'files'));
+      if (b.can.files) out.push(new DetailGroupItem(n.pr, 'files', t('Files'), 'files'));
       if (b.can.checks) out.push(new DetailGroupItem(n.pr, 'checks', 'Checks', 'checklist'));
-      if (b.can.comments) out.push(new DetailGroupItem(n.pr, 'comments', 'Comentários recentes', 'comment-discussion'));
+      if (b.can.comments) out.push(new DetailGroupItem(n.pr, 'comments', t('Recent comments'), 'comment-discussion'));
       return out;
     }
     if (n instanceof DetailGroupItem) {
@@ -334,7 +342,7 @@ export class PrTreeProvider implements vscode.TreeDataProvider<Node> {
         }
         if (n.what === 'checks') {
           const checks = await b.checks(n.pr);
-          if (!checks.length) return [new DetailItem('Nenhum check', '', new vscode.ThemeIcon('circle-slash'))];
+          if (!checks.length) return [new DetailItem(t('No checks'), '', new vscode.ThemeIcon('circle-slash'))];
           const icon: Record<PrCheck['status'], vscode.ThemeIcon> = {
             success: new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed')),
             failed: new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed')),
@@ -346,13 +354,13 @@ export class PrTreeProvider implements vscode.TreeDataProvider<Node> {
           return checks.map(c => new DetailItem(c.name, c.status, icon[c.status], openUrl(c.url)));
         }
         const comments = await b.comments(n.pr);
-        if (!comments.length) return [new DetailItem('Sem comentários', '', new vscode.ThemeIcon('comment'))];
+        if (!comments.length) return [new DetailItem(t('No comments'), '', new vscode.ThemeIcon('comment'))];
         return comments.map(
           (c: PrComment) =>
             new DetailItem(`${c.author}: ${shortText(c.body, 90)}`, `${c.path ? `${c.path} · ` : ''}${ago(c.at)}`, new vscode.ThemeIcon('comment'), openUrl(c.url), c.body),
         );
       } catch (e) {
-        return [new DetailItem(`Erro: ${(e as Error).message}`, '', new vscode.ThemeIcon('error'))];
+        return [new DetailItem(t('Error: {0}', (e as Error).message), '', new vscode.ThemeIcon('error'))];
       }
     }
     return [];
@@ -371,7 +379,7 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
   if (view.visible) svc.setVisible(true);
   svc.onDidChange(() => {
     const n = svc.groups.reviewRequested.length;
-    view.badge = n ? { value: n, tooltip: `${n} PR(s)/MR(s) pedem sua revisão` } : undefined;
+    view.badge = n ? { value: n, tooltip: t('{0} PR(s)/MR(s) awaiting your review', n) } : undefined;
     view.message = undefined;
   });
   ctl.onDidChangeRepo?.(() => svc.resetForProject());
@@ -384,7 +392,7 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     await svc.refresh();
     const pick = await vscode.window.showQuickPick(
       svc.all().map(p => ({ label: `${p.ref} ${p.title}`, description: `${p.author} · ${p.source} → ${p.target}`, p })),
-      { placeHolder: 'Qual PR/MR?', matchOnDescription: true },
+      { placeHolder: t('Which PR/MR?'), matchOnDescription: true },
     );
     return pick?.p;
   };
@@ -401,11 +409,11 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     const b = await svc.browser();
     const remote = ctl.cfg().get<string>('remote', 'origin');
     const { refspec, localBranch } = fetchSpecFor(p, b?.kind ?? 'github');
-    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Trazendo ${p.ref} (${p.source})…` }, () =>
+    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Fetching {0} ({1})…', p.ref, p.source) }, () =>
       repo.run(['fetch', remote, refspec], repo.root, 300_000),
     );
     if (r.code !== 0) {
-      vscode.window.showErrorMessage(`Não consegui trazer ${p.ref}: ${(r.stderr || r.stdout).trim()}`);
+      vscode.window.showErrorMessage(t('Could not fetch {0}: {1}', p.ref, (r.stderr || r.stdout).trim()));
       return undefined;
     }
     const hasLocal = (await repo.run(['rev-parse', '--verify', '--quiet', `refs/heads/${localBranch}`])).code === 0;
@@ -415,9 +423,11 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     tree.fire();
     if (dir && open) {
       // sem await: o comando termina quando a worktree existe; a pergunta fica na notificação
-      void vscode.window.showInformationMessage(`${p.ref} está na worktree ${localBranch}.`, 'Abrir em nova janela', 'Abrir terminal').then(go => {
-        if (go === 'Abrir em nova janela') vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir), { forceNewWindow: true });
-        if (go === 'Abrir terminal') vscode.window.createTerminal({ name: localBranch, cwd: dir }).show();
+      const newWindow = t('Open in new window');
+      const openTerm = t('Open terminal');
+      void vscode.window.showInformationMessage(t('{0} is in worktree {1}.', p.ref, localBranch), newWindow, openTerm).then(go => {
+        if (go === newWindow) vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir), { forceNewWindow: true });
+        if (go === openTerm) vscode.window.createTerminal({ name: localBranch, cwd: dir }).show();
       });
     }
     return dir;
@@ -426,7 +436,7 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
   const localBranchOf = async (p: PullRequestInfo): Promise<string | undefined> => {
     const wt = svc.worktreeOf(p);
     if (wt?.branch) return wt.branch;
-    const go = await vscode.window.showInformationMessage(`${p.ref} ainda não está no repositório local.`, 'Trazer para uma worktree');
+    const go = await vscode.window.showInformationMessage(t('{0} is not in the local repository yet.', p.ref), t('Bring into a worktree'));
     if (!go) return undefined;
     await bring(p, false);
     await ctl.refresh();
@@ -437,7 +447,7 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
 
   reg('refresh', () => svc.refresh(true));
   reg('filter', async () => {
-    const q = await vscode.window.showInputBox({ title: 'Filtrar PRs/MRs', prompt: 'Número, título, autor ou branch', value: svc.filter });
+    const q = await vscode.window.showInputBox({ title: t('Filter PRs/MRs'), prompt: t('Number, title, author or branch'), value: svc.filter });
     if (q === undefined) return;
     svc.filter = q.trim();
     tree.fire();
@@ -454,7 +464,7 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     const p = await prOf(arg);
     if (p) {
       await vscode.env.clipboard.writeText(p.url);
-      vscode.window.setStatusBarMessage(`Link de ${p.ref} copiado`, 2500);
+      vscode.window.setStatusBarMessage(t('Link to {0} copied', p.ref), 2500);
     }
   });
   reg('openWorktree', async (arg: PrArg) => {
@@ -486,7 +496,7 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     const files = await b.files(p);
     const pick = await vscode.window.showQuickPick(
       files.map(f => ({ label: path.basename(f.path), description: `${path.dirname(f.path) === '.' ? '' : path.dirname(f.path)}  +${f.additions} −${f.deletions}`, f })),
-      { placeHolder: `${p.ref}: ${files.length} arquivo(s)`, matchOnDescription: true },
+      { placeHolder: t('{0}: {1} file(s)', p.ref, files.length), matchOnDescription: true },
     );
     if (pick) await vscode.commands.executeCommand('worktreeGraph.pullRequests.openFileDiff', p.ref, pick.f.path, pick.f.status);
   });
@@ -525,27 +535,27 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     const method = ctl.cfg().get<MergeMethod>('pullRequests.mergeMethod', 'merge');
     const ci = ctl.state?.pipelines?.[p.source];
     const warnings = [
-      p.state === 'draft' ? 'é um rascunho' : '',
-      p.review?.state !== 'approved' ? `não está aprovado (${REVIEW[p.review?.state ?? 'pending']?.[0] ?? 'sem revisão'})` : '',
-      ci && ci.status !== 'success' ? `o último CI está "${ci.status}"` : '',
-      p.conflicts ? 'tem conflito com o destino' : '',
+      p.state === 'draft' ? t('it is a draft') : '',
+      p.review?.state !== 'approved' ? t('it is not approved ({0})', review(p.review?.state ?? 'pending')?.[0] ?? t('no review')) : '',
+      ci && ci.status !== 'success' ? t('the latest CI is "{0}"', ci.status) : '',
+      p.conflicts ? t('it conflicts with the target') : '',
     ].filter(Boolean);
     const ok = await vscode.window.showWarningMessage(
-      `Mesclar ${p.ref} "${p.title}" em ${p.target} pelo ${b.kind === 'gitlab' ? 'GitLab' : 'GitHub'}?`,
+      t('Merge {0} "{1}" into {2} via {3}?', p.ref, p.title, p.target, b.kind === 'gitlab' ? 'GitLab' : 'GitHub'),
       {
         modal: true,
-        detail: [`Método: ${method}.`, warnings.length ? `Atenção: ${warnings.join('; ')}.` : 'Aprovado e sem pendências conhecidas.'].join('\n'),
+        detail: [t('Method: {0}.', method), warnings.length ? t('Warning: {0}.', warnings.join('; ')) : t('Approved, with no known pending issues.')].join('\n'),
       },
-      warnings.length ? 'Mesclar mesmo assim' : 'Mesclar',
+      warnings.length ? t('Merge anyway') : t('Merge'),
     );
     if (!ok) return;
     try {
-      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Mesclando ${p.ref}…` }, () => b.merge(p, method));
-      vscode.window.showInformationMessage(`${p.ref} mesclado em ${p.target}.`);
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Merging {0}…', p.ref) }, () => b.merge(p, method));
+      vscode.window.showInformationMessage(t('Merged {0} into {1}.', p.ref, p.target));
       await svc.refresh(true);
       void ctl.requests.refresh(true);
     } catch (e) {
-      vscode.window.showErrorMessage(`O servidor recusou o merge de ${p.ref}: ${(e as Error).message}`);
+      vscode.window.showErrorMessage(t('The server rejected the merge of {0}: {1}', p.ref, (e as Error).message));
     }
   });
   const draft = async (arg: PrArg, value: boolean) => {
@@ -554,10 +564,10 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     if (!p || !b?.can.draft) return;
     try {
       await b.setDraft(p, value);
-      vscode.window.showInformationMessage(value ? `${p.ref} virou rascunho.` : `${p.ref} está pronto para revisão.`);
+      vscode.window.showInformationMessage(value ? t('{0} is now a draft.', p.ref) : t('{0} is ready for review.', p.ref));
       await svc.refresh(true);
     } catch (e) {
-      vscode.window.showErrorMessage(`Não consegui alterar ${p.ref}: ${(e as Error).message}`);
+      vscode.window.showErrorMessage(t('Could not change {0}: {1}', p.ref, (e as Error).message));
     }
   };
   reg('ready', (arg: PrArg) => draft(arg, false));

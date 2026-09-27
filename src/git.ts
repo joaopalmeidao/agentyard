@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { t } from './i18n';
 
 export interface GitResult {
   stdout: string;
@@ -10,7 +11,7 @@ export interface GitResult {
 
 export class GitError extends Error {
   constructor(readonly args: string[], readonly result: GitResult) {
-    super(`git ${args.join(' ')} falhou (${result.code}): ${(result.stderr || result.stdout).trim()}`);
+    super(t('git {0} failed ({1}): {2}', args.join(' '), result.code, (result.stderr || result.stdout).trim()));
   }
 }
 
@@ -306,7 +307,7 @@ export class Repo {
     const r = await this.run(['worktree', 'remove', ...(force ? ['--force'] : []), worktreePath], this.root, timeoutMs);
     if (r.code !== 0 && unlinked.length) {
       // a remoção falhou: os atalhos já foram desfeitos, avisa quais eram para poder recriar
-      r.stderr += `\n(atalhos desfeitos antes da tentativa: ${unlinked.join(', ')})`;
+      r.stderr += `\n${t('(links removed before the attempt: {0})', unlinked.join(', '))}`;
     }
     return r;
   }

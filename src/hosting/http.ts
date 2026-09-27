@@ -1,5 +1,6 @@
 /** Chamada HTTP comum aos clientes REST de hospedagem (JSON por padrão, texto com raw). */
 import { HostError } from './core';
+import { t } from '../i18n';
 
 type Fetch = typeof fetch;
 
@@ -8,7 +9,7 @@ export async function request(f: Fetch, url: string, init: RequestInit, raw = fa
   try {
     res = await f(url, init);
   } catch (e) {
-    throw new HostError(0, `Não consegui falar com ${new URL(url).host}: ${(e as Error).message}`);
+    throw new HostError(0, t('Could not reach {0}: {1}', new URL(url).host, (e as Error).message));
   }
   const text = await res.text();
   if (!res.ok) {
@@ -41,8 +42,8 @@ export async function request(f: Fetch, url: string, init: RequestInit, raw = fa
  *  - qualquer outra coisa → Bearer
  */
 export function authHeader(token: string, basicAlways = false): string {
-  const t = token.trim();
-  if (basicAlways) return `Basic ${Buffer.from(t.includes(':') ? t : `:${t}`).toString('base64')}`;
-  if (t.includes(':')) return `Basic ${Buffer.from(t).toString('base64')}`;
-  return `Bearer ${t}`;
+  const tok = token.trim();
+  if (basicAlways) return `Basic ${Buffer.from(tok.includes(':') ? tok : `:${tok}`).toString('base64')}`;
+  if (tok.includes(':')) return `Basic ${Buffer.from(tok).toString('base64')}`;
+  return `Bearer ${tok}`;
 }

@@ -75,7 +75,7 @@ check('criar, copiar para o projeto, renomear e excluir skill', () => {
   assert.strictEqual(C.parseFrontmatter(fs.readFileSync(renamed, 'utf8')).data.name, 'outra');
   C.deleteEntry(C.listSkills('project', claude, proj)[0]);
   assert.deepStrictEqual(C.listSkills('project', claude, proj), []);
-  assert.throws(() => C.deleteEntry(C.listSkills('user', claude).find(x => x.readOnly)), /sincronizada/);
+  assert.throws(() => C.deleteEntry(C.listSkills('user', claude).find(x => x.readOnly)), /Synced skill/);
 });
 
 check('settings: permissões e modelo preservam chaves desconhecidas e fazem backup', () => {
@@ -99,7 +99,7 @@ check('settings: permissões e modelo preservam chaves desconhecidas e fazem bac
 check('settings inválido não é sobrescrito', () => {
   const file = path.join(root, 'ruim.json');
   fs.writeFileSync(file, '{ "a": ');
-  assert.throws(() => C.addPermission(file, 'allow', 'Read'), /não foi alterado/);
+  assert.throws(() => C.addPermission(file, 'allow', 'Read'), /was not changed/);
   assert.strictEqual(fs.readFileSync(file, 'utf8'), '{ "a": ');
 });
 

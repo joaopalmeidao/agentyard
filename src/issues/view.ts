@@ -3,6 +3,7 @@ import type { HostKind } from '../hosting/core';
 import { hostLabel } from '../hosting/platforms';
 import { Issue } from './core';
 import { IssueGroup, IssueService } from './service';
+import { t } from '../i18n';
 
 const ICON: Record<string, [string, string]> = {
   github: ['issues', 'charts.green'],
@@ -13,9 +14,9 @@ const ICON: Record<string, [string, string]> = {
 function ago(unix: number) {
   if (!unix) return '';
   const s = Math.max(0, Date.now() / 1000 - unix);
-  if (s < 3600) return `${Math.max(1, Math.floor(s / 60))} min`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h`;
-  return `${Math.floor(s / 86400)} d`;
+  if (s < 3600) return t('{0} min', Math.max(1, Math.floor(s / 60)));
+  if (s < 86400) return t('{0} h', Math.floor(s / 3600));
+  return t('{0} d', Math.floor(s / 86400));
 }
 
 export class IssueGroupItem extends vscode.TreeItem {
@@ -23,7 +24,7 @@ export class IssueGroupItem extends vscode.TreeItem {
   constructor(readonly group: IssueGroup) {
     super(group.title, group.issues.length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `issues:${group.title}`;
-    this.description = group.needsConnect ? 'não conectado' : group.error ? 'erro' : String(group.issues.length);
+    this.description = group.needsConnect ? t('not connected') : group.error ? t('error') : String(group.issues.length);
     const icons: Record<string, string> = { redmine: 'tasklist', jira: 'issues', gitlab: 'source-control', bitbucket: 'repo', azure: 'azure-devops', github: 'github' };
     this.iconPath = new vscode.ThemeIcon(icons[group.provider] ?? 'issues');
     this.tooltip = group.error ?? group.title;
@@ -41,15 +42,15 @@ export class IssueItem extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon(branch ? 'git-branch' : icon, new vscode.ThemeColor(color));
     const md = new vscode.MarkdownString(undefined, true);
     md.appendMarkdown(`**${issue.key} ${escapeMd(issue.title)}**\n\n`);
-    if (issue.project) md.appendMarkdown(`Projeto: ${escapeMd(issue.project)}  \n`);
-    if (issue.assignee) md.appendMarkdown(`Responsável: ${escapeMd(issue.assignee)}  \n`);
+    if (issue.project) md.appendMarkdown(`${t('Project: {0}', escapeMd(issue.project))}  \n`);
+    if (issue.assignee) md.appendMarkdown(`${t('Assignee: {0}', escapeMd(issue.assignee))}  \n`);
     if (issue.labels.length) md.appendMarkdown(`${issue.labels.map(escapeMd).join(' · ')}\n\n`);
     const excerpt = issue.body.trim().slice(0, 600);
     if (excerpt) md.appendText(`${excerpt}${issue.body.length > 600 ? '…' : ''}\n\n`);
-    md.appendMarkdown(`[Abrir no navegador](${issue.url})`);
+    md.appendMarkdown(`[${t('Open in browser')}](${issue.url})`);
     this.tooltip = md;
     this.contextValue = branch ? 'issue-linked' : 'issue';
-    this.command = { command: 'worktreeGraph.issues.show', title: 'Ver issue', arguments: [this] };
+    this.command = { command: 'worktreeGraph.issues.show', title: t('View issue'), arguments: [this] };
   }
 }
 
@@ -81,12 +82,13 @@ export class IssueTreeProvider implements vscode.TreeDataProvider<Node> {
     if (el instanceof IssueGroupItem) {
       const g = el.group;
       if (g.needsConnect) {
-        if (g.provider === 'redmine') return [new ActionItem('Conectar ao Redmine…', 'worktreeGraph.connectRedmine', 'plug')];
-        if (g.provider === 'jira') return [new ActionItem('Conectar ao Jira…', 'worktreeGraph.connectJira', 'plug')];
-        return [new ActionItem(`Conectar ao ${hostLabel(g.provider as HostKind)}…`, 'worktreeGraph.connectHosting', 'plug')];
+        if (g.provider === 'redmine') return [new ActionItem(t('Connect to {0}…', 'Redmine'), 'worktreeGraph.connectRedmine', 'plug')];
+        if (g.provider === 'jira') return [new ActionItem(t('Connect to {0}…', 'Jira'), 'worktreeGraph.connectJira', 'plug')];
+        return [new ActionItem(t('Connect to {0}…', hostLabel(g.provider as HostKind)), 'worktreeGraph.connectHosting', 'plug')];
       }
-      if (g.error) return [new ActionItem(`Erro: ${g.error}`, 'worktreeGraph.issues.refresh', 'error')];
-      if (!g.issues.length) return [new ActionItem(this.svc.scope === 'mine' ? 'Nenhuma issue aberta atribuída a você' : 'Nenhuma issue aberta', 'worktreeGraph.issues.refresh', 'check')];
+      if (g.error) return [new ActionItem(t('Error: {0}', g.error), 'worktreeGraph.issues.refresh', 'error')];
+      if (!g.issues.length)
+        return [new ActionItem(this.svc.scope === 'mine' ? t('No open issues assigned to you') : t('No open issues'), 'worktreeGraph.issues.refresh', 'check')];
       return g.issues.map(i => new IssueItem(i, this.svc.branchOf(i)));
     }
     return [];
@@ -98,13 +100,13 @@ export async function showIssue(issue: Issue) {
   const content = [
     `# ${issue.key} ${issue.title}`,
     '',
-    [issue.project && `Projeto: ${issue.project}`, issue.assignee && `Responsável: ${issue.assignee}`, issue.labels.length && issue.labels.join(' · ')].filter(Boolean).join('  \n'),
+    [issue.project && t('Project: {0}', issue.project), issue.assignee && t('Assignee: {0}', issue.assignee), issue.labels.length && issue.labels.join(' · ')].filter(Boolean).join('  \n'),
     '',
     issue.url,
     '',
     '---',
     '',
-    issue.body || '_(sem descrição)_',
+    issue.body || `_${t('(no description)')}_`,
   ].join('\n');
   const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content });
   await vscode.window.showTextDocument(doc, { preview: true });
