@@ -239,7 +239,7 @@ body.resizing { user-select: none; }
 .chip.link:hover { text-decoration: underline; }
 
 /* painel de análise de merge */
-body:has(.verdict), body.activity-page, body.review-page { overflow: auto; padding: 0 16px 24px; }
+body:has(.verdict), body.activity-page, body.review-page, body.overlap-page { overflow: auto; padding: 0 16px 24px; }
 .verdict { margin-top: 12px; padding: 10px 14px; border-radius: var(--radius-lg); border-left: 4px solid; font-size: 14px; font-weight: 600; background: var(--card); }
 .verdict.ok { border-color: var(--ok); }
 .verdict.bad { border-color: var(--bad); }
@@ -249,6 +249,13 @@ body:has(.verdict), body.activity-page, body.review-page { overflow: auto; paddi
 .stats span { font-size: 11px; color: var(--muted); }
 .stats .bad b { color: var(--bad); }
 .stats .warn b { color: var(--warn); }
+/* tela de sobreposição: um bloco por par de worktrees */
+.overlap-page [hidden] { display: none !important; }
+.overlap-page .toolbar input[type="search"] { width: 240px; }
+.overlap-page details.pair { margin-top: 16px; padding: 10px 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.overlap-page details.pair > summary h2 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--fg); }
+.overlap-page .pair-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.overlap-page .ref-head { cursor: inherit; }
 table.files { width: 100%; border-collapse: collapse; }
 table.files td { padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 table.files td.p { font-family: var(--mono); font-size: 12px; white-space: normal; word-break: break-all; width: 100%; }

@@ -22,6 +22,7 @@ import {
   processNext,
   resolveAwaiting,
 } from './core';
+import { OverlapPanel } from './panel';
 
 const key = (p: string) => path.normalize(p).toLowerCase();
 
@@ -39,13 +40,15 @@ export class Coord implements vscode.Disposable {
   private readonly budgetNotified = new Set<string>();
   private computing?: Promise<void>;
   private processing = false;
+  private readonly overlapsChanged = new vscode.EventEmitter<void>();
+  readonly onDidChangeOverlaps = this.overlapsChanged.event;
   private readonly queueChanged = new vscode.EventEmitter<void>();
   readonly onDidChangeQueue = this.queueChanged.event;
   /** Worktrees "em espera" da tarefa em lote: abrem quando um agente termina. */
   private readonly batchWaiting: { path: string; branch?: string; prompt: string }[] = [];
 
   constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals, private readonly agentFlow?: AgentFlow) {
-    this.disposables.push(this.queueChanged);
+    this.disposables.push(this.queueChanged, this.overlapsChanged);
     ctl.stateHooks.push(s => {
       for (const w of s.worktrees) {
         const o = this.summary.get(key(w.path));
@@ -99,7 +102,9 @@ export class Coord implements vscode.Disposable {
       touched.set(w.path, files);
     }
     const before = JSON.stringify([...this.summary]);
+    const beforeList = JSON.stringify(this.overlaps);
     this.overlaps = findOverlaps(touched);
+    if (JSON.stringify(this.overlaps) !== beforeList) this.overlapsChanged.fire();
     this.summary = new Map([...overlapSummary(this.overlaps)].map(([p, v]) => [key(p), v] as [string, { with: string[]; files: number }]));
     for (const [p, v] of this.summary) v.with = v.with.map(o => this.nameOf(o));
     if (JSON.stringify([...this.summary]) !== before) this.ctl.scheduleRefresh(50);
@@ -118,7 +123,7 @@ export class Coord implements vscode.Disposable {
     }
   }
 
-  private nameOf(p: string) {
+  nameOf(p: string) {
     return this.ctl.state?.worktrees.find(w => key(w.path) === key(p))?.name ?? path.basename(p);
   }
 
@@ -132,43 +137,21 @@ export class Coord implements vscode.Disposable {
     return undefined;
   }
 
-  private async analyzePair(o: Overlap) {
+  async analyzePair(o: Overlap) {
     const a = this.wtOf(o.a);
     const b = this.wtOf(o.b);
     if (a?.branch && b?.branch) await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', a.branch, b.branch);
   }
 
-  /** Lista das sobreposições (de uma worktree, ou todas) e ações. */
+  /** Tela com as sobreposições (de uma worktree, ou todas) e as ações de cada par. */
   async showOverlap(arg?: unknown) {
-    await this.recompute();
     const wt = arg ? this.wtOf(arg) : undefined;
-    const list = this.overlaps.filter(o => !wt || key(o.a) === key(wt.path) || key(o.b) === key(wt.path));
-    if (!list.length) {
-      vscode.window.showInformationMessage(wt ? t('{0} doesn\'t overlap files with other active worktrees.', wt.name) : t('No overlaps between active worktrees.'));
-      return;
-    }
-    type It = vscode.QuickPickItem & { o: Overlap; file?: string; act?: string };
-    const items: It[] = [];
-    for (const o of list) {
-      const title = `${this.nameOf(o.a)} ↔ ${this.nameOf(o.b)}`;
-      items.push({ label: title, kind: vscode.QuickPickItemKind.Separator, o });
-      items.push({ label: `$(git-compare) ${t('Analyze merge between the two')}`, o, act: 'analyze' });
-      items.push({ label: `$(sparkle) ${t('Warn the agent')}`, description: t('opens the agent with the list of shared files'), o, act: 'warn' });
-      for (const f of o.files) items.push({ label: path.basename(f), description: path.dirname(f) === '.' ? '' : path.dirname(f), detail: t('compare both sides'), o, file: f });
-    }
-    const pick = await vscode.window.showQuickPick(items, { title: t('Shared files between active worktrees'), matchOnDescription: true });
-    if (!pick) return;
-    if (pick.act === 'analyze') return this.analyzePair(pick.o);
-    if (pick.act === 'warn') return this.warnAgent(pick.o, wt);
-    if (pick.file) {
-      const l = vscode.Uri.file(path.join(pick.o.a, pick.file));
-      const r = vscode.Uri.file(path.join(pick.o.b, pick.file));
-      await vscode.commands.executeCommand('vscode.diff', l, r, `${path.basename(pick.file)} (${this.nameOf(pick.o.a)} ↔ ${this.nameOf(pick.o.b)})`);
-    }
+    await OverlapPanel.show(this.ctl, this, wt?.path);
   }
 
-  private async warnAgent(o: Overlap, prefer?: WorktreeView) {
-    const me = prefer ?? this.wtOf(o.a);
+  /** Abre o agente da worktree `side` (um dos lados do par) avisando dos arquivos em comum. */
+  async warnAgent(o: Overlap, side: string) {
+    const me = this.wtOf(side);
     const otherPath = me && key(me.path) === key(o.a) ? o.b : o.a;
     if (!me) return;
     const prompt = [
