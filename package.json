@@ -60,6 +60,10 @@
           "name": "Issues"
         },
         {
+          "id": "worktreeGraph.agents",
+          "name": "Agentes abertos"
+        },
+        {
           "id": "worktreeGraph.claudeSessions",
           "name": "Sessões Claude"
         },
@@ -159,6 +163,30 @@
         "title": "Abrir agente (Claude Code, Codex…) na worktree",
         "category": "AgentYard",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.launchAgentNew",
+        "title": "Abrir outro agente na worktree (novo terminal)",
+        "category": "AgentYard",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.agents.pick",
+        "title": "Agentes abertos…",
+        "category": "AgentYard",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "worktreeGraph.agents.show",
+        "title": "Mostrar terminal",
+        "category": "AgentYard",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "worktreeGraph.agents.close",
+        "title": "Fechar terminal do agente",
+        "category": "AgentYard",
+        "icon": "$(close)"
       },
       {
         "command": "worktreeGraph.openFileInWorktree",
@@ -1087,6 +1115,16 @@
     "menus": {
       "view/title": [
         {
+          "command": "worktreeGraph.launchAgent",
+          "when": "view == worktreeGraph.agents",
+          "group": "navigation@0"
+        },
+        {
+          "command": "worktreeGraph.agents.pick",
+          "when": "view == worktreeGraph.agents",
+          "group": "navigation@1"
+        },
+        {
           "command": "worktreeGraph.openGraph",
           "when": "view == worktreeGraph.worktrees",
           "group": "navigation@1"
@@ -1384,6 +1422,31 @@
       ],
       "view/item/context": [
         {
+          "command": "worktreeGraph.launchAgentNew",
+          "when": "view == worktreeGraph.agents && viewItem == agentGroup",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.agents.close",
+          "when": "view == worktreeGraph.agents && viewItem == agentTerminal",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.launchAgentNew",
+          "when": "view == worktreeGraph.agents && viewItem == agentGroup",
+          "group": "1_open@0"
+        },
+        {
+          "command": "worktreeGraph.agents.show",
+          "when": "view == worktreeGraph.agents && viewItem == agentTerminal",
+          "group": "1_open@0"
+        },
+        {
+          "command": "worktreeGraph.agents.close",
+          "when": "view == worktreeGraph.agents && viewItem == agentTerminal",
+          "group": "9_close@0"
+        },
+        {
           "command": "worktreeGraph.launchAgent",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "inline@0"
@@ -1447,6 +1510,16 @@
           "command": "worktreeGraph.launchAgent",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "1_open@0"
+        },
+        {
+          "command": "worktreeGraph.agents.pick",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@0b"
+        },
+        {
+          "command": "worktreeGraph.launchAgentNew",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@0a"
         },
         {
           "command": "worktreeGraph.openFileInWorktree",
@@ -2021,6 +2094,14 @@
       ],
       "commandPalette": [
         {
+          "command": "worktreeGraph.agents.show",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.agents.close",
+          "when": "false"
+        },
+        {
           "command": "worktreeGraph.togglePauseSync",
           "when": "false"
         },
@@ -2301,6 +2382,21 @@
               "promptCommand": "gemini -i {prompt}"
             }
           ]
+        },
+        "worktreeGraph.agentWhenOpen": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "reuse",
+            "new"
+          ],
+          "enumDescriptions": [
+            "Perguntar: ir para um dos terminais já abertos ou abrir outro.",
+            "Trazer para frente o último terminal aberto do agente.",
+            "Abrir sempre um terminal novo."
+          ],
+          "default": "ask",
+          "description": "O que o botão ✦ faz quando o agente já está aberto na worktree. Ctrl/Alt+clique no ✦ sempre abre outro."
         },
         "worktreeGraph.agentTerminalLocation": {
           "type": "string",
