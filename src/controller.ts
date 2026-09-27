@@ -193,7 +193,8 @@ export class Controller implements vscode.Disposable {
           agentNames: agents(this).map(a => a.name),
           agentsRunning: this.agentsRunning?.(),
           favorites: new Set(this.favorites()),
-          graphFilter: this.ctx.workspaceState.get<'all' | 'unmerged'>('graphFilter', 'all'),
+          // padrão: só o que falta mesclar; a escolha do usuário fica salva (por projeto e geral)
+          graphFilter: this.ctx.workspaceState.get<'all' | 'unmerged'>('graphFilter') ?? this.ctx.globalState.get<'all' | 'unmerged'>('graphFilter', 'unmerged'),
         },
         this.cache,
       );

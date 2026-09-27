@@ -197,6 +197,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return commits.explainCommit(ctl, a.sha);
       case 'setGraphFilter':
         await ctx.workspaceState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
+        await ctx.globalState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
         return ctl.refresh();
       case 'publishRequest':
         return ctl.requests.publish(a.branch);
