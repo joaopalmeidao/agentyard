@@ -7,3 +7,5 @@ tsconfig.json
 .gitignore
 scripts/**
 test/**
+site/**
+dist/**

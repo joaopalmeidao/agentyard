@@ -5,6 +5,15 @@
   base é mesclada nela (mesmas regras: worktree limpa, sem conflito previsto, testes). A verificação
   periódica só mostra quem está atrás. Para voltar ao comportamento anterior (mesclar a cada
   verificação), use `worktreeGraph.autoSync.trigger: "interval"`.
+- Migrations nos merges: quando a branch e o destino criaram migrations novas, o git mescla sem
+  conflito, mas a cadeia quebra (duas `0005` no Django, duas heads no Alembic, `V5__` repetida no
+  Flyway). Antes do merge o AgentYard avisa e oferece "Reencadear e mesclar": renumera as da branch
+  depois da última do destino e aponta a dependência/`down_revision` para ela, num commit na branch.
+  Funciona também depois de a base já ter sido trazida. Suporta Django, Alembic, Flyway,
+  golang-migrate e arquivos numerados em pastas de migrations (timestamps não colidem e ficam de fora).
+- "Reencadear migrations após a base" no menu da worktree, "Conferir migrations das worktrees" na
+  view Worktrees, seção "Migrations" no Analisar merge, e o sync automático reencadeia antes de trazer
+  a base (`worktreeGraph.migrations.rechainOnSync`; `migrations.checkOnMerge` desliga o aviso).
 - Vários agentes na mesma worktree: com um já aberto, o ✦ pergunta se vai para um dos terminais
   abertos ou abre outro (`worktreeGraph.agentWhenOpen`: perguntar, reaproveitar ou sempre novo).
   Ctrl/Alt+clique no ✦ e "Abrir outro agente na worktree" sempre abrem um terminal novo (`#2`, `#3`…).

@@ -16,13 +16,16 @@ import { registerSchedule } from './schedule/register';
 import { registerCoord } from './coord/register';
 import { ReadySummaryService } from './env/readySummary';
 import { registerEnv } from './env/register';
+import { registerMigrations } from './migrations/register';
 import { registerTemplates } from './templates/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
 import { registerDelivery } from './delivery/register';
+import { registerPromotion } from './promotion/register';
 import { registerReview } from './review';
 import { registerGitOps } from './gitops/register';
+import { registerSummary } from './summary/register';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
@@ -213,6 +216,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return generateCiWorkflow(ctl);
       case 'configureFlow':
         return configureFlow(ctl);
+      case 'promotionMap':
+        await vscode.commands.executeCommand('worktreeGraph.promotionMap');
+        return;
       case 'promote':
         await promote(ctl, a.from, a.to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t));
         return;
@@ -418,12 +424,18 @@ export async function activate(ctx: vscode.ExtensionContext) {
     issueOf: b => issues.linkOf(b),
   });
   const gitOps = registerGitOps(ctx, ctl, guard);
+  registerSummary(ctx, ctl, guard);
   const env = registerEnv(ctx, ctl, guard);
   actions.worktreeCreatedHooks.push((dir, branch, quiet) => env.afterCreate(dir, branch, quiet));
   const templates = registerTemplates(ctx, ctl, guard, b => issues.linkOf(b)?.key);
   const readySummary = new ReadySummaryService(ctl, agentFlow);
   ctx.subscriptions.push(readySummary);
   const delivery = registerDelivery(ctx, ctl, guard, { activity, pipelines: () => pipelines.pipelines, issueOf: b => issues.linkOf(b) });
+  const promotion = registerPromotion(ctx, ctl, guard, {
+    promote: (from, to) => promote(ctl, from, to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t)),
+    merge: (s, t) => actions.mergeBranches(ctl, s, t),
+    showCommit: sha => commits.showCommit(ctl, sha),
+  });
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -435,8 +447,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const claudeConfig = registerClaudeConfig(ctx, ctl);
 
   const guards = registerGuards(ctx, ctl);
+  registerMigrations(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion };
 }
 
 export function deactivate() {}

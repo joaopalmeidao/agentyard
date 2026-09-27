@@ -1,0 +1,655 @@
+# Manual do AgentYard
+
+Guia de uso da extensão, organizado pelo que você quer fazer. Para a lista resumida de recursos,
+veja o [README](../README.md); para o que mudou em cada versão, o [CHANGELOG](../CHANGELOG.md).
+
+> Todos os comandos citados aqui estão na paleta (**Ctrl+Shift+P**) com o prefixo **AgentYard:**.
+> Os IDs internos continuam `worktreeGraph.*` (nome antigo da extensão).
+
+## Sumário
+
+1. [Instalação e requisitos](#1-instalação-e-requisitos)
+2. [Primeiros passos](#2-primeiros-passos)
+3. [Onde fica cada coisa](#3-onde-fica-cada-coisa)
+4. [Worktrees](#4-worktrees)
+5. [Agentes (Claude Code, Codex, Gemini…)](#5-agentes-claude-code-codex-gemini)
+6. [Tarefas: fila, lote, modelos e agendamentos](#6-tarefas-fila-lote-modelos-e-agendamentos)
+7. [Revisar o que o agente fez](#7-revisar-o-que-o-agente-fez)
+8. [Merge](#8-merge)
+9. [Remoto: push, pull, PR/MR e pipelines](#9-remoto-push-pull-prmr-e-pipelines)
+10. [Issues](#10-issues)
+11. [Histórico (grafo de commits)](#11-histórico-grafo-de-commits)
+12. [Sync automático da base](#12-sync-automático-da-base)
+13. [Fluxo de ambientes](#13-fluxo-de-ambientes)
+14. [Proteção e checagens](#14-proteção-e-checagens)
+15. [Claude Code: sessões, uso e configuração](#15-claude-code-sessões-uso-e-configuração)
+16. [Ambiente por worktree (portas, .env, dependências)](#16-ambiente-por-worktree-portas-env-dependências)
+17. [Limpeza](#17-limpeza)
+18. [Métricas e entrega](#18-métricas-e-entrega)
+19. [Vários projetos](#19-vários-projetos)
+20. [Conectar às plataformas](#20-conectar-às-plataformas)
+21. [Referência de configurações](#21-referência-de-configurações)
+22. [Problemas comuns](#22-problemas-comuns)
+
+---
+
+## 1. Instalação e requisitos
+
+- **VS Code** 1.85 ou mais novo.
+- **git 2.38** ou mais novo (a previsão de conflito usa `git merge-tree --write-tree`).
+- Para os agentes: o CLI instalado e no `PATH` (`claude`, `codex`, `gemini`…).
+
+Instale pelo `.vsix`:
+
+```bash
+code --install-extension worktree-graph-<versão>.vsix
+```
+
+Ou gere o pacote a partir do código:
+
+```bash
+npm install
+npm run compile
+npm run package
+```
+
+A extensão ativa sozinha em qualquer pasta que tenha `.git`.
+
+## 2. Primeiros passos
+
+1. Abra um repositório git no VS Code.
+2. Clique no ícone do **AgentYard** na barra de atividades (a lateral esquerda).
+3. Rode **AgentYard: Abrir grafo** para abrir o painel principal.
+4. Crie uma worktree para uma tarefa: **Nova worktree** (botão `+` na view Worktrees ou na paleta).
+   Informe o nome da branch; a pasta nasce em `<repo>.worktrees/<nome>`.
+5. No card da worktree, clique em **✦ Claude Code**: o agente abre num terminal já dentro da pasta.
+6. Quando o agente terminar, o card mostra **✓ Pronto para revisar**. Clique para ver o resumo e
+   use **Revisar**, **Analisar merge** e **Mesclar em `<base>`** ou **Publicar PR/MR**.
+
+A branch base é detectada sozinha (`origin/HEAD` → `main` → `master` → `develop`). Para fixar, use
+`worktreeGraph.baseBranch`.
+
+![Painel](prints/01-painel.png)
+
+## 3. Onde fica cada coisa
+
+### Painel principal (webview)
+
+Aberto por **Abrir grafo**. Tem duas áreas — **Worktrees** e **Histórico** — que podem ficar
+empilhadas, lado a lado ou em abas (botão de layout na barra do topo; o divisor é arrastável e a
+escolha fica salva).
+
+Barra do topo, da esquerda para a direita:
+
+| botão | o que faz |
+|---|---|
+| nome do projeto ▾ | troca o projeto ativo |
+| **Sync** | liga/desliga o sync automático da base (por repositório) |
+| **onde** | escolhe onde o sync roda: local, CI, dividido ou ambos |
+| **Sincronizar agora** | roda o sync uma vez |
+| **☁↓ Trazer n** | pull em lote das branches com novidades no remoto |
+| **☁↑ Enviar n** | push em lote das branches com commits não enviados |
+| **Atividade** | commits, sessões, tokens e custo do dia |
+| **PRs/MRs** | abre a view Pull requests |
+| **Linha do tempo** | nascimento, PR e merge de cada branch |
+| **Gerar CI** | gera o workflow de sync para GitHub Actions ou GitLab CI |
+| **Conectar** | login no GitHub/GitLab/etc. do remoto |
+| layout · ⟳ | layout do painel e atualizar |
+
+### Cards e tabela
+
+- **Cards**: a worktree principal, as **favoritas (★)** e as que têm agente aberto.
+- **Tabela**: todas as outras, com filtro por texto, filtro "só com alterações" e ordenação por
+  espaço em disco.
+- Botão direito num card ou linha mostra todas as ações.
+
+Cada card mostra: branch, pasta, alterações não commitadas, `↓atrás ↑à frente` da base, previsão de
+conflito, situação no remoto (`☁`), PR/MR com o status da revisão, último pipeline, sessões e tokens
+do Claude, porta, orçamento, fila de tarefas e estado do sync (`⟳`).
+
+Chips de revisão do PR/MR: **✓** aprovado, **✎** mudanças pedidas, **◷** aguardando, **💬**
+conversas abertas.
+
+### Barra lateral (views)
+
+| view | conteúdo |
+|---|---|
+| **Projetos** | repositórios adicionados; troca o ativo |
+| **Worktrees** | cada worktree expande em *Alterações × base*, árvore de pastas e *Stashes*; branches sem worktree também |
+| **Issues** | issues do GitHub, GitLab, Bitbucket, Azure DevOps, Jira e Redmine |
+| **Sessões Claude** | sessões do Claude Code agrupadas por worktree |
+| **Claude: configuração** | skills, comandos, permissões, modelo, hooks e memória |
+| **Pipelines** | GitHub Actions, GitLab CI, Bitbucket Pipelines, Azure Pipelines |
+| **Fila de tarefas** | tarefas esperando cada worktree |
+| **Agendamentos** | tarefas recorrentes para os agentes |
+| **Fila de merge** | branches esperando para entrar na base, uma por vez |
+| **Pull requests** | PRs/MRs do remoto agrupados |
+
+Na barra de status: uso estimado do Claude Code (janela de 5 h e semana) e atalho para o sync.
+
+## 4. Worktrees
+
+### Criar
+
+**Nova worktree** pede o nome da branch e o ponto de partida (a base, qualquer branch ou um
+commit). Depois de criada:
+
+- roda `worktreeGraph.postCreateCommand`, se definido (ex.: `npm install`);
+- senão, trata as dependências Node conforme `worktreeGraph.setup.nodeModules`
+  (`ask`, `install` ou `link` — compartilhar o `node_modules` da principal);
+- aplica portas e `.env` se `worktreeGraph.env.ports` estiver configurado (ver seção 16).
+
+Onde as pastas nascem: `worktreeGraph.worktreeRoot` (padrão `<repo>.worktrees` ao lado do repo).
+
+Também dá para criar worktree a partir de um commit do histórico, de uma issue ou de um PR/MR.
+
+### Abrir e navegar
+
+- **Abrir em nova janela**: outra janela do VS Code na worktree.
+- **Abrir terminal na worktree**.
+- **Abrir arquivo de outra worktree…**: busca e abre um arquivo sem trocar de janela.
+- Na view Worktrees, a árvore de pastas funciona como a do Explorer: letras do git (M/U/A/D),
+  abrir ao lado, revelar no sistema, copiar caminho, **Comparar com a base** e **Adicionar ao
+  Explorer** (vira pasta do workspace multi-root).
+
+### Favoritar
+
+**★** no card ou na árvore: a worktree vira card e sobe na lista.
+
+### Stash e mover alterações
+
+No grupo **Stashes** de cada worktree: guardar, aplicar em…, aplicar e remover (pop), ver diff e
+apagar. **Mover alterações para outra worktree…** leva o trabalho não commitado de uma para outra.
+
+### Comparar
+
+**Comparar com outra branch/worktree…** abre a lista de arquivos diferentes entre duas branches.
+
+## 5. Agentes (Claude Code, Codex, Gemini…)
+
+### Abrir
+
+- **✦ Claude Code** no card abre o primeiro agente de `worktreeGraph.agents`.
+- Botão direito no card → outros agentes.
+- **Abrir agente com uma tarefa** pede o texto antes de abrir.
+
+Um terminal por worktree e agente: clicar de novo só traz o terminal para frente.
+`worktreeGraph.agentTerminalLocation` escolhe entre o painel de terminais e uma aba do editor.
+
+### Configurar a lista
+
+```jsonc
+"worktreeGraph.agents": [
+  { "name": "Claude Code", "command": "claude", "promptCommand": "claude {prompt}" },
+  { "name": "Codex CLI", "command": "codex", "promptCommand": "codex {prompt}" },
+  { "name": "Meu script", "command": "./agente.sh {prompt}" }
+]
+```
+
+- `command`: o que roda ao clicar. Com `{prompt}`, a extensão pede a tarefa antes.
+- `promptCommand`: usado quando a extensão já tem a tarefa pronta (resolver conflito, issue, fila…).
+- O terminal recebe as variáveis `WTGRAPH_BRANCH`, `WTGRAPH_BASE` e `WTGRAPH_WORKTREE`.
+- A tarefa vai por arquivo e entra como um único argumento, então aspas e quebras de linha
+  funcionam em PowerShell, bash e cmd.
+
+### Quando o agente termina
+
+A extensão detecta o fim pelo shell integration do terminal ou, se não der, por
+`worktreeGraph.agents.idleMinutes` sem mudança no HEAD e no índice. Se ficaram commits novos e a
+worktree está limpa, aparece **✓ Pronto para revisar**, com o resumo (commits, arquivos, +/−) e
+os botões **Revisar**, **Analisar merge** e **Publicar**.
+
+- `worktreeGraph.agents.notifyReady`: notificação ao ficar pronto.
+- `worktreeGraph.readySummary.useAgent`: também pede ao agente um resumo (o que mudou, riscos, o
+  que testar) em `.worktree-graph/summary.md`.
+- **Tirar "pronto para revisar"** limpa o aviso.
+
+### Tentar N abordagens
+
+**Tentar N abordagens…** (ou a partir de uma issue) cria várias worktrees `try/*` com a mesma
+tarefa e um agente em cada. **Comparar tentativas…** mostra as diferenças lado a lado; escolha uma
+e descarte as outras.
+
+### Sobreposição entre worktrees
+
+O card avisa quando duas worktrees mexem nos mesmos arquivos (risco de conflito entre agentes).
+**Ver sobreposição de arquivos entre worktrees** lista tudo.
+
+### Orçamento por worktree
+
+`worktreeGraph.budget.perWorktreeTokens` e/ou `perWorktreeUsd` definem um limite. O aviso sai aos
+80% e aos 100%. Com `worktreeGraph.budget.action: "pause-queue"`, a worktree que estourou deixa de
+receber tarefas da fila e dos agendamentos.
+
+## 6. Tarefas: fila, lote, modelos e agendamentos
+
+### Fila de tarefas
+
+**Adicionar tarefa para o agente…** enfileira uma tarefa numa worktree. Quando o agente termina a
+atual, a próxima vai sozinha (`worktreeGraph.tasks.autoAdvance`). Na view **Fila de tarefas**:
+rodar agora, subir/descer, remover, marcar como pronta/falhou e limpar as terminadas.
+
+### Tarefa em lote
+
+**Enviar tarefa para várias worktrees…** manda a mesma tarefa para várias worktrees. No máximo
+`worktreeGraph.batch.maxParallel` agentes abertos ao mesmo tempo; os outros esperam vaga.
+
+### Modelos de tarefa
+
+**✦ Usar modelo de tarefa…** oferece modelos prontos (corrigir testes, atualizar dependências,
+escrever testes para o arquivo aberto, revisar e simplificar o diff, documentar a branch,
+investigar erro) e os do projeto.
+
+Modelos do projeto ficam em `.agentyard/templates/<id>.md`:
+
+```markdown
+---
+name: Migrar para a API nova
+description: troca chamadas da v1 pela v2
+---
+Na branch ${branch}, troque as chamadas da API v1 pela v2 em ${file}. Rode os testes.
+```
+
+Placeholders: `${branch}`, `${base}`, `${file}`, `${selection}`, `${issue}`. **Novo modelo de
+tarefa…** e **Editar modelo de tarefa…** criam e abrem esses arquivos. Também dá para listar
+modelos em `worktreeGraph.taskTemplates`.
+
+### Agendamentos
+
+**Novo agendamento…** (view **Agendamentos**) manda uma tarefa a um agente em horários definidos.
+
+Quando — cron de 5 campos ou um atalho:
+
+| atalho | equivale a |
+|---|---|
+| `todo dia às 09:00` | `0 9 * * *` |
+| `dias úteis às 8h30` | `30 8 * * 1-5` |
+| `toda segunda às 10:00` | `0 10 * * 1` |
+| `a cada 2 h` | `0 */2 * * *` |
+| `a cada 30 min` | `*/30 * * * *` |
+| `de hora em hora` | `0 * * * *` |
+| `uma vez em 2026-10-01 14:00` | uma única execução |
+
+Onde: uma branch existente, uma worktree nova a cada execução, ou todas as branches de um padrão.
+Condições opcionais: só se a worktree estiver limpa, só se a base andou. Horário perdido com o VS
+Code fechado: executar uma vez ao abrir, ou pular.
+
+Com várias janelas abertas, só uma executa os agendamentos de cada repositório. Na view: editar,
+duplicar, pausar/retomar, executar agora, histórico e excluir.
+
+## 7. Revisar o que o agente fez
+
+- **Revisar alterações contra a base**: lista os arquivos que a branch mudou desde que saiu da
+  base (inclui o não commitado); cada um abre num diff.
+- Na view Worktrees, o grupo *Alterações × base* faz o mesmo na árvore.
+- **✦ Revisar PR/MR com o agente**: o agente revisa o PR/MR e os comentários aparecem num painel;
+  você escolhe o que postar no GitHub/GitLab. **Abrir a última revisão do agente** reabre o painel.
+- Commits do histórico: **✦ Explicar com o agente** (ver seção 11).
+
+## 8. Merge
+
+### Formas de mesclar
+
+- **↓ Trazer `<base>`**: `git merge <base>` na worktree.
+- **↑ Mesclar em `<base>`**: mescla a branch na base (com `--no-ff` por padrão,
+  `worktreeGraph.noFastForwardIntoBase`).
+- **Mesclar esta branch em…**: escolhe o destino.
+- **Arrastar** um card ou branch sobre outro.
+
+![Arrastar para mesclar](prints/03-arrastar-para-mesclar.png)
+
+Sempre há confirmação com quantos commits entram e se a simulação prevê conflito. Se a branch de
+destino não tem worktree, o merge acontece numa worktree temporária; se der conflito, nada muda e a
+extensão oferece criar uma worktree para resolver.
+
+### Analisar antes
+
+**Analisar merge…** abre um painel com os commits que entram, os arquivos (marcando os alterados
+nos dois lados) e os conflitos previstos. Cada conflito abre como o arquivo ficaria depois do
+merge, com os marcadores. Nada é alterado.
+
+### Resolver conflito com o agente
+
+Em worktrees com conflito previsto aparece **✦ Resolver com Claude**: o agente abre com a tarefa de
+trazer a base, resolver, rodar os testes e commitar. Se a branch não tem worktree, ela é criada
+antes. O texto da tarefa está em `worktreeGraph.prompts.resolveConflict` e
+`worktreeGraph.prompts.mergeIntoBase`.
+
+### Fila de merge
+
+Para várias branches prontas ao mesmo tempo: **Pôr na fila de merge**. A fila mescla uma por vez,
+trazendo a base antes e rodando as checagens. Na view **Fila de merge**: subir/descer, tirar,
+pausar/retomar, processar agora e limpar. `worktreeGraph.mergeQueue.pushBase` faz push da base
+depois de cada merge.
+
+### Cherry-pick e reorganizar commits
+
+- Arraste um commit do histórico sobre uma branch, ou **Cherry-pick de um commit em…**.
+- **Reorganizar commits…**: reordenar, juntar (squash/fixup), mudar mensagem e descartar, sem
+  editor. Há backup e **Desfazer a última reorganização de commits**.
+
+## 9. Remoto: push, pull, PR/MR e pipelines
+
+### Push
+
+- **☁ Push ↑n** no card quando há commits não enviados.
+- **☁ Publicar** (`push -u`) para branches que ainda não existem no remoto.
+- Push recusado: a extensão oferece trazer do remoto e tentar de novo, ou forçar com
+  `--force-with-lease`.
+- **☁↑ Enviar n** na barra: push em lote, com a lista já marcada.
+
+O remoto usado é `worktreeGraph.remote` (padrão `origin`).
+
+### Pull e fetch
+
+- **☁↓ Trazer** por branch: fast-forward; se divergir, pergunta merge ou rebase. Worktree suja
+  pode guardar num stash e devolver depois.
+- **☁↓ Trazer n**: em lote.
+- **Fetch agora**, ou automático com `worktreeGraph.fetch.intervalMinutes`.
+
+### Publicar PR/MR
+
+**Publicar PR/MR…**: faz o push, sugere título e descrição a partir dos commits e permite abrir
+como rascunho. `PR #12` / `MR !5` aparece no card, na tabela e na árvore. Se a branch veio de uma
+issue, a descrição ganha `Closes #N` ou `Refs #N`.
+
+### View Pull requests
+
+Grupos **Meus**, **Pedem minha revisão**, **Abertos** e **Mesclados (7 dias)**, com revisão, CI,
+conflitos, rascunho e se já existe worktree local. Ao expandir: comentários recentes e checks.
+
+Ações: abrir no navegador, **Trazer para uma worktree** (inclusive PR de fork no GitHub, como
+`pr/N`), revisar arquivos, ✦ revisar com o agente, analisar merge, **Mesclar PR/MR…** pela API
+(método em `worktreeGraph.pullRequests.mergeMethod`), marcar pronto / converter em rascunho,
+copiar link e filtrar.
+
+No painel, clicar no chip do PR abre o PR nesta view; **Ctrl/Alt+clique** abre no navegador.
+
+GitHub e GitLab têm todas as ações; Bitbucket e Azure DevOps, a listagem.
+
+### Pipelines
+
+View **Pipelines**: execuções por branch (só com worktree ou todas), jobs, log, re-executar
+(inclusive só os que falharam), cancelar, **Rodar pipeline numa branch…** e iniciar job manual.
+
+O último pipeline de cada branch aparece no card. Quando um pipeline falha,
+**✦ Corrigir com o agente** abre o agente na worktree com o final do log
+(`worktreeGraph.prompts.fixPipeline`).
+
+## 10. Issues
+
+A view **Issues** mostra as suas ou todas (botão na barra da view).
+
+- **Começar com Claude**: cria branch (`issue/<n>-<título>`, prefixo em
+  `worktreeGraph.issues.branchPrefix`) e worktree, e abre o agente com o contexto da issue
+  (`worktreeGraph.prompts.issue`).
+- **Criar worktree sem agente**, **Ver issue**, **Abrir no navegador**, **Copiar link**.
+- **Começar trabalho numa issue…** pela paleta.
+- **Nova issue…** cria no provedor do projeto.
+- **Criar issue com a seleção**: botão direito numa seleção do editor; leva arquivo, linhas e
+  código. A notificação oferece **✦ Começar com Claude**.
+
+Provedores: GitHub, GitLab, Bitbucket, Azure DevOps (work items), Jira e Redmine — ver seção 20.
+
+## 11. Histórico (grafo de commits)
+
+Colunas Graph, Description, Date, Author e Commit. Clique num commit para ver os detalhes logo
+abaixo: pais, autor, mensagem completa, arquivos com +/− e diff.
+
+![Histórico](prints/07-historico.png)
+
+Filtros (salvos por projeto):
+
+- **Tudo** / **Não mescladas** (padrão): só os commits que ainda não entraram na base, com o ponto
+  de saída de cada branch.
+- **CI**: só as branches que o CI usa (fluxo, base, arquivos de GitHub Actions, GitLab CI,
+  Bitbucket Pipelines, Azure Pipelines e `worktreeGraph.ciBranches`).
+- **Branches:** escolhe quais branches aparecem; **Mostrar branches remotas**; busca.
+
+![Filtro CI](prints/10-filtro-ci.png)
+
+Botão direito ou duplo clique num commit: ver alterações, **✦ Explicar com o agente**, abrir no
+GitHub/GitLab, copiar hash/mensagem, criar branch/tag/worktree, cherry-pick em…, reverter e voltar
+uma branch até o commit (com backup e Desfazer).
+
+![Menu do commit](prints/06-menu-commit.png)
+
+## 12. Sync automático da base
+
+Mantém as worktrees em dia com a base sem você precisar lembrar.
+
+Ligue pelo botão **Sync** do painel, pela view Worktrees ou pela barra de status. O estado vale
+por repositório. A cada `autoSync.intervalSeconds`, para cada worktree cuja branch casa com
+`autoSync.branches` (e não com `autoSync.exclude`):
+
+1. em dia com a base → nada;
+2. alterações não commitadas ou merge/rebase em andamento → espera;
+3. conflito previsto → não mexe e avisa uma vez por commit da base;
+4. modo `notify` → só avisa, com **Mesclar agora**;
+5. senão → `git merge <base>`; se `autoSync.testCommand` estiver definido, roda na worktree e,
+   se falhar, desfaz com `git reset --keep`.
+
+**Pausar/retomar sync desta branch** exclui uma branch temporariamente.
+
+### Onde o sync roda
+
+O botão **onde** escolhe, por repositório:
+
+| modo | o que acontece |
+|---|---|
+| **Só local** | a extensão mescla nas worktrees desta máquina |
+| **Só CI** | a extensão só mostra; o workflow gerado sincroniza as branches publicadas |
+| **Dividido** | local para branches não publicadas; CI para as que têm upstream |
+| **Ambos** | os dois em todas (pode gerar merges duplicados) |
+
+**Gerar CI** escreve `.github/workflows/sync-<base>-into-branches.yml` (GitHub) ou
+`.gitlab/worktree-graph-sync.gitlab-ci.yml` (GitLab). No GitHub, use um PAT em
+`secrets.SYNC_TOKEN` se quiser que o push do sync dispare o CI da branch; no GitLab a variável
+`SYNC_TOKEN` é obrigatória (project access token com `write_repository`).
+
+## 13. Fluxo de ambientes
+
+Para quem promove código por estágios (dev → QA → homologação → produção).
+
+**Configurar fluxo de ambientes…** ou `worktreeGraph.flow`:
+
+```jsonc
+"worktreeGraph.flow": ["develop", "qa", "homolog", "main"]
+// ou com rótulos:
+"worktreeGraph.flow": [{ "branch": "qa", "label": "QA" }, ...]
+```
+
+Uma faixa no painel mostra, em cada degrau, quantos commits esperam promoção e os hotfixes feitos
+direto no estágio de cima que precisam descer. **Promover** abre PR/MR, analisa ou mescla; o botão
+de back-merge traz o estágio de cima para o de baixo.
+
+## 14. Proteção e checagens
+
+### Branches protegidas
+
+Por padrão: a base, os estágios do fluxo, `main` e `master` (ou a lista em
+`worktreeGraph.protectedBranches`, aceita `*`/`**`). Aparecem com 🔒.
+
+`worktreeGraph.protection.mode`:
+
+- `confirm` (padrão): merge/push direto pede para digitar o nome da branch;
+- `require-pr`: bloqueia e oferece abrir PR/MR;
+- `off`: sem proteção. Push forçado numa protegida só passa com `off`.
+
+### Checagens antes de mesclar e enviar
+
+```jsonc
+"worktreeGraph.checks.beforeMerge": ["npm run lint", "npm test"],
+"worktreeGraph.checks.beforePush": ["npm test"],
+"worktreeGraph.checks.mode": "block"   // "warn" ou "off"
+```
+
+Rodam na worktree da branch, com cache por commit. Falhou: **Mostrar saída das checagens** e
+**✦ Corrigir com o agente** (`worktreeGraph.prompts.fixChecks`). Em `block`, dá para continuar
+mesmo assim confirmando.
+
+## 15. Claude Code: sessões, uso e configuração
+
+### Sessões
+
+View **Sessões Claude**: sessões agrupadas por worktree. **Retomar sessão**, **Nova sessão do
+Claude aqui**, **Ver transcrição** e **Copiar id da sessão**. O chip no card mostra sessões e
+tokens; clicar retoma a última.
+
+**Comandos do Claude Code…** lista os comandos e skills do projeto e do usuário.
+
+### Uso
+
+A barra de status mostra o uso estimado da janela de 5 h e da semana. Para ver porcentagem,
+calibre pelo `/usage` do Claude Code:
+
+```jsonc
+"worktreeGraph.claude.sessionBudgetTokens": 0,
+"worktreeGraph.claude.weeklyBudgetTokens": 0,
+"worktreeGraph.claude.weekStart": "rolling"   // ou "monday"
+```
+
+Para custo estimado em US$, preencha `worktreeGraph.claude.pricePerMTokInput`, `…Output` e
+`…CacheRead`.
+
+### Configuração do Claude Code
+
+View **Claude: configuração**, com escopo do usuário e do projeto ativo:
+
+- **Skills e comandos**: criar com esqueleto, copiar entre usuário e projeto, renomear, excluir.
+  Skills sincronizadas da conta aparecem só para leitura.
+- **Configurações**: editor de permissões (allow/ask/deny), modelo padrão e hooks. A gravação
+  preserva chaves desconhecidas e comentários e guarda um `.bak`.
+- **Memória** por projeto e por worktree: criar (com a linha no `MEMORY.md`), excluir junto com a
+  linha do índice e **Verificar índice MEMORY.md**.
+
+A pasta de dados é `CLAUDE_CONFIG_DIR` ou `~/.claude`; troque em `worktreeGraph.claude.configDir`.
+
+## 16. Ambiente por worktree (portas, .env, dependências)
+
+Vários agentes rodando o app ao mesmo tempo precisam de portas diferentes:
+
+```jsonc
+"worktreeGraph.env.ports": { "base": 3000, "step": 10, "vars": ["PORT", "VITE_PORT", "API_PORT"] },
+"worktreeGraph.env.devCommand": "npm run dev"
+```
+
+Cada worktree ganha um bloco estável de portas (3000, 3010, 3020…); a primeira variável recebe a
+porta e as seguintes +1, +2. O card mostra a porta; clique para abrir `http://localhost:<porta>`.
+
+- **Configurar ambiente desta worktree** — `.env`, portas e dependências.
+- **Rodar dev nesta worktree** — roda `env.devCommand` com as variáveis de porta.
+- **Abrir a porta desta worktree no navegador**.
+
+Dependências na criação: npm, pnpm, yarn, bun, pip, poetry e uv são detectados; para Node,
+`worktreeGraph.setup.nodeModules: "link"` compartilha o `node_modules` da principal.
+
+O espaço em disco (💾) de cada worktree aparece na tabela, na limpeza e em *Remover mescladas*
+(`worktreeGraph.diskUsage.*`).
+
+## 17. Limpeza
+
+| comando | o que remove |
+|---|---|
+| **Remover mescladas (n)** | worktrees limpas cuja branch já está inteira na base (e as branches, se quiser). Favoritas, com agente aberto e protegidas ficam de fora. |
+| **Excluir mescladas** (branches sem worktree) | branches locais cujos commits já estão todos na base. A base e as protegidas nunca entram; as do remoto continuam. "Escolher na lista…" permite manter alguma. |
+| **Limpar worktrees…** | remoção em lote, com as mescladas e limpas já marcadas |
+| **Remover worktrees órfãs** | registros cuja pasta foi apagada (`git worktree prune`) |
+| **Remover worktree** / **Excluir branch** | uma de cada vez, com confirmação |
+
+Na árvore dá para selecionar várias com Ctrl/Shift.
+
+Quando se acumulam `worktreeGraph.cleanup.remindThreshold` worktrees mescladas e paradas há
+`cleanup.staleDays` dias, a extensão lembra de limpar.
+
+Atalhos (junction/symlink) para fora da worktree, como um `node_modules` compartilhado, são
+desfeitos antes da remoção: o conteúdo do destino não é apagado.
+
+## 18. Métricas e entrega
+
+- **Atividade**: hoje, ontem e 7 dias — commits, arquivos, sessões e tokens por worktree, PRs e
+  pipelines, e custo por tarefa (tokens da branch ligados à issue ou ao PR/MR).
+- **Linha do tempo das branches**: nascimento, commits, PR/MR, aprovação e merge.
+- **Relatório do dia…**: Markdown com commits, PRs, pipelines, issues, tokens e custo por branch.
+  Com `worktreeGraph.report.agentSummary`, oferece **✦ Redigir resumo com o agente**.
+- **Preparar versão…**: changelog por seções desde a última tag, próxima versão por semver, commit
+  e tag locais (o push fica com você).
+
+## 19. Vários projetos
+
+View **Projetos** → **Adicionar projeto…**: uma pasta ou uma varredura de uma pasta cheia de
+repositórios. Troque o projeto ativo pela view ou pelo nome ▾ no topo do painel, sem abrir outra
+janela. **Abrir projeto numa nova janela** e **Remover projeto da lista** também estão lá.
+
+## 20. Conectar às plataformas
+
+O provedor é detectado pelo endereço do remoto (`worktreeGraph.remote`).
+
+| plataforma | como conectar | hosts próprios |
+|---|---|---|
+| GitHub.com | login do próprio VS Code | — |
+| GitHub Enterprise | **Conectar ao GitHub/GitLab** (token) | `worktreeGraph.github.hosts`, `github.apiUrl` |
+| GitLab (.com e self-hosted) | **Conectar ao GitLab (URL e token)…**, escopo `api` | `worktreeGraph.gitlab.hosts`, `gitlab.apiUrl` |
+| Bitbucket Cloud/Server | **Conectar ao GitHub/GitLab** (token) | `worktreeGraph.bitbucket.hosts` |
+| Azure DevOps Services/Server | **Conectar ao GitHub/GitLab** (token) | `worktreeGraph.azureDevOps.hosts` |
+| Jira Cloud/Server | **Conectar ao Jira** | `worktreeGraph.jira.url`, `jira.projectKey`, `jira.jql` |
+| Redmine | **Conectar ao Redmine** (chave de API) | `worktreeGraph.redmine.url`, `redmine.projectId` |
+
+Tokens e chaves ficam no cofre de segredos do VS Code, nunca no `settings.json`. Os comandos
+**Desconectar…** apagam a credencial.
+
+## 21. Referência de configurações
+
+Todas começam com `worktreeGraph.`. As mais usadas:
+
+| chave | padrão | para quê |
+|---|---|---|
+| `baseBranch` | *(detecta)* | branch base |
+| `worktreeRoot` | `<repo>.worktrees` | onde as worktrees nascem |
+| `postCreateCommand` | | comando após criar a worktree |
+| `agents` | Claude, Codex, Gemini | CLIs de agente |
+| `agentTerminalLocation` | `panel` | `panel` ou `editor` |
+| `noFastForwardIntoBase` | `true` | `--no-ff` ao mesclar na base |
+| `remote` | `origin` | remoto para push e PR/MR |
+| `refreshIntervalSeconds` | `15` | atualização do painel |
+| `gitConcurrency` | `4` | processos git em paralelo |
+| `autoSync.*` | | ver seção 12 |
+| `flow` | `[]` | ver seção 13 |
+| `protectedBranches`, `protection.mode` | automático, `confirm` | ver seção 14 |
+| `checks.*` | | ver seção 14 |
+| `agents.idleMinutes` | `3` | minutos parado para considerar que o agente terminou |
+| `tasks.autoAdvance` | `true` | próxima tarefa da fila vai sozinha |
+| `batch.maxParallel` | `3` | agentes simultâneos na tarefa em lote |
+| `budget.*` | `0` | orçamento por worktree |
+| `fetch.intervalMinutes` | `0` | fetch automático |
+| `env.ports`, `env.devCommand` | | ver seção 16 |
+| `setup.nodeModules` | `ask` | `ask`, `install` ou `link` |
+| `cleanup.remindThreshold`, `cleanup.staleDays` | `20`, `7` | lembrete de limpeza |
+| `pullRequests.mergeMethod` | `merge` | método ao mesclar pela view |
+| `prompts.*` | | textos enviados ao agente (conflito, issue, pipeline, checagens, revisão) |
+
+A lista completa, com descrições, está em **Configurações → Extensões → AgentYard**.
+
+## 22. Problemas comuns
+
+**A previsão de conflito não aparece.** Atualize o git para 2.38 ou mais novo.
+
+**"command 'worktreeGraph.…' not found" depois de atualizar.** A janela ainda está com a versão
+anterior carregada: **Developer: Reload Window**.
+
+**O agente não abre / "comando não encontrado".** O CLI precisa estar no `PATH` do terminal do VS
+Code. Teste o comando num terminal comum e ajuste `worktreeGraph.agents`.
+
+**"Pronto para revisar" não aparece.** Sem shell integration, o fim é detectado por inatividade;
+reduza `worktreeGraph.agents.idleMinutes` ou use **Verificar se o agente terminou**. A worktree
+precisa estar limpa e com commits novos.
+
+**O sync não mexe numa worktree.** Veja o chip `⟳` do card: *esperando commit* (há alterações não
+commitadas), *conflito*, *testes falharam*, *via GitHub Actions* (modo de onde) ou a branch não casa
+com `autoSync.branches`/`exclude`, ou foi pausada.
+
+**Muitas janelas no mesmo repositório.** Só uma roda o sync e os agendamentos (lock em
+`<.git>/worktree-graph-sync.lock`); as outras só mostram.
+
+**Log da extensão.** **AgentYard: Mostrar log** abre o canal de saída com os comandos git
+executados e erros.
