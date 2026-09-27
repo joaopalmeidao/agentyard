@@ -6,7 +6,7 @@ import { computeFlow, flowStages } from './flow';
 import { hostLabel } from './hosting/platforms';
 import { RequestService } from './hosting/service';
 import { Repo } from './git';
-import { applyCache, buildState, enrich, GraphState, RepoCache, resolveBase, SyncStatus, SyncWhere } from './model';
+import { applyCache, buildState, enrich, GraphState, RepoCache, resolveBase, SyncStatus, SyncWhere, GraphFilter } from './model';
 
 /** Dono do repositório aberto e do estado mostrado na árvore e no grafo. */
 export class Controller implements vscode.Disposable {
@@ -180,7 +180,7 @@ export class Controller implements vscode.Disposable {
           configuredBase: this.configuredBase(),
           useRemoteBase: c.get('autoSync.fetchRemote', false),
           maxCommits: c.get('graph.maxCommits', 400),
-          showRemotes: c.get('graph.showRemoteBranches', true),
+          showRemotes: this.ctx.workspaceState.get<boolean>('graphShowRemotes') ?? c.get('graph.showRemoteBranches', true),
           paused: this.paused(),
           statuses: this.statuses,
           autoSync: {
@@ -194,7 +194,9 @@ export class Controller implements vscode.Disposable {
           agentsRunning: this.agentsRunning?.(),
           favorites: new Set(this.favorites()),
           // padrão: só o que falta mesclar; a escolha do usuário fica salva (por projeto e geral)
-          graphFilter: this.ctx.workspaceState.get<'all' | 'unmerged'>('graphFilter') ?? this.ctx.globalState.get<'all' | 'unmerged'>('graphFilter', 'unmerged'),
+          graphFilter: this.ctx.workspaceState.get<GraphFilter>('graphFilter') ?? this.ctx.globalState.get<GraphFilter>('graphFilter', 'unmerged'),
+          graphBranches: this.ctx.workspaceState.get<string[]>('graphBranches', []),
+          ci: { flow: flowStages(this).map(s => s.branch), extras: c.get<string[]>('ciBranches', []) },
         },
         this.cache,
       );

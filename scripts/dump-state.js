@@ -12,6 +12,9 @@ const { buildState, enrich, applyCache, RepoCache } = require('../out/model');
     configuredBase: '', useRemoteBase: false, maxCommits: 400, showRemotes: true, paused: [], statuses,
     autoSync: { enabled: args[2] === 'sync-on', mode: 'merge', testCommand: 'npm test', owner: true, where: 'local' },
     agentNames: ['Claude Code', 'Codex CLI'],
+    // WTGRAPH_FILTER=ci|unmerged|all escolhe o filtro do histórico (prints e medições)
+    graphFilter: process.env.WTGRAPH_FILTER || undefined,
+    ci: { flow: [], extras: [] },
   };
   let t = Date.now();
   const state = await buildState(repo, opts, cache);

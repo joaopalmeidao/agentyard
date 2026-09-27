@@ -195,9 +195,22 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return commits.openCommitOnWeb(ctl, a.sha);
       case 'explainCommit':
         return commits.explainCommit(ctl, a.sha);
+      case 'setGraphOptions':
+        // seletor "Branches:" e "Mostrar branches remotas" do histórico
+        if (a.branches !== undefined) await ctx.workspaceState.update('graphBranches', a.branches ? a.branches.split('\n').filter(Boolean) : []);
+        if (a.showRemotes !== undefined) await ctx.workspaceState.update('graphShowRemotes', a.showRemotes === 'true');
+        return ctl.refresh();
+      case 'openCiBranchesSettings':
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.ciBranches');
+        return;
+      case 'openCommitFile':
+        return commits.openCommitFile(ctl, a.sha, a.parent, a.path, a.status);
       case 'setGraphFilter':
-        await ctx.workspaceState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
-        await ctx.globalState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
+        {
+          const f = a.value === 'unmerged' || a.value === 'ci' ? a.value : 'all';
+          await ctx.workspaceState.update('graphFilter', f);
+          await ctx.globalState.update('graphFilter', f);
+        }
         return ctl.refresh();
       case 'publishRequest':
         return ctl.requests.publish(a.branch);
