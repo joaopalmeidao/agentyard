@@ -3,7 +3,7 @@
   "displayName": "AgentYard",
   "description": "Central para desenvolver com agentes de IA em paralelo: worktrees e branches num grafo, merge e análise de merge, PR/MR com revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Redmine), Claude Code por worktree com sessões e uso, fila e agendamento de tarefas, e a base sempre em dia.",
   "version": "0.13.0",
-  "publisher": "worktree-graph",
+  "publisher": "joaopalmeidao",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "vscode": "^1.85.0"
