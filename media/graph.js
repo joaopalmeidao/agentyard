@@ -280,6 +280,13 @@
       <span>Detalhando worktrees: ${done} de ${total}</span></div>`;
   }
 
+  /** ["Claude Code", "Claude Code", "Codex"] → "Claude Code ×2, Codex" */
+  function agentsLabel(names) {
+    const n = new Map();
+    for (const a of names) n.set(a, (n.get(a) || 0) + 1);
+    return [...n].map(([a, c]) => (c > 1 ? `${a} ×${c}` : a)).join(', ');
+  }
+
   function claudeChip(w) {
     const c = w.claude;
     return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}${c.usd !== undefined ? ` · ≈US$ ${c.usd.toFixed(2).replace('.', ',')}` : ''}</span>`;
@@ -480,7 +487,7 @@
         <td class="c-chips">${w.size ? sizeChip(w.size) : ''}${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.overlap ? overlapChip(w) : ''}${w.budget ? budgetChip(w) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
         <td class="row-actions">
-          ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
+          ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree (Ctrl/Alt+clique abre outro, mesmo com um já rodando)">✦</button>` : ''}
           ${w.remote.ahead || !w.remote.published ? pushButton(w.branch, w.remote, true) : ''}
           ${w.remote.published && w.remote.behind ? pullButton(w.branch, w.remote.behind, true) : ''}
           <button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>
@@ -512,7 +519,8 @@
         }
         if (w.branch) chips.push(remoteChip(w));
         if (w.branch) chips.push(syncChip(w));
-        if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
+        if (w.agents && w.agents.length)
+          chips.push(`<span class="chip agent link" data-action="agents.pick" data-path="${esc(w.path)}" title="${w.agents.length} terminal(is) de agente aberto(s) nesta worktree. Clique para escolher qual trazer para frente.">✦ ${esc(agentsLabel(w.agents))}</span>`);
         if (w.review) chips.push(reviewChip(w));
         if (w.tasks) chips.push(tasksChip(w));
         if (w.request) chips.push(requestChip(w.request));
@@ -526,7 +534,7 @@
         const agent = state.agentNames && state.agentNames[0];
         const act = [
           agent && !w.bare && !w.prunable
-            ? `<button data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" class="agent" title="Abre ${esc(agent)} num terminal dentro desta worktree (botão direito no card para outros agentes)">✦ ${esc(agent)}</button>`
+            ? `<button data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" class="agent" title="Abre ${esc(agent)} num terminal dentro desta worktree. Ctrl/Alt+clique abre outro, mesmo com um já rodando (botão direito no card para outros agentes)">✦ ${esc(agent)}</button>`
             : '',
           w.branch && (w.remote.ahead || !w.remote.published) && !w.prunable ? pushButton(w.branch, w.remote) : '',
           w.branch && w.remote.published && w.remote.behind && !w.prunable ? pullButton(w.branch, w.remote.behind) : '',
@@ -1020,7 +1028,11 @@
       }
       items.push('<hr>');
       if (wt) {
-        for (const a of state.agentNames || []) items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
+        for (const a of state.agentNames || []) {
+          items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
+          if ((wt.agents || []).includes(a)) items.push(item('launchAgentNew', `✦ Outro ${a} (novo terminal)`, { path: wt.path, branch: b, agent: a }, 'agent'));
+        }
+        if (wt.agents && wt.agents.length) items.push(item('agents.pick', `Agentes abertos aqui (${wt.agents.length})…`, { path: wt.path }, 'agent'));
         if ((state.agentNames || []).length) items.push('<hr>');
         items.push(item('toggleFavorite', wt.favorite ? '★ Desfavoritar' : '☆ Favoritar', { path: wt.path }));
         items.push(item('templates.use', '✦ Usar modelo de tarefa…', { path: wt.path, branch: b }, 'agent'));
