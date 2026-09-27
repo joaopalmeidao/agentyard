@@ -1,0 +1,69 @@
+import * as path from 'path';
+import * as vscode from 'vscode';
+import { AgentTerminals, OpenAgent, groupByWorktree, sinceText } from './agents';
+
+/** Grupo da view: uma worktree com agentes abertos. */
+export interface AgentGroupItem {
+  kind: 'group';
+  path: string;
+  branch?: string;
+  terminals: OpenAgent[];
+}
+
+type Node = AgentGroupItem | { kind: 'terminal'; open: OpenAgent };
+
+/** View "Agentes abertos": terminais de agente agrupados por worktree; clicar traz o terminal para frente. */
+export class AgentsTreeProvider implements vscode.TreeDataProvider<Node>, vscode.Disposable {
+  private readonly changed = new vscode.EventEmitter<void>();
+  readonly onDidChangeTreeData = this.changed.event;
+  private readonly disposables: vscode.Disposable[] = [this.changed];
+
+  constructor(private readonly terms: AgentTerminals) {
+    this.disposables.push(
+      terms.onDidChange(() => this.changed.fire()),
+      // o nome muda quando o próprio agente renomeia o terminal (o Claude Code põe o assunto da conversa)
+      vscode.window.onDidChangeTerminalState(() => this.changed.fire()),
+      vscode.window.onDidChangeActiveTerminal(() => this.changed.fire()),
+    );
+  }
+
+  count() {
+    return this.terms.list().length;
+  }
+
+  getChildren(node?: Node): Node[] {
+    if (!node)
+      return groupByWorktree(this.terms.list()).map(list => ({ kind: 'group', path: list[0].path, branch: list[0].branch, terminals: list }));
+    return node.kind === 'group' ? node.terminals.map(open => ({ kind: 'terminal', open })) : [];
+  }
+
+  getTreeItem(node: Node): vscode.TreeItem {
+    if (node.kind === 'group') {
+      const item = new vscode.TreeItem(node.branch ?? path.basename(node.path), vscode.TreeItemCollapsibleState.Expanded);
+      item.description = `${node.terminals.length} terminal(is)`;
+      item.tooltip = node.path;
+      item.iconPath = new vscode.ThemeIcon('git-branch');
+      item.contextValue = 'agentGroup';
+      return item;
+    }
+    const o = node.open;
+    const active = vscode.window.activeTerminal === o.terminal;
+    const item = new vscode.TreeItem(o.terminal.name, vscode.TreeItemCollapsibleState.None);
+    item.description = `${active ? '● ' : ''}${sinceText(o.started)}${o.task ? ' · tarefa' : ''}`;
+    item.tooltip = `${o.agent} em ${o.path}\nAberto ${sinceText(o.started)}${o.task ? ', com uma tarefa' : ''}.\nClique para trazer o terminal para frente.`;
+    item.iconPath = new vscode.ThemeIcon('sparkle');
+    item.contextValue = 'agentTerminal';
+    item.command = { command: 'worktreeGraph.agents.show', title: 'Mostrar terminal', arguments: [node] };
+    return item;
+  }
+
+  dispose() {
+    this.disposables.forEach(d => d.dispose());
+  }
+}
+
+/** Terminal de um nó da view (ou undefined). */
+export function terminalOf(node: unknown): vscode.Terminal | undefined {
+  const n = node as Node | undefined;
+  return n && n.kind === 'terminal' ? n.open.terminal : undefined;
+}

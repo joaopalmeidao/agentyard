@@ -45,10 +45,6 @@ export function promptArgument(prompt: string, shell = vscode.env.shell): { arg:
   return { arg, file };
 }
 
-/**
- * Terminais de agente abertos pela extensão, por worktree. Um terminal por (worktree, agente):
- * chamar de novo só traz o terminal para frente. Tarefas (launchWithPrompt) sempre abrem um novo.
- */
 /** Um agente acabou de ser aberto pela extensão (a frente "pronto para revisar" acompanha a partir daqui). */
 export interface AgentLaunch {
   path: string;
@@ -58,33 +54,79 @@ export interface AgentLaunch {
   prompt?: string;
 }
 
+/** Um terminal de agente aberto pela extensão. */
+export interface OpenAgent {
+  terminal: vscode.Terminal;
+  path: string;
+  branch?: string;
+  agent: string;
+  started: number;
+  /** Aberto já com uma tarefa (launchWithPrompt). */
+  task?: boolean;
+}
+
+/** Nomes repetidos viram "Claude Code ×2". */
+export function agentsLabel(names: string[]): string {
+  const n = new Map<string, number>();
+  for (const a of names) n.set(a, (n.get(a) ?? 0) + 1);
+  return [...n].map(([a, c]) => (c > 1 ? `${a} ×${c}` : a)).join(', ');
+}
+
+/** "agora", "há 5 min", "há 2 h", "há 3 d". */
+export function sinceText(t: number, now = Date.now()): string {
+  const m = Math.max(0, Math.round((now - t) / 60000));
+  if (m < 1) return 'agora';
+  if (m < 60) return `há ${m} min`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `há ${h} h` : `há ${Math.floor(h / 24)} d`;
+}
+
+const keyOf = (p: string) => path.normalize(p).toLowerCase();
+
+/**
+ * Terminais de agente abertos pela extensão, por worktree. Pode haver vários do mesmo agente na
+ * mesma worktree; abrir de novo pergunta se traz um deles para frente ou abre outro (`agentWhenOpen`).
+ * Tarefas (launchWithPrompt) sempre abrem um novo.
+ */
 export class AgentTerminals implements vscode.Disposable {
-  private readonly open = new Map<string, vscode.Terminal>();
+  private readonly open: OpenAgent[] = [];
   private readonly launched = new vscode.EventEmitter<AgentLaunch>();
   readonly onDidLaunch = this.launched.event;
-  private readonly disposables: vscode.Disposable[] = [this.launched];
+  private readonly changed = new vscode.EventEmitter<void>();
+  /** A lista de terminais abertos mudou. */
+  readonly onDidChange = this.changed.event;
+  private readonly disposables: vscode.Disposable[] = [this.launched, this.changed];
   /** Arquivo do último prompt enviado (usado pelos testes). */
   lastPromptFile?: string;
 
   constructor(private readonly ctl: Controller) {
     this.disposables.push(
       vscode.window.onDidCloseTerminal(t => {
-        for (const [k, v] of this.open) if (v === t) this.open.delete(k);
+        const i = this.open.findIndex(o => o.terminal === t);
+        if (i >= 0) this.open.splice(i, 1);
+        this.changed.fire();
         this.ctl.scheduleRefresh(50);
       }),
     );
   }
 
-  /** Nomes dos agentes com terminal aberto em cada worktree (chave: caminho em minúsculas). */
+  /** Terminais abertos, opcionalmente só os de uma worktree (e de um agente). */
+  list(worktreePath?: string, agentName?: string): OpenAgent[] {
+    return this.open.filter(
+      o => o.terminal.exitStatus === undefined && (!worktreePath || keyOf(o.path) === keyOf(worktreePath)) && (!agentName || o.agent === agentName),
+    );
+  }
+
+  /** Agentes abertos em cada worktree (chave: caminho em minúsculas), um nome por terminal. */
   running(): Map<string, string[]> {
     const out = new Map<string, string[]>();
-    for (const k of this.open.keys()) {
-      const [p, name] = k.split('|');
-      const list = out.get(p) ?? [];
-      if (!list.includes(name)) list.push(name);
-      out.set(p, list);
-    }
+    for (const o of this.list()) out.set(keyOf(o.path), [...(out.get(keyOf(o.path)) ?? []), o.agent]);
     return out;
+  }
+
+  private track(o: Omit<OpenAgent, 'started'>) {
+    this.open.push({ ...o, started: Date.now() });
+    this.changed.fire();
   }
 
   private async pickAgent(worktreePath: string, branch: string | undefined, agentName?: string): Promise<AgentConfig | undefined> {
@@ -114,15 +156,49 @@ export class AgentTerminals implements vscode.Disposable {
     });
   }
 
-  async launch(worktreePath: string, branch: string | undefined, agentName?: string) {
+  /** Nome do terminal; a partir do segundo do mesmo agente (e mesmo tipo) na worktree ganha "#n". */
+  private terminalName(agent: string, worktreePath: string, branch: string | undefined, task = false) {
+    const n = this.list(worktreePath, agent).filter(o => !!o.task === task).length;
+    return `${agent} · ${branch ?? path.basename(worktreePath)}${task ? ' · tarefa' : ''}${n ? ` #${n + 1}` : ''}`;
+  }
+
+  private describe(o: OpenAgent) {
+    return `aberto ${sinceText(o.started)}${o.task ? ' · com tarefa' : ''}`;
+  }
+
+  /**
+   * Abre o agente na worktree. Se já houver terminal dele ali: `mode` 'reuse' traz o último para
+   * frente, 'new' abre outro; sem `mode`, segue `agentWhenOpen` (padrão: perguntar).
+   */
+  async launch(worktreePath: string, branch: string | undefined, agentName?: string, mode?: 'reuse' | 'new') {
     const agent = await this.pickAgent(worktreePath, branch, agentName);
     if (!agent) return;
 
-    const key = `${path.normalize(worktreePath).toLowerCase()}|${agent.name}`;
-    const existing = this.open.get(key);
-    if (existing && existing.exitStatus === undefined) {
-      existing.show();
-      return;
+    const openHere = this.list(worktreePath, agent.name);
+    if (openHere.length && mode !== 'new') {
+      const pref = mode ?? this.ctl.cfg().get<string>('agentWhenOpen', 'ask');
+      if (pref === 'reuse') {
+        openHere[openHere.length - 1].terminal.show();
+        return;
+      }
+      if (pref !== 'new') {
+        const items: (vscode.QuickPickItem & { o?: OpenAgent })[] = [
+          { label: `$(add) Abrir outro ${agent.name}`, description: 'novo terminal, sessão nova' },
+          { label: 'Já abertos', kind: vscode.QuickPickItemKind.Separator },
+          ...openHere
+            .slice()
+            .reverse()
+            .map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: this.describe(o), o })),
+        ];
+        const pick = await vscode.window.showQuickPick(items, {
+          placeHolder: `${agent.name} já está aberto em ${branch ?? path.basename(worktreePath)}: ir para um deles ou abrir outro?`,
+        });
+        if (!pick) return;
+        if (pick.o) {
+          pick.o.terminal.show();
+          return;
+        }
+      }
     }
 
     let command = agent.command;
@@ -142,8 +218,8 @@ export class AgentTerminals implements vscode.Disposable {
       }
     }
 
-    const terminal = await this.createTerminal(worktreePath, branch, `${agent.name} · ${branch ?? path.basename(worktreePath)}`);
-    this.open.set(key, terminal);
+    const terminal = await this.createTerminal(worktreePath, branch, this.terminalName(agent.name, worktreePath, branch));
+    this.track({ terminal, path: worktreePath, branch, agent: agent.name });
     terminal.show();
     terminal.sendText(command);
     this.launched.fire({ path: worktreePath, branch, terminal, agent: agent.name });
@@ -158,8 +234,8 @@ export class AgentTerminals implements vscode.Disposable {
     const p = promptArgument(prompt);
     this.lastPromptFile = p.file;
     const command = promptCommandOf(agent).replace(/\{prompt\}/g, () => p.arg).trim();
-    const terminal = await this.createTerminal(worktreePath, branch, `${agent.name} · ${branch ?? path.basename(worktreePath)} · tarefa`);
-    this.open.set(`${path.normalize(worktreePath).toLowerCase()}|${agent.name}|${Date.now()}`, terminal);
+    const terminal = await this.createTerminal(worktreePath, branch, this.terminalName(agent.name, worktreePath, branch, true));
+    this.track({ terminal, path: worktreePath, branch, agent: agent.name, task: true });
     terminal.show();
     terminal.sendText(command);
     this.launched.fire({ path: worktreePath, branch, terminal, agent: agent.name, prompt });
@@ -167,9 +243,32 @@ export class AgentTerminals implements vscode.Disposable {
     this.ctl.scheduleRefresh(50);
   }
 
+  /** Lista os terminais de agente abertos, agrupados por worktree, e traz para frente o escolhido. */
+  async pickOpen(worktreePath?: string) {
+    const all = this.list(worktreePath);
+    if (!all.length) {
+      vscode.window.showInformationMessage(worktreePath ? 'Nenhum agente aberto nesta worktree.' : 'Nenhum agente aberto.');
+      return;
+    }
+    const items: (vscode.QuickPickItem & { o?: OpenAgent })[] = [];
+    for (const list of groupByWorktree(all)) {
+      items.push({ label: list[0].branch ?? path.basename(list[0].path), kind: vscode.QuickPickItemKind.Separator });
+      for (const o of list) items.push({ label: `$(terminal) ${o.terminal.name}`, description: this.describe(o), detail: o.path, o });
+    }
+    const pick = await vscode.window.showQuickPick(items, { placeHolder: `${all.length} terminal(is) de agente aberto(s)`, matchOnDetail: true });
+    pick?.o?.terminal.show();
+  }
+
   dispose() {
     this.disposables.forEach(d => d.dispose());
   }
+}
+
+/** Terminais agrupados por worktree, na ordem em que cada worktree apareceu. */
+export function groupByWorktree(list: OpenAgent[]): OpenAgent[][] {
+  const groups = new Map<string, OpenAgent[]>();
+  for (const o of list) groups.set(keyOf(o.path), [...(groups.get(keyOf(o.path)) ?? []), o]);
+  return [...groups.values()];
 }
 
 /** Troca ${nome} pelos valores; placeholders desconhecidos ficam como estão. */

@@ -1,5 +1,14 @@
 # Changelog
 
+## Não lançado
+- Vários agentes na mesma worktree: com um já aberto, o ✦ pergunta se vai para um dos terminais
+  abertos ou abre outro (`worktreeGraph.agentWhenOpen`: perguntar, reaproveitar ou sempre novo).
+  Ctrl/Alt+clique no ✦ e "Abrir outro agente na worktree" sempre abrem um terminal novo (`#2`, `#3`…).
+- View "Agentes abertos": terminais de agente agrupados por worktree, com há quanto tempo estão
+  abertos; clicar traz o terminal para frente, ➕ abre outro na worktree e ✕ fecha. Badge com o total.
+- "Agentes abertos…" (paleta, menu da worktree e chip ✦ do card) lista os terminais agrupados;
+  o chip mostra "Claude Code ×2" quando há mais de um.
+
 ## 0.13.0
 - "Excluir mescladas" nas branches sem worktree: um clique exclui as branches locais cujos commits
   já estão todos na base (a base e as protegidas nunca entram; as do remoto continuam). Confirmação
