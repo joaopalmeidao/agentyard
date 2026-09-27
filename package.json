@@ -63,6 +63,10 @@
         {
           "id": "worktreeGraph.claudeConfig",
           "name": "Claude: configuração"
+        },
+        {
+          "id": "worktreeGraph.pipelines",
+          "name": "Pipelines"
         }
       ]
     },
@@ -512,6 +516,72 @@
         "command": "worktreeGraph.issues.createFromSelection",
         "title": "Criar issue com a seleção",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.pipelines.refresh",
+        "title": "Atualizar pipelines",
+        "category": "Worktree Graph",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.scopeAll",
+        "title": "Pipelines: mostrar todas as branches",
+        "category": "Worktree Graph",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.scopeWorktrees",
+        "title": "Pipelines: só branches com worktree",
+        "category": "Worktree Graph",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.open",
+        "title": "Abrir no navegador",
+        "category": "Worktree Graph",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.log",
+        "title": "Ver log",
+        "category": "Worktree Graph",
+        "icon": "$(output)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.retry",
+        "title": "Re-executar pipeline",
+        "category": "Worktree Graph",
+        "icon": "$(debug-rerun)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.retryFailed",
+        "title": "Re-executar só os jobs que falharam",
+        "category": "Worktree Graph",
+        "icon": "$(debug-rerun)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.cancel",
+        "title": "Cancelar pipeline",
+        "category": "Worktree Graph",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.trigger",
+        "title": "Rodar pipeline numa branch…",
+        "category": "Worktree Graph",
+        "icon": "$(play)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.fix",
+        "title": "✦ Corrigir com o agente (log da falha)",
+        "category": "Worktree Graph",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.pipelines.play",
+        "title": "Iniciar job manual",
+        "category": "Worktree Graph",
+        "icon": "$(debug-start)"
       }
     ],
     "menus": {
@@ -660,6 +730,26 @@
           "command": "worktreeGraph.issues.create",
           "when": "view == worktreeGraph.issues",
           "group": "navigation@0"
+        },
+        {
+          "command": "worktreeGraph.pipelines.refresh",
+          "when": "view == worktreeGraph.pipelines",
+          "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.pipelines.trigger",
+          "when": "view == worktreeGraph.pipelines",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.pipelines.scopeAll",
+          "when": "view == worktreeGraph.pipelines && worktreeGraph.pipelinesScope != all",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.pipelines.scopeWorktrees",
+          "when": "view == worktreeGraph.pipelines && worktreeGraph.pipelinesScope == all",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -962,6 +1052,61 @@
           "command": "worktreeGraph.pushBranch",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "2_merge@6"
+        },
+        {
+          "command": "worktreeGraph.pipelines.fix",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.pipelines.retry",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-(failed|canceled|success)/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.pipelines.cancel",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-(running|queued)/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.pipelines.open",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline/",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.pipelines.play",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipelineJob-manual-gitlab/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.pipelines.log",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline/",
+          "group": "1_view@1"
+        },
+        {
+          "command": "worktreeGraph.pipelines.open",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline/",
+          "group": "1_view@2"
+        },
+        {
+          "command": "worktreeGraph.pipelines.retry",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-/",
+          "group": "2_run@1"
+        },
+        {
+          "command": "worktreeGraph.pipelines.retryFailed",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed-github/",
+          "group": "2_run@2"
+        },
+        {
+          "command": "worktreeGraph.pipelines.cancel",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-(running|queued)/",
+          "group": "2_run@3"
+        },
+        {
+          "command": "worktreeGraph.pipelines.fix",
+          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
+          "group": "3_fix@1"
         }
       ],
       "commandPalette": [
@@ -1071,6 +1216,34 @@
         },
         {
           "command": "worktreeGraph.claudeConfig.revealMemory",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pipelines.open",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pipelines.log",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pipelines.retry",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pipelines.retryFailed",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pipelines.cancel",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pipelines.play",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pipelines.fix",
           "when": "false"
         }
       ],
@@ -1401,6 +1574,12 @@
           "type": "number",
           "default": 50,
           "description": "Quantas sessões mostrar por worktree na view Sessões Claude."
+        },
+        "worktreeGraph.prompts.fixPipeline": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "",
+          "markdownDescription": "Tarefa enviada ao agente em *✦ Corrigir* de um pipeline que falhou. Vazio = texto padrão. Placeholders: `${branch}`, `${pipeline}`, `${url}`, `${jobs}`, `${log}` (últimas ~150 linhas do job que falhou)."
         }
       }
     }
@@ -1410,7 +1589,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

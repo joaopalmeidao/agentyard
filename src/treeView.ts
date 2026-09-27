@@ -10,6 +10,9 @@ type Node = OrphansGroup | WorktreeItem | ChangesItem | ChangeItem | DirItem | F
 const HIDDEN = new Set(['.git']);
 const STATUS_LABEL: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', '?': 'novo, não rastreado', T: 'tipo alterado' };
 
+/** Último pipeline de uma branch (preenchido pelo provider a partir do estado). */
+let pipelineOf: ((branch: string) => { status: string } | undefined) | undefined;
+
 export class WorktreeItem extends vscode.TreeItem {
   readonly kind = 'worktree';
   readonly branch?: string;
@@ -34,6 +37,10 @@ export class WorktreeItem extends vscode.TreeItem {
     if (wt.preview?.conflict) parts.push('⚠ conflito');
     if (wt.agents.length) parts.push(`✦ ${wt.agents.join(', ')}`);
     if (wt.request) parts.push(`${wt.request.ref}${wt.request.state === 'draft' ? ' rascunho' : ''}`);
+    if (wt.branch && pipelineOf?.(wt.branch)) {
+      const p = pipelineOf(wt.branch)!;
+      parts.push(`${{ success: '✓', failed: '✗', running: '⟳', queued: '…', canceled: '⊘', skipped: '↷', manual: '▶' }[p.status] ?? '?'} CI`);
+    }
     if (wt.paused) parts.push('‖');
     this.description = parts.join('  ');
 
@@ -186,6 +193,7 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
     if (!s || !repo) return [];
     try {
       if (!el) {
+        pipelineOf = b => s.pipelines?.[b];
         const items: Node[] = s.worktrees.filter(w => !w.prunable).map(w => new WorktreeItem(w, s.base, s.baseRef));
         const orphans = s.worktrees.filter(w => w.prunable);
         if (orphans.length) items.push(new OrphansGroup(orphans.length));

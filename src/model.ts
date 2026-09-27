@@ -105,6 +105,8 @@ export interface GraphState {
   unmerged: string[];
   /** Remoto reconhecido (GitHub/GitLab) e se há credencial. */
   hosting?: { kind: 'github' | 'gitlab'; label: 'PR' | 'MR'; host: string; connected: boolean; error?: string };
+  /** Último pipeline (GitHub Actions/GitLab CI) de cada branch, se houver dados. */
+  pipelines?: Record<string, { id: number; status: string; name: string; url: string; updatedAt: number }>;
   error?: string;
 }
 
