@@ -4,13 +4,16 @@
  */
 import type { HostKind, RemoteInfo } from './core';
 import { HostError } from './core';
+import { AzurePipelines } from './azure';
+import { bitbucketPipelines } from './bitbucket';
+import { request } from './http';
 
 export type PipelineStatus = 'queued' | 'running' | 'success' | 'failed' | 'canceled' | 'skipped' | 'manual' | 'other';
 
 export interface Pipeline {
   id: number;
   provider: HostKind;
-  /** Nome do workflow (GitHub) ou "Pipeline #id" (GitLab). */
+  /** Nome do workflow (GitHub), da definição (Azure) ou "Pipeline #id" (GitLab/Bitbucket). */
   name: string;
   branch: string;
   sha: string;
@@ -56,32 +59,6 @@ export interface PipelineClient {
 
 type Fetch = typeof fetch;
 const ts = (s?: string | null) => (s ? Math.floor(Date.parse(s) / 1000) : 0);
-
-async function request(f: Fetch, url: string, init: RequestInit, raw = false): Promise<any> {
-  let res: Response;
-  try {
-    res = await f(url, init);
-  } catch (e) {
-    throw new HostError(0, `Não consegui falar com ${new URL(url).host}: ${(e as Error).message}`);
-  }
-  const text = await res.text();
-  if (!res.ok) {
-    let msg = text || res.statusText;
-    try {
-      const b = JSON.parse(text);
-      msg = b.message || b.error || msg;
-    } catch {
-      // corpo não é JSON
-    }
-    throw new HostError(res.status, `${res.status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
-  }
-  if (raw) return text;
-  try {
-    return text ? JSON.parse(text) : undefined;
-  } catch {
-    return text;
-  }
-}
 
 /** status + conclusion do GitHub (run ou job) → status comum. */
 export function githubStatus(status: string | null, conclusion: string | null): PipelineStatus {
@@ -305,7 +282,16 @@ export class GitLabPipelines implements PipelineClient {
 }
 
 export function pipelineClient(remote: RemoteInfo, token: string, apiBase?: string, f: Fetch = fetch): PipelineClient {
-  return remote.kind === 'github' ? new GitHubPipelines(remote, token, apiBase, f) : new GitLabPipelines(remote, token, apiBase, f);
+  switch (remote.kind) {
+    case 'github':
+      return new GitHubPipelines(remote, token, apiBase, f);
+    case 'gitlab':
+      return new GitLabPipelines(remote, token, apiBase, f);
+    case 'bitbucket':
+      return bitbucketPipelines(remote, token, apiBase, f);
+    case 'azure':
+      return new AzurePipelines(remote, token, apiBase, f);
+  }
 }
 
 /** Últimas `n` linhas de um log, sem os códigos de cor ANSI. */

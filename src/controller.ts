@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { agents } from './agents';
 import { computeFlow, flowStages } from './flow';
+import { hostLabel } from './hosting/platforms';
 import { RequestService } from './hosting/service';
 import { Repo } from './git';
 import { applyCache, buildState, enrich, GraphState, RepoCache, resolveBase, SyncStatus, SyncWhere } from './model';
@@ -263,7 +264,7 @@ export class Controller implements vscode.Disposable {
     for (const w of s.worktrees) w.request = w.branch ? r.byBranch.get(w.branch) : undefined;
     for (const b of s.branches) b.request = r.byBranch.get(b.name);
     s.hosting = r.remote
-      ? { kind: r.remote.kind, label: r.remote.kind === 'gitlab' ? 'MR' : 'PR', host: r.remote.host, connected: r.connected, error: r.error }
+      ? { kind: r.remote.kind, name: hostLabel(r.remote.kind), label: r.remote.kind === 'gitlab' ? 'MR' : 'PR', host: r.remote.host, connected: r.connected, error: r.error }
       : undefined;
   }
 

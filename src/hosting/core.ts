@@ -1,11 +1,12 @@
 import { Issue, IssueScope, mapGitHubIssue, mapGitLabIssue, NewIssue } from '../issues/core';
+import { parsePlatformRemote } from './platforms';
 
 /**
  * GitHub (incl. Enterprise) e GitLab (incl. self-hosted) via REST, sem depender da API do VS Code
  * para poder ser testado contra um servidor falso (test/hosting.test.js).
  */
 
-export type HostKind = 'github' | 'gitlab';
+export type HostKind = 'github' | 'gitlab' | 'bitbucket' | 'azure';
 
 export interface RemoteInfo {
   kind: HostKind;
@@ -13,8 +14,13 @@ export interface RemoteInfo {
   host: string;
   /** Endereço web com esquema e porta: "https://gitlab.empresa.com:8443". */
   webBase: string;
-  /** "grupo/subgrupo/projeto" ou "dono/repo". */
+  /** "grupo/subgrupo/projeto", "dono/repo", "PROJ/repo" (Bitbucket Server) ou "org/projeto/repo" (Azure). */
   projectPath: string;
+  /** Bitbucket e Azure DevOps: serviço na nuvem ou instalação própria. */
+  flavor?: 'cloud' | 'server';
+  /** Raiz da API quando não sai direto do webBase (Bitbucket Cloud/Server, coleção do Azure). */
+  apiRoot?: string;
+  azure?: { collection: string; organization: string; project: string; repo: string };
 }
 
 export interface ChangeRequest {
@@ -62,6 +68,37 @@ export function githubReviewDecision(reviews: { user?: { login?: string }; state
   if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
   if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
   if (last.size) return { state: 'commented', approvals: 0, by: [...last.keys()] };
+  return { state: 'pending', approvals: 0, by: [] };
+}
+
+/** Bitbucket Cloud: participantes com papel de revisor; approved ou state "changes_requested". */
+export function bitbucketCloudReview(participants: any[]): ReviewStatus {
+  const rev = (participants ?? []).filter(p => p.role === 'REVIEWER' || p.approved || p.state);
+  const name = (p: any) => p.user?.nickname ?? p.user?.display_name ?? '?';
+  const changes = rev.filter(p => p.state === 'changes_requested').map(name);
+  const approved = rev.filter(p => p.approved || p.state === 'approved').map(name);
+  if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
+  if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
+  return { state: 'pending', approvals: 0, by: [] };
+}
+
+/** Bitbucket Server/Data Center: reviewers[].status APPROVED | NEEDS_WORK | UNAPPROVED. */
+export function bitbucketServerReview(reviewers: any[]): ReviewStatus {
+  const name = (r: any) => r.user?.name ?? r.user?.displayName ?? '?';
+  const changes = (reviewers ?? []).filter(r => r.status === 'NEEDS_WORK').map(name);
+  const approved = (reviewers ?? []).filter(r => r.status === 'APPROVED' || r.approved).map(name);
+  if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
+  if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
+  return { state: 'pending', approvals: 0, by: [] };
+}
+
+/** Azure DevOps: vote 10 aprovado, 5 aprovado com sugestões, -5 aguardando o autor, -10 rejeitado. */
+export function azureReview(reviewers: any[]): ReviewStatus {
+  const name = (r: any) => r.displayName ?? r.uniqueName ?? '?';
+  const changes = (reviewers ?? []).filter(r => r.vote <= -5).map(name);
+  const approved = (reviewers ?? []).filter(r => r.vote >= 5).map(name);
+  if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
+  if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
   return { state: 'pending', approvals: 0, by: [] };
 }
 
@@ -113,7 +150,16 @@ function hostEntry(entry: string): { host: string; webBase: string; prefix: stri
  * A porta de um remoto ssh é a do ssh, não a da web: nesses casos o endereço web vem da
  * configuração do host (gitlabHosts/githubHosts) ou cai para https://host.
  */
-export function parseRemote(url: string, gitlabHosts: string[] = [], githubHosts: string[] = []): RemoteInfo | undefined {
+export function parseRemote(
+  url: string,
+  gitlabHosts: string[] = [],
+  githubHosts: string[] = [],
+  bitbucketHosts: string[] = [],
+  azureHosts: string[] = [],
+): RemoteInfo | undefined {
+  // Bitbucket e Azure DevOps têm formatos de caminho próprios (/scm/, /_git/, v3/…)
+  const platform = parsePlatformRemote(url, bitbucketHosts, azureHosts);
+  if (platform) return platform;
   let host: string;
   let path: string;
   let webBase: string;

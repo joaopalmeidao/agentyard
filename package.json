@@ -100,6 +100,10 @@
       {
         "view": "worktreeGraph.tasks",
         "contents": "Tarefas em fila para os agentes, por worktree. Quando o agente termina uma, a próxima é enviada sozinha.\n[Adicionar tarefa](command:worktreeGraph.tasks.add)\n[Tentar várias abordagens](command:worktreeGraph.attempts.try)"
+      },
+      {
+        "view": "worktreeGraph.issues",
+        "contents": "Issues do GitHub, GitLab, Bitbucket e Azure DevOps do repositório, do Jira e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao remoto](command:worktreeGraph.connectHosting)\n[Conectar ao Jira](command:worktreeGraph.connectJira)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
       }
     ],
     "commands": [
@@ -777,6 +781,17 @@
         "title": "Comparar com outra branch/worktree…",
         "category": "Worktree Graph",
         "icon": "$(git-compare)"
+      },
+      {
+        "command": "worktreeGraph.connectJira",
+        "title": "Conectar ao Jira",
+        "category": "Worktree Graph",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "worktreeGraph.disconnectJira",
+        "title": "Desconectar do Jira (apagar credenciais)",
+        "category": "Worktree Graph"
       }
     ],
     "menus": {
@@ -985,6 +1000,11 @@
           "command": "worktreeGraph.pullMany",
           "when": "view == worktreeGraph.worktrees",
           "group": "1_sync"
+        },
+        {
+          "command": "worktreeGraph.connectJira",
+          "when": "view == worktreeGraph.issues",
+          "group": "1_connect"
         }
       ],
       "view/item/context": [
@@ -2115,6 +2135,47 @@
           "default": 0,
           "minimum": 0,
           "description": "Fetch automático a cada N minutos (0 = desligado), com aviso quando branches ganham novidades no remoto."
+        },
+        "worktreeGraph.bitbucket.hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Hosts de Bitbucket Server/Data Center, ex.: `git.empresa.com` ou `https://git.empresa.com/bitbucket` (com o caminho de contexto, se houver). Endereços com \"bitbucket\" no nome são reconhecidos sozinhos."
+        },
+        "worktreeGraph.azureDevOps.hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Hosts de Azure DevOps Server (on-premises), ex.: `tfs.empresa.com`. dev.azure.com e *.visualstudio.com são reconhecidos sozinhos."
+        },
+        "worktreeGraph.azureDevOps.workItemType": {
+          "type": "string",
+          "default": "Task",
+          "description": "Tipo de work item criado por \"Nova issue…\" no Azure DevOps (Task, Bug, User Story, Issue…)."
+        },
+        "worktreeGraph.jira.url": {
+          "type": "string",
+          "default": "",
+          "description": "Endereço do Jira (Cloud ou Server/Data Center). As credenciais ficam no cofre do VS Code (comando Conectar ao Jira)."
+        },
+        "worktreeGraph.jira.projectKey": {
+          "type": "string",
+          "default": "",
+          "description": "Chave do projeto do Jira (ex.: PROJ). Vazio = o escolhido ao conectar."
+        },
+        "worktreeGraph.jira.jql": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "JQL opcional que substitui o filtro padrão (projeto e `statusCategory != Done`). Em \"minhas\", a extensão acrescenta `assignee = currentUser()`."
+        },
+        "worktreeGraph.jira.issueType": {
+          "type": "string",
+          "default": "Task",
+          "description": "Tipo de issue criado por \"Nova issue…\" no Jira."
         }
       }
     }
@@ -2124,7 +2185,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

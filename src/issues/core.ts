@@ -3,14 +3,14 @@
  * para poder ser testado contra um servidor falso (test/issues.test.js).
  */
 
-export type IssueProvider = 'github' | 'gitlab' | 'redmine';
+export type IssueProvider = 'github' | 'gitlab' | 'bitbucket' | 'azure' | 'redmine' | 'jira';
 export type IssueScope = 'mine' | 'all';
 
 export interface Issue {
   provider: IssueProvider;
   /** Número no GitHub, iid no GitLab, id no Redmine. */
   id: number | string;
-  /** "#12" no GitHub/GitLab, "RM#123" no Redmine. */
+  /** "#12" no GitHub/GitLab/Bitbucket, "AB#12" no Azure DevOps, "RM#123" no Redmine, "PROJ-12" no Jira. */
   key: string;
   title: string;
   body: string;
@@ -153,13 +153,23 @@ export function issueBranch(issue: Issue, prefix: string): string {
     .split('-')
     .slice(0, 6)
     .join('-');
-  const p = issue.provider === 'redmine' ? 'redmine' : prefix || 'issue';
+  const p = issue.provider === 'redmine' ? 'redmine' : issue.provider === 'jira' ? 'jira' : prefix || 'issue';
   return `${p}/${issue.id}${slug ? `-${slug}` : ''}`;
 }
 
 /** Linha para a descrição do PR/MR que fecha ou referencia a issue. */
 export function issueTrailer(issue: Pick<Issue, 'provider' | 'id'>): string {
-  return issue.provider === 'redmine' ? `Refs #${issue.id}` : `Closes #${issue.id}`;
+  switch (issue.provider) {
+    case 'redmine':
+      return `Refs #${issue.id}`;
+    // Jira liga PR e issue pela chave; Azure Boards pela menção AB#id
+    case 'jira':
+      return String(issue.id);
+    case 'azure':
+      return `AB#${issue.id}`;
+    default:
+      return `Closes #${issue.id}`;
+  }
 }
 
 export const DEFAULT_ISSUE_PROMPT = [

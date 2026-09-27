@@ -28,7 +28,9 @@ const check = async (name, fn) => {
     const b = parseRemote('http://usuario@gitlab.interno:8080/grupo/app');
     assert.deepStrictEqual(b, { kind: 'gitlab', host: 'gitlab.interno', webBase: 'http://gitlab.interno:8080', projectPath: 'grupo/app' });
     assert.strictEqual(parseRemote('git@gitlab.com:g/sub/p.git').projectPath, 'g/sub/p');
-    assert.strictEqual(parseRemote('https://bitbucket.org/a/b.git'), undefined);
+    // desde o suporte a Bitbucket, bitbucket.org é reconhecido; host desconhecido continua de fora
+    assert.strictEqual(parseRemote('https://bitbucket.org/a/b.git').kind, 'bitbucket');
+    assert.strictEqual(parseRemote('https://git.desconhecido.com/a/b.git'), undefined);
   });
 
   await check('parseRemote: GitLab em subcaminho (https://empresa.com/gitlab) e ssh com URL configurada', () => {

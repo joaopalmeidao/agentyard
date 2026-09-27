@@ -133,7 +133,17 @@ export async function generateCiWorkflow(ctl: Controller) {
 
   // 1. Onde
   const remote = await ctl.requests.detectRemote(true);
-  let provider = remote?.kind;
+  let provider: 'github' | 'gitlab' | undefined = remote?.kind === 'github' || remote?.kind === 'gitlab' ? remote.kind : undefined;
+  if (remote && !provider) {
+    // Bitbucket Pipelines e Azure Pipelines ainda não têm template de sync
+    const name = remote.kind === 'azure' ? 'Azure Pipelines' : 'Bitbucket Pipelines';
+    const go = await vscode.window.showInformationMessage(
+      `Ainda não há template de sync para ${name}.`,
+      { modal: true, detail: 'O sync local da extensão funciona normalmente com este remoto. Se quiser, dá para gerar o workflow do GitHub Actions ou do GitLab CI como ponto de partida.' },
+      'Gerar para GitHub/GitLab mesmo assim',
+    );
+    if (!go) return;
+  }
   if (!provider) {
     const p = await vscode.window.showQuickPick(
       [

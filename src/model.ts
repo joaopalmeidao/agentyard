@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { Commit, MergePreview, parseTrack, pLimit, Ref, RemoteTrack, Repo, Worktree, WorktreeStatus } from './git';
 import type { FlowStep } from './flow';
-import type { ChangeRequest } from './hosting/core';
+import type { ChangeRequest, HostKind } from './hosting/core';
 
 export type SyncKind =
   | 'uptodate'
@@ -109,8 +109,8 @@ export interface GraphState {
   unmerged: string[];
   /** Branches protegidas (src/guards.ts): merge e push direto pedem confirmação ou PR/MR. */
   protectedBranches?: string[];
-  /** Remoto reconhecido (GitHub/GitLab) e se há credencial. */
-  hosting?: { kind: 'github' | 'gitlab'; label: 'PR' | 'MR'; host: string; connected: boolean; error?: string };
+  /** Remoto reconhecido (GitHub, GitLab, Bitbucket, Azure DevOps) e se há credencial. */
+  hosting?: { kind: HostKind; name: string; label: 'PR' | 'MR'; host: string; connected: boolean; error?: string };
   /** Último pipeline (GitHub Actions/GitLab CI) de cada branch, se houver dados. */
   pipelines?: Record<string, { id: number; status: string; name: string; url: string; updatedAt: number }>;
   error?: string;

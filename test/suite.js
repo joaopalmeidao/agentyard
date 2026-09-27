@@ -178,6 +178,17 @@ exports.run = async () => {
     assert.deepStrictEqual(api.issues.groups, [], 'demo sem remoto e sem Redmine: nenhum grupo');
   });
 
+  await check('issues: Jira configurado sem credencial aparece com "Conectar ao Jira"', async () => {
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    await cfg.update('jira.url', 'https://jira.exemplo.invalid', vscode.ConfigurationTarget.Global);
+    await api.issues.refresh(true);
+    const g = api.issues.groups.find(x => x.provider === 'jira');
+    assert.ok(g && g.needsConnect, JSON.stringify(api.issues.groups));
+    await cfg.update('jira.url', undefined, vscode.ConfigurationTarget.Global);
+    await api.issues.refresh(true);
+    assert.ok(!api.issues.groups.some(x => x.provider === 'jira'));
+  });
+
   await check('issues: começar cria a worktree da issue e entrega o prompt', async () => {
     const issue = { provider: 'github', id: 99, key: '#99', title: 'Teste de issue', body: 'corpo da issue', url: 'https://example.com/99', labels: [], updated: 0 };
     await api.issues.start(issue, true);

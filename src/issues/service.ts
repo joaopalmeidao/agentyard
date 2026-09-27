@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { createWorktree, openTerminal } from '../actions';
 import type { Controller } from '../controller';
+import { hostLabel } from '../hosting/platforms';
 import { DEFAULT_ISSUE_PROMPT, Issue, IssueProvider, IssueScope, issueBranch, issueTrailer, RedmineClient, renderPrompt } from './core';
+import { JiraAuth, JiraClient } from './jira';
 
 const REFRESH_MS = 180_000;
 const MAX_BODY = 6000;
@@ -72,6 +74,111 @@ export class IssueService implements vscode.Disposable {
     return key ? new RedmineClient(url, key) : undefined;
   }
 
+  // ---------- Jira ----------
+
+  private jiraUrl(): string {
+    return this.ctl.cfg().get<string>('jira.url', '').trim().replace(/\/+$/, '');
+  }
+
+  private jiraSecret(url: string) {
+    return `worktreeGraph.jira:${url.toLowerCase()}`;
+  }
+
+  private jiraProjectKey() {
+    return `jira.projectKey:${this.ctl.repo?.commonDir.toLowerCase() ?? ''}`;
+  }
+
+  /** Configuração explícita tem precedência; senão, o projeto escolhido ao conectar. */
+  private jiraProject(): string | undefined {
+    return this.ctl.cfg().get<string>('jira.projectKey', '') || this.ctl.ctx.workspaceState.get<string>(this.jiraProjectKey()) || undefined;
+  }
+
+  private async jiraClient(): Promise<JiraClient | undefined> {
+    const url = this.jiraUrl();
+    if (!url) return undefined;
+    const raw = await this.ctl.ctx.secrets.get(this.jiraSecret(url));
+    let auth: JiraAuth | undefined;
+    try {
+      auth = raw ? (JSON.parse(raw) as JiraAuth) : undefined;
+    } catch {
+      auth = undefined;
+    }
+    if (!auth && process.env.JIRA_API_TOKEN) {
+      auth = process.env.JIRA_EMAIL
+        ? { kind: 'cloud', email: process.env.JIRA_EMAIL, token: process.env.JIRA_API_TOKEN }
+        : { kind: 'server', token: process.env.JIRA_API_TOKEN };
+    }
+    return auth ? new JiraClient(url, auth) : undefined;
+  }
+
+  async connectJira() {
+    const url = await vscode.window.showInputBox({
+      title: 'Conectar ao Jira',
+      prompt: 'Endereço do Jira (ex.: https://empresa.atlassian.net ou https://jira.empresa.com)',
+      value: this.jiraUrl() || 'https://',
+      ignoreFocusOut: true,
+      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : 'Informe um endereço http(s)://'),
+    });
+    if (!url) return;
+    const base = url.trim().replace(/\/+$/, '');
+    const cloudGuess = /\.atlassian\.net$/i.test(new URL(base).hostname);
+    const kinds = [
+      { label: 'Jira Cloud', detail: 'E-mail da conta Atlassian + API token (id.atlassian.com → Segurança → Tokens de API)', flavor: 'cloud' as const },
+      { label: 'Jira Server / Data Center', detail: 'Personal Access Token (Perfil → Personal Access Tokens)', flavor: 'server' as const },
+    ];
+    if (!cloudGuess) kinds.reverse();
+    const kind = await vscode.window.showQuickPick(kinds, { title: `Jira em ${base}: tipo de instalação` });
+    if (!kind) return;
+    let auth: JiraAuth;
+    if (kind.flavor === 'cloud') {
+      const email = await vscode.window.showInputBox({ title: 'E-mail da conta Atlassian', ignoreFocusOut: true, validateInput: v => (/.+@.+/.test(v) ? undefined : 'Informe o e-mail.') });
+      if (!email) return;
+      const open = await vscode.window.showInformationMessage('API token do Jira Cloud', { modal: true, detail: 'O token fica no cofre de segredos do VS Code.' }, 'Abrir página de tokens', 'Já tenho o token');
+      if (!open) return;
+      if (open === 'Abrir página de tokens') await vscode.env.openExternal(vscode.Uri.parse('https://id.atlassian.com/manage-profile/security/api-tokens'));
+      const token = await vscode.window.showInputBox({ title: 'API token do Jira Cloud', password: true, ignoreFocusOut: true });
+      if (!token) return;
+      auth = { kind: 'cloud', email: email.trim(), token: token.trim() };
+    } else {
+      const token = await vscode.window.showInputBox({ title: 'Personal Access Token do Jira', password: true, ignoreFocusOut: true });
+      if (!token) return;
+      auth = { kind: 'server', token: token.trim() };
+    }
+    const client = new JiraClient(base, auth);
+    let user: string;
+    try {
+      user = await client.whoami();
+    } catch (e) {
+      vscode.window.showErrorMessage(`As credenciais não funcionaram em ${base}: ${(e as Error).message}`);
+      return;
+    }
+    await this.ctl.ctx.secrets.store(this.jiraSecret(base), JSON.stringify(auth));
+    await this.ctl.cfg().update('jira.url', base, vscode.ConfigurationTarget.Global);
+    try {
+      const projects = await client.projects();
+      if (projects.length) {
+        const pick = await vscode.window.showQuickPick(
+          [{ label: 'Todos os projetos', key: '' }, ...projects.map(p => ({ label: p.name, description: p.key, key: p.key }))],
+          { title: 'Jira: issues de qual projeto?' },
+        );
+        // por repositório e fora do settings.json, para não deixar a worktree com alteração
+        if (pick) await this.ctl.ctx.workspaceState.update(this.jiraProjectKey(), pick.key);
+      }
+    } catch {
+      // listar projetos é opcional
+    }
+    vscode.window.showInformationMessage(`Conectado ao Jira como ${user}.`);
+    await this.refresh(true);
+  }
+
+  async disconnectJira() {
+    const url = this.jiraUrl();
+    if (!url) return;
+    await this.ctl.ctx.secrets.delete(this.jiraSecret(url));
+    vscode.window.showInformationMessage(`Credenciais do Jira (${url}) removidas.`);
+    await this.refresh(true);
+  }
+
   private signature() {
     return this.groups.map(g => `${g.title}|${g.error ?? ''}|${g.needsConnect ?? ''}|${g.issues.map(i => `${i.key}${i.updated}`).join(',')}`).join(';');
   }
@@ -88,10 +195,11 @@ export class IssueService implements vscode.Disposable {
       const jobs: Promise<void>[] = [];
 
       const remote = await this.ctl.requests.detectRemote();
-      if (remote) {
+      // Bitbucket Server não tem issues (normalmente usa o Jira)
+      if (remote && !(remote.kind === 'bitbucket' && remote.flavor === 'server')) {
         const g: IssueGroup = {
           provider: remote.kind,
-          title: `${remote.kind === 'gitlab' ? 'GitLab' : 'GitHub'} · ${remote.projectPath}`,
+          title: `${hostLabel(remote.kind)} · ${remote.projectPath}`,
           issues: [],
         };
         groups.push(g);
@@ -124,6 +232,26 @@ export class IssueService implements vscode.Disposable {
                 return;
               }
               g.issues = await client.listIssues(scope, this.redmineProject());
+            } catch (e) {
+              g.error = (e as Error).message;
+            }
+          })(),
+        );
+      }
+
+      const jiraUrl = this.jiraUrl();
+      if (jiraUrl) {
+        const g: IssueGroup = { provider: 'jira', title: `Jira · ${jiraUrl.replace(/^https?:\/\//, '')}`, issues: [] };
+        groups.push(g);
+        jobs.push(
+          (async () => {
+            try {
+              const client = await this.jiraClient();
+              if (!client) {
+                g.needsConnect = true;
+                return;
+              }
+              g.issues = await client.listIssues(scope, this.jiraProject(), this.ctl.cfg().get<string>('jira.jql', ''));
             } catch (e) {
               g.error = (e as Error).message;
             }
@@ -227,19 +355,24 @@ export class IssueService implements vscode.Disposable {
    * descrição (ex.: trecho de código selecionado), que entra depois do que a pessoa escrever.
    */
   async create(context?: string) {
-    type Target = { label: string; description: string; where: 'host' | 'redmine' };
+    type Target = { label: string; description: string; where: 'host' | 'redmine' | 'jira' };
     const targets: Target[] = [];
     const remote = await this.ctl.requests.detectRemote();
-    if (remote) targets.push({ label: remote.kind === 'gitlab' ? 'GitLab' : 'GitHub', description: `${remote.host}/${remote.projectPath}`, where: 'host' });
+    // Bitbucket Server não tem issues (normalmente usa o Jira)
+    if (remote && !(remote.kind === 'bitbucket' && remote.flavor === 'server'))
+      targets.push({ label: hostLabel(remote.kind), description: `${remote.host}/${remote.projectPath}`, where: 'host' });
     if (this.redmineUrl()) targets.push({ label: 'Redmine', description: this.redmineUrl(), where: 'redmine' });
+    if (this.jiraUrl()) targets.push({ label: 'Jira', description: this.jiraUrl(), where: 'jira' });
     if (!targets.length) {
       const go = await vscode.window.showWarningMessage(
-        'Nenhum lugar para criar issues: o remoto não é GitHub/GitLab reconhecido e o Redmine não está configurado.',
+        'Nenhum lugar para criar issues: o remoto não tem issues reconhecidas e nem Redmine nem Jira estão configurados.',
+        'Conectar ao Jira',
         'Conectar ao Redmine',
-        'Conectar ao GitHub/GitLab',
+        'Conectar ao remoto',
       );
+      if (go === 'Conectar ao Jira') await this.connectJira();
       if (go === 'Conectar ao Redmine') await this.connectRedmine();
-      if (go === 'Conectar ao GitHub/GitLab') await this.ctl.requests.connect();
+      if (go === 'Conectar ao remoto') await this.ctl.requests.connect();
       return;
     }
     const target = targets.length === 1 ? targets[0] : await vscode.window.showQuickPick(targets, { title: 'Nova issue: onde?' });
@@ -264,6 +397,23 @@ export class IssueService implements vscode.Disposable {
         if (labelsRaw === undefined) return;
         const labels = labelsRaw.split(',').map(l => l.trim()).filter(Boolean);
         created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Criando issue…' }, () => client.createIssue({ title: title.trim(), body, labels }));
+      } else if (target.where === 'jira') {
+        const client = await this.jiraClient();
+        if (!client) return this.connectJira();
+        let projectKey = this.jiraProject();
+        if (!projectKey) {
+          const projects = await client.projects();
+          const pick = await vscode.window.showQuickPick(projects.map(p => ({ label: p.name, description: p.key, key: p.key })), { title: 'Jira: em qual projeto?' });
+          if (!pick) return;
+          projectKey = pick.key;
+        }
+        const labelsRaw = await vscode.window.showInputBox({ title: `Nova issue: ${title}`, prompt: 'Labels separadas por vírgula (opcional)', ignoreFocusOut: true });
+        if (labelsRaw === undefined) return;
+        const labels = labelsRaw.split(',').map(l => l.trim()).filter(Boolean);
+        const issueType = this.ctl.cfg().get<string>('jira.issueType', 'Task');
+        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Criando issue…' }, () =>
+          client.createIssue({ projectKey: projectKey!, issueType, title: title.trim(), body, labels }),
+        );
       } else {
         const client = await this.redmineClient();
         if (!client) return this.connectRedmine();
