@@ -10,6 +10,7 @@ import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
 import { registerGuards } from './guards';
 import { registerAgentFlow } from './agentFlow/register';
+import { registerSchedule } from './schedule/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
@@ -33,6 +34,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctl.agentsRunning = () => agentTerms.running();
   ctx.subscriptions.push(agentTerms);
   const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
+  const schedules = registerSchedule(ctx, ctl, agentTerms, agentFlow.tasks);
 
   /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
   const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
@@ -363,7 +365,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules };
 }
 
 export function deactivate() {}

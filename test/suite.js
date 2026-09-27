@@ -594,6 +594,66 @@ exports.run = async () => {
     execSync(`git worktree remove --force "${suja}"`, { cwd: root });
   });
 
+  await check('agendamentos: o relógio dispara o agente, a fila recebe a tarefa e "só se limpa" pula a suja', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const sch = api.schedules;
+    const root = ctl.repo.root;
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
+    const limpa = path.join(root, '..', 'sched-limpa');
+    const suja = path.join(root, '..', 'sched-suja');
+    execSync(`git worktree add -q -b sched/limpa "${limpa}" master`, { cwd: root });
+    execSync(`git worktree add -q -b sched/suja "${suja}" master`, { cwd: root });
+    fs.writeFileSync(path.join(suja, 'rascunho.txt'), 'x');
+    const base = { agent: 'Eco', conditions: {}, missed: 'run', enabled: true, scope: 'local' };
+
+    // 1. "a cada minuto", criado há 5 min: o tick executa uma vez e abre o agente com o prompt montado
+    const t0 = Date.now();
+    sch.now = () => t0;
+    await sch.save({ ...base, id: 'teste-launch', name: 'Revisão diária', when: 'a cada minuto', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'Revise ${branch} contra ${base}', delivery: 'launch', createdAt: t0 - 5 * 60_000 });
+    const before = vscode.window.terminals.length;
+    await sch.tick();
+    assert.ok(before >= 0);
+    try {
+      await until(() => vscode.window.terminals.some(x => x.name === 'Eco · sched/limpa · tarefa'), 15000);
+    } catch {
+      assert.fail(`terminal da tarefa não abriu: ${vscode.window.terminals.map(x => x.name).join(' | ')} · histórico: ${JSON.stringify(sch.history().slice(0, 3))}`);
+    }
+    assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'Revise sched/limpa contra master');
+    assert.strictEqual(sch.runtime('teste-launch').lastRun, t0);
+    const n = vscode.window.terminals.length;
+    await sch.tick(); // mesmo minuto: nada a fazer
+    assert.strictEqual(vscode.window.terminals.length, n, 'não executa duas vezes no mesmo horário');
+    await sch.remove('teste-launch');
+
+    // 2. modo fila: a tarefa entra na fila da worktree
+    await sch.save({ ...base, id: 'teste-fila', name: 'Fila', when: 'todo dia às 09:00', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'tarefa da fila', delivery: 'queue', createdAt: t0 });
+    const r = await sch.run(sch.get('teste-fila'), { manual: true });
+    assert.strictEqual(r[0].result, 'ok', JSON.stringify(r));
+    assert.ok(api.agentFlow.tasks.queue(limpa).tasks.some(t => t.text === 'tarefa da fila'));
+    await sch.remove('teste-fila');
+
+    // 3. "só se limpa" em ai/* e sched/*: a suja fica de fora e vai para o histórico
+    await sch.save({ ...base, id: 'teste-limpa', name: 'Só limpas', when: 'dias úteis às 08:30', target: { kind: 'pattern', pattern: 'sched/*' }, prompt: 'x', delivery: 'launch', conditions: { onlyClean: true, skipIfAgentOpen: true }, createdAt: t0 });
+    const res = await sch.run(sch.get('teste-limpa'), { manual: true });
+    const byBranch = Object.fromEntries(res.map(x => [x.target, x.result]));
+    assert.strictEqual(byBranch['sched/suja'], 'skipped', JSON.stringify(res));
+    assert.strictEqual(byBranch['sched/limpa'], 'skipped', 'já há agente aberto (do passo 1)');
+    assert.ok(sch.history().some(h => h.scheduleId === 'teste-limpa' && /alteraç/.test(h.message)), JSON.stringify(sch.history().filter(h => h.scheduleId === 'teste-limpa')));
+    await sch.remove('teste-limpa');
+
+    // 4. horário perdido com política "pular": registra e não executa
+    await sch.save({ ...base, id: 'teste-perdido', name: 'Perdido', when: 'todo dia às 03:00', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'x', delivery: 'launch', missed: 'skip', createdAt: t0 - 3 * 86400_000 });
+    const n2 = vscode.window.terminals.length;
+    await sch.tick();
+    assert.strictEqual(vscode.window.terminals.length, n2);
+    assert.ok(sch.history().some(h => h.scheduleId === 'teste-perdido' && h.result === 'skipped'));
+    await sch.remove('teste-perdido');
+    sch.now = () => Date.now();
+    execSync(`git worktree remove --force "${suja}"`, { cwd: root });
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));
