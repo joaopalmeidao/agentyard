@@ -47,7 +47,7 @@ export class AutoSync implements vscode.Disposable {
     }
     const on = this.ctl.autoSyncEnabled();
     const mode = this.ctl.cfg().get<string>('autoSync.mode', 'merge');
-    const where = { local: '', github: ' · GitHub', split: ' · dividido', both: ' · local+GitHub' }[this.ctl.syncWhere()];
+    const where = { local: '', github: ' · CI', split: ' · dividido', both: ' · local+CI' }[this.ctl.syncWhere()];
     this.statusBar.text = on ? `$(sync) Sync ${mode === 'notify' ? '(avisar)' : 'on'}${where}` : `$(sync-ignored) Sync off${where}`;
     this.statusBar.tooltip = on
       ? this.ctl.syncOwner
@@ -69,9 +69,9 @@ export class AutoSync implements vscode.Disposable {
     const current = this.ctl.syncWhere();
     const items: (vscode.QuickPickItem & { value: SyncWhere })[] = [
       { value: 'local', label: 'Só local', detail: 'A extensão mescla a base nas worktrees desta máquina. O workflow do GitHub não é usado.' },
-      { value: 'github', label: 'Só GitHub Actions', detail: 'A extensão não mexe nas worktrees; o workflow gerado em "Gerar CI" sincroniza as branches publicadas.' },
-      { value: 'split', label: 'Dividido', detail: 'Local para branches ainda não publicadas; GitHub Actions para as publicadas. Nenhuma branch é sincronizada pelos dois.' },
-      { value: 'both', label: 'Ambos', detail: 'Local e GitHub Actions em todas as branches. Pode gerar dois merges diferentes da mesma base.' },
+      { value: 'github', label: 'Só CI (GitHub Actions ou GitLab CI)', detail: 'A extensão não mexe nas worktrees; o CI gerado em "Gerar CI" sincroniza as branches publicadas.' },
+      { value: 'split', label: 'Dividido', detail: 'Local para branches ainda não publicadas; CI para as publicadas. Nenhuma branch é sincronizada pelos dois.' },
+      { value: 'both', label: 'Ambos', detail: 'Local e CI em todas as branches. Pode gerar dois merges diferentes da mesma base.' },
     ];
     for (const i of items) if (i.value === current) i.description = '(atual)';
     const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Onde o sync da base deve rodar neste repositório?' });
@@ -115,8 +115,8 @@ export class AutoSync implements vscode.Disposable {
             wt.branch,
             'remote',
             where === 'github'
-              ? 'Sync configurado para rodar só no GitHub Actions.'
-              : 'Branch publicada: quem sincroniza é o GitHub Actions (modo dividido).',
+              ? 'Sync configurado para rodar só no CI (GitHub Actions/GitLab CI).'
+              : 'Branch publicada: quem sincroniza é o CI (modo dividido).',
           );
           continue;
         }

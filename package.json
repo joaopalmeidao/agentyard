@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "Worktree Graph",
   "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "worktree-graph",
   "license": "MIT",
   "engines": {
@@ -189,6 +189,60 @@
         "title": "Favoritar / desfavoritar",
         "category": "Worktree Graph",
         "icon": "$(star-empty)"
+      },
+      {
+        "command": "worktreeGraph.publishRequest",
+        "title": "Publicar PR/MR…",
+        "category": "Worktree Graph",
+        "icon": "$(git-pull-request-create)"
+      },
+      {
+        "command": "worktreeGraph.analyzeMerge",
+        "title": "Analisar merge…",
+        "category": "Worktree Graph",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "worktreeGraph.connectHosting",
+        "title": "Conectar ao GitHub/GitLab",
+        "category": "Worktree Graph",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "worktreeGraph.disconnectHosting",
+        "title": "Desconectar do GitHub/GitLab (apagar token)",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.configureFlow",
+        "title": "Configurar fluxo de ambientes (dev → QA → homologação → produção)…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.addToExplorer",
+        "title": "Adicionar ao Explorer (workspace multi-root)",
+        "category": "Worktree Graph",
+        "icon": "$(files)"
+      },
+      {
+        "command": "worktreeGraph.openToSide",
+        "title": "Abrir ao lado",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.revealInOS",
+        "title": "Revelar no sistema de arquivos",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.copyPath",
+        "title": "Copiar caminho",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.compareWithBase",
+        "title": "Comparar com a base",
+        "category": "Worktree Graph"
       }
     ],
     "menus": {
@@ -247,6 +301,16 @@
           "command": "worktreeGraph.pruneWorktrees",
           "when": "view == worktreeGraph.worktrees",
           "group": "3_cleanup"
+        },
+        {
+          "command": "worktreeGraph.connectHosting",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "4_hosting"
+        },
+        {
+          "command": "worktreeGraph.configureFlow",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "4_hosting"
         }
       ],
       "view/item/context": [
@@ -329,11 +393,66 @@
           "command": "worktreeGraph.toggleFavorite",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "0_fav"
+        },
+        {
+          "command": "worktreeGraph.analyzeMerge",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@0"
+        },
+        {
+          "command": "worktreeGraph.publishRequest",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@4"
+        },
+        {
+          "command": "worktreeGraph.addToExplorer",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@5"
+        },
+        {
+          "command": "worktreeGraph.openToSide",
+          "when": "view == worktreeGraph.worktrees && viewItem == wtFile",
+          "group": "1_open@1"
+        },
+        {
+          "command": "worktreeGraph.compareWithBase",
+          "when": "view == worktreeGraph.worktrees && viewItem == wtFile",
+          "group": "1_open@2"
+        },
+        {
+          "command": "worktreeGraph.revealInOS",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^wt(File|Folder)$/",
+          "group": "2_path@1"
+        },
+        {
+          "command": "worktreeGraph.copyPath",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^wt(File|Folder)$/",
+          "group": "2_path@2"
         }
       ],
       "commandPalette": [
         {
           "command": "worktreeGraph.togglePauseSync",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.openToSide",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.revealInOS",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.copyPath",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.compareWithBase",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.addToExplorer",
           "when": "false"
         }
       ]
@@ -456,8 +575,8 @@
           ],
           "enumDescriptions": [
             "Só a extensão sincroniza, nas worktrees desta máquina.",
-            "Só o GitHub Actions (workflow gerado em Gerar CI); a extensão só mostra o estado.",
-            "Local para branches não publicadas, GitHub Actions para as publicadas.",
+            "Só o CI (GitHub Actions ou GitLab CI, gerado em Gerar CI); a extensão só mostra o estado.",
+            "Local para branches não publicadas, CI para as publicadas.",
             "Os dois em todas as branches (pode gerar merges duplicados)."
           ],
           "default": "local",
@@ -518,6 +637,63 @@
           "type": "boolean",
           "default": true,
           "description": "Desfazer o merge (git reset --keep) quando a verificação falhar."
+        },
+        "worktreeGraph.flow": {
+          "type": "array",
+          "markdownDescription": "Fluxo de ambientes em ordem de promoção, ex.: `[\"develop\", \"qa\", \"homolog\", \"main\"]` ou objetos `{ \"branch\": \"qa\", \"label\": \"QA\" }`. Vazio = usa o que foi salvo pelo comando *Configurar fluxo de ambientes*. O primeiro estágio vira a base, a menos que `baseBranch` esteja definido.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch"
+                ]
+              }
+            ]
+          },
+          "default": []
+        },
+        "worktreeGraph.remote": {
+          "type": "string",
+          "default": "origin",
+          "description": "Remoto usado para push e para PRs/MRs."
+        },
+        "worktreeGraph.gitlab.hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Hosts de GitLab self-hosted cujo endereço não contém \"gitlab\", ex.: `git.empresa.com` ou `https://git.empresa.com:8443` (use a forma com esquema/porta quando o remoto for ssh e a web estiver em outra porta)."
+        },
+        "worktreeGraph.gitlab.apiUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "URL da API do GitLab, se não for `<host>/api/v4`."
+        },
+        "worktreeGraph.github.hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Hosts de GitHub Enterprise Server."
+        },
+        "worktreeGraph.github.apiUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "URL da API do GitHub Enterprise, se não for `<host>/api/v3`."
         }
       }
     }
@@ -526,7 +702,8 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
-    "publish": "vsce publish"
+    "publish": "vsce publish",
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

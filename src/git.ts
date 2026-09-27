@@ -69,10 +69,14 @@ export interface Commit {
   author: string;
   date: number;
   subject: string;
+  /** Commit de fronteira (--boundary): o ponto da base de onde uma branch saiu. */
+  boundary?: boolean;
 }
 
 export interface WorktreeStatus {
   changes: number;
+  /** [código XY do porcelain, caminho relativo com "/"]. */
+  files?: [string, string][];
   operation?: 'merge' | 'rebase' | 'cherry-pick';
 }
 
@@ -181,16 +185,22 @@ export class Repo {
 
   async log(revs: string[], max: number): Promise<Commit[]> {
     if (revs.length === 0) return [];
-    const r = await this.run(['log', '--date-order', `-n${max}`, '--format=%H%x1f%P%x1f%an%x1f%at%x1f%s%x1e', ...revs, '--']);
+    const r = await this.run(['log', '--date-order', `-n${max}`, '--format=%H%x1f%P%x1f%an%x1f%at%x1f%m%x1f%s%x1e', ...revs, '--']);
     if (r.code !== 0) return [];
     const commits: Commit[] = [];
     for (const rec of r.stdout.split('\x1e')) {
       const s = rec.replace(/^\r?\n/, '');
       if (!s) continue;
-      const [sha, parents, author, date, subject] = s.split('\x1f');
-      commits.push({ sha, parents: parents ? parents.split(' ') : [], author, date: Number(date), subject });
+      const [sha, parents, author, date, mark, subject] = s.split('\x1f');
+      commits.push({ sha, parents: parents ? parents.split(' ') : [], author, date: Number(date), subject, boundary: mark === '-' });
     }
     return commits;
+  }
+
+  /** Branches locais com commits que `base` não tem (um processo só, sem depender do cache). */
+  async unmerged(base: string): Promise<string[]> {
+    const r = await this.run(['for-each-ref', `--no-merged=${base}`, '--format=%(refname:short)', 'refs/heads']);
+    return r.code === 0 ? r.stdout.split(/\r?\n/).filter(Boolean) : [];
   }
 
   /** [commits só em `left`, commits só em `right`]. */
@@ -216,7 +226,9 @@ export class Repo {
 
   async status(worktreePath: string): Promise<WorktreeStatus> {
     const st = await runGit(worktreePath, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=normal']);
-    const changes = st.code === 0 ? st.stdout.split('\0').filter(Boolean).length : 0;
+    const entries = st.code === 0 ? st.stdout.split('\0').filter(Boolean) : [];
+    const changes = entries.length;
+    const files = entries.map((e): [string, string] => [e.slice(0, 2), e.slice(3)]);
     // Lido direto do diretório git da worktree: no Windows cada processo git custa ~0,5 s.
     let operation: WorktreeStatus['operation'];
     const gitDir = gitDirOf(worktreePath);
@@ -226,7 +238,7 @@ export class Repo {
       else if (has('rebase-merge') || has('rebase-apply')) operation = 'rebase';
       else if (has('CHERRY_PICK_HEAD')) operation = 'cherry-pick';
     }
-    return { changes, operation };
+    return { changes, operation, files };
   }
 
   /**

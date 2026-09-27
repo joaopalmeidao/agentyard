@@ -96,6 +96,46 @@ exports.run = async () => {
     assert.deepStrictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').agents, ['Eco']);
   });
 
+  await check('estado detalhado (status e comparação) chega em segundo plano', async () => {
+    await until(() => ctl.state && ctl.state.pending === 0, 30000);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
+    assert.strictEqual(wt.changes, 2);
+    assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo').preview.conflict, true);
+  });
+
+  await check('cores do git na árvore: arquivo modificado em outra worktree', async () => {
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
+    const d = api.decorations.provideFileDecoration(vscode.Uri.file(require('path').join(wt.path, 'src', 'api.ts')));
+    assert.strictEqual(d && d.badge, 'M');
+    const u = api.decorations.provideFileDecoration(vscode.Uri.file(require('path').join(wt.path, 'src', 'novo.ts')));
+    assert.strictEqual(u && u.badge, 'U');
+  });
+
+  await check('analisar merge abre o painel', async () => {
+    await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', 'ai/precos-promo', 'master');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Merge: ai/precos-promo → master');
+  });
+
+  await check('filtro "não mescladas" mostra só commits pendentes e o ponto de saída', async () => {
+    await ctl.ctx.workspaceState.update('graphFilter', 'unmerged');
+    await ctl.refresh();
+    assert.deepStrictEqual([...ctl.state.unmerged].sort(), ['ai/login-oauth', 'ai/precos-promo', 'ai/refatorar-api']);
+    assert.ok(ctl.state.commits.some(c => c.boundary), 'tem commit de fronteira');
+    assert.ok(ctl.state.commits.length < 8);
+    await ctl.ctx.workspaceState.update('graphFilter', 'all');
+    await ctl.refresh();
+  });
+
+  await check('fluxo de ambientes: promoção pendente e base = 1º estágio', async () => {
+    await vscode.workspace.getConfiguration('worktreeGraph').update('flow', ['release/1.0', 'master'], vscode.ConfigurationTarget.Global);
+    await ctl.refresh();
+    assert.strictEqual(ctl.state.base, 'release/1.0');
+    assert.strictEqual(ctl.state.flow[0].hotfix, 4, 'master tem 4 commits que release/1.0 não tem');
+    await vscode.workspace.getConfiguration('worktreeGraph').update('flow', [], vscode.ConfigurationTarget.Global);
+    await ctl.refresh();
+    assert.strictEqual(ctl.state.base, 'master');
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);

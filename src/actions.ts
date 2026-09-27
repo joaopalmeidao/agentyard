@@ -58,7 +58,11 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
     ]
       .filter(Boolean)
       .join('\n');
-    const ok = await vscode.window.showInformationMessage(`Mesclar ${source} em ${target}?`, { modal: true, detail }, 'Mesclar');
+    const ok = await vscode.window.showInformationMessage(`Mesclar ${source} em ${target}?`, { modal: true, detail }, 'Mesclar', 'Analisar antes');
+    if (ok === 'Analisar antes') {
+      await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', source, target);
+      return false;
+    }
     if (ok !== 'Mesclar') return false;
   }
 

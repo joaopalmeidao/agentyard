@@ -5,6 +5,9 @@ import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
 import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
+import { WorktreeDecorations } from './decorations';
+import { configureFlow, promote } from './flow';
+import { MergePanel } from './mergePanel';
 import { AutoSync } from './sync';
 import { WorktreeTreeProvider } from './treeView';
 
@@ -21,7 +24,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
     let wtPath = arg?.path;
     let branch = arg?.branch;
-    const wts = ctl.repo ? await ctl.repo.worktrees() : [];
+    const wts = ctl.repo ? await ctl.repo.worktreesFast() : [];
     if (!wtPath && branch) wtPath = wts.find(w => w.branch === branch)?.path;
     if (wtPath && !branch) branch = wts.find(w => w.path.toLowerCase() === wtPath!.toLowerCase())?.branch;
     if (!wtPath) {
@@ -33,6 +36,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (wtPath) await agentTerms.launch(wtPath, branch, agent);
   };
 
+  const decorations = new WorktreeDecorations(ctl);
   const sync = new AutoSync(ctl);
   const tree = new WorktreeTreeProvider(ctl);
   const treeView = vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true, canSelectMany: true });
@@ -45,8 +49,36 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph.autoSync') && sync.reschedule()),
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, new GitShowProvider()),
+    vscode.window.registerFileDecorationProvider(decorations),
     treeView,
   );
+
+  const analyzeMerge = async (source?: string, target?: string) => {
+    const src = source ?? (await actions.pickBranch(ctl, undefined, 'Analisar o merge de qual branch?'));
+    if (!src) return;
+    const dst = target ?? (await ctl.base()).base;
+    await MergePanel.show(
+      ctl,
+      src,
+      dst,
+      async (s, t) => void (await actions.mergeBranches(ctl, s, t)),
+      b => ctl.requests.publish(b),
+    );
+  };
+
+  /** Arquivo de uma worktree (item da árvore) → diff contra o ponto em que a branch saiu da base. */
+  const compareWithBase = async (item: { resourceUri?: vscode.Uri }) => {
+    const file = item?.resourceUri?.fsPath;
+    if (!file || !ctl.repo || !ctl.state) return;
+    const wt = ctl.state.worktrees
+      .filter(w => file.toLowerCase().startsWith(w.path.toLowerCase() + require('path').sep))
+      .sort((a, b) => b.path.length - a.path.length)[0];
+    if (!wt) return;
+    const rel = require('path').relative(wt.path, file).split(require('path').sep).join('/');
+    const mb = (await ctl.repo.exec(['merge-base', ctl.state.baseRef, 'HEAD'], wt.path)).trim();
+    const { gitUri } = await import('./diff');
+    await vscode.commands.executeCommand('vscode.diff', gitUri(wt.path, mb, rel), vscode.Uri.file(file), `${rel.split('/').pop()} (${ctl.state.baseRef} ↔ ${wt.name})`);
+  };
 
   /** Ações vindas do webview: mesmos nomes dos comandos, argumentos simples. */
   const handler = async (action: string, a: Record<string, string>) => {
@@ -96,6 +128,23 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return sync.tick(true);
       case 'generateCi':
         return generateCiWorkflow(ctl);
+      case 'configureFlow':
+        return configureFlow(ctl);
+      case 'promote':
+        await promote(ctl, a.from, a.to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t));
+        return;
+      case 'setGraphFilter':
+        await ctx.workspaceState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
+        return ctl.refresh();
+      case 'publishRequest':
+        return ctl.requests.publish(a.branch);
+      case 'openUrl':
+        await vscode.env.openExternal(vscode.Uri.parse(a.url));
+        return;
+      case 'connectHosting':
+        return ctl.requests.connect();
+      case 'analyzeMerge':
+        return analyzeMerge(a.source ?? a.branch, a.target);
       case 'copy':
         return actions.copyText(a.text);
       case 'showLog':
@@ -141,12 +190,32 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('pruneWorktrees', () => actions.pruneWorktrees(ctl));
   reg('generateCiWorkflow', () => generateCiWorkflow(ctl));
   reg('showLog', () => out.show());
+  reg('publishRequest', async item => {
+    const b = await actions.pickBranch(ctl, item, 'Publicar PR/MR de qual branch?');
+    if (b) await ctl.requests.publish(b);
+  });
+  reg('connectHosting', () => ctl.requests.connect());
+  reg('configureFlow', () => configureFlow(ctl));
+  reg('disconnectHosting', () => ctl.requests.disconnect());
+  reg('analyzeMerge', (source?: string | { branch?: string }, target?: string) =>
+    analyzeMerge(typeof source === 'string' ? source : source?.branch, typeof target === 'string' ? target : undefined),
+  );
+  reg('openToSide', item => item?.resourceUri && vscode.commands.executeCommand('vscode.open', item.resourceUri, { viewColumn: vscode.ViewColumn.Beside }));
+  reg('revealInOS', item => item?.resourceUri && vscode.commands.executeCommand('revealFileInOS', item.resourceUri));
+  reg('copyPath', item => item?.resourceUri && actions.copyText(item.resourceUri.fsPath));
+  reg('compareWithBase', item => compareWithBase(item));
+  reg('addToExplorer', item => {
+    const p = item?.path;
+    if (!p) return;
+    const n = vscode.workspace.workspaceFolders?.length ?? 0;
+    vscode.workspace.updateWorkspaceFolders(n, 0, { uri: vscode.Uri.file(p), name: `wt: ${item.branch ?? require('path').basename(p)}` });
+  });
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => sync.reschedule());
 
   // Usado pelos testes de integração (test/).
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations };
 }
 
 export function deactivate() {}

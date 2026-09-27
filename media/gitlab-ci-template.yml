@@ -1,0 +1,11 @@
+# Gerado pela extensão Worktree Graph.
+#
+# __DESCRIPTION__
+#
+# Configuração necessária (Settings → CI/CD → Variables):
+#   SYNC_TOKEN: project access token (ou PAT) com escopo "write_repository", marcado como "Masked".
+#   O CI_JOB_TOKEN padrão não pode fazer push, por isso o token separado.
+# Funciona em GitLab.com e self-hosted: o endereço vem de CI_SERVER_PROTOCOL/HOST/PORT.
+# Branches protegidas precisam permitir push do dono do token.
+
+__JOBS__

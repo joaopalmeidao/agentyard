@@ -31,6 +31,7 @@ export class WorktreeItem extends vscode.TreeItem {
     if (wt.operation) parts.push(wt.operation);
     if (wt.preview?.conflict) parts.push('⚠ conflito');
     if (wt.agents.length) parts.push(`✦ ${wt.agents.join(', ')}`);
+    if (wt.request) parts.push(`${wt.request.ref}${wt.request.state === 'draft' ? ' rascunho' : ''}`);
     if (wt.paused) parts.push('‖');
     this.description = parts.join('  ');
 
@@ -59,6 +60,7 @@ export class WorktreeItem extends vscode.TreeItem {
     if (wt.preview?.conflict) md.appendMarkdown(`⚠ Mesclar \`${base}\` conflita em: ${wt.preview.files.join(', ')}\n\n`);
     if (wt.agents.length) md.appendMarkdown(`Agentes abertos: ${wt.agents.join(', ')}\n\n`);
     if (wt.sync) md.appendMarkdown(`Sync: ${wt.sync.message}\n\n`);
+    if (wt.request) md.appendMarkdown(`[${wt.request.ref} ${wt.request.title}](${wt.request.url})\n\n`);
     this.tooltip = md;
   }
 }
@@ -89,10 +91,11 @@ class ChangeItem extends vscode.TreeItem {
 
 class DirItem extends vscode.TreeItem {
   readonly kind = 'dir';
-  constructor(readonly dir: string) {
+  constructor(readonly dir: string, compactLabel?: string) {
     super(vscode.Uri.file(dir), vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `dir:${dir}`;
     this.contextValue = 'wtFolder';
+    if (compactLabel) this.label = compactLabel;
   }
 }
 
@@ -218,17 +221,45 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 }
 
-function listDir(dir: string): Node[] {
-  let entries: fs.Dirent[];
+/** Nomes escondidos pelo `files.exclude` (só os padrões de nome simples, como "**\/node_modules"). */
+function excludedNames(): Set<string> {
+  const out = new Set(HIDDEN);
+  const cfg = vscode.workspace.getConfiguration('files').get<Record<string, boolean>>('exclude', {});
+  for (const [pattern, on] of Object.entries(cfg)) {
+    if (!on) continue;
+    const name = pattern.replace(/^\*\*\//, '');
+    if (!/[*?{}[\]/]/.test(name)) out.add(name);
+  }
+  return out;
+}
+
+function readDir(dir: string, hidden: Set<string>): fs.Dirent[] {
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    return fs.readdirSync(dir, { withFileTypes: true }).filter(e => !hidden.has(e.name));
   } catch {
     return [];
   }
-  return entries
-    .filter(e => !HIDDEN.has(e.name))
-    .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
-    .map(e => (e.isDirectory() ? new DirItem(path.join(dir, e.name)) : new FileItem(path.join(dir, e.name))));
+}
+
+function listDir(dir: string): Node[] {
+  const hidden = excludedNames();
+  const compact = vscode.workspace.getConfiguration('explorer').get('compactFolders', true);
+  return readDir(dir, hidden)
+    .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name, undefined, { numeric: true }))
+    .map(e => {
+      const full = path.join(dir, e.name);
+      if (!e.isDirectory()) return new FileItem(full);
+      // Como o Explorer: pasta com uma única subpasta vira "a/b/c".
+      let deepest = full;
+      const parts = [e.name];
+      while (compact) {
+        const inside = readDir(deepest, hidden);
+        if (inside.length !== 1 || !inside[0].isDirectory()) break;
+        parts.push(inside[0].name);
+        deepest = path.join(deepest, inside[0].name);
+      }
+      return new DirItem(deepest, parts.length > 1 ? parts.join('/') : undefined);
+    });
 }
 
 async function lsTree(cwd: string, ref: string, dir: string, exec: (args: string[], cwd?: string) => Promise<string>): Promise<Node[]> {

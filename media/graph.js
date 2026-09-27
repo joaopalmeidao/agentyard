@@ -9,6 +9,9 @@
   /** @type {any} */
   let state = null;
   let filter = '';
+  /** Layout do painel (fica guardado pelo VS Code entre recargas do webview). */
+  const ui = Object.assign({ layout: 'rows', split: 46, tab: 'a' }, (vscode.getState() || {}).ui);
+  const saveUi = () => vscode.setState({ ...(vscode.getState() || {}), ui });
   const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
   const send = (action, args = {}) => vscode.postMessage({ type: 'action', action, args });
@@ -107,14 +110,18 @@
       app.innerHTML = '<div class="empty">Nenhum repositório git aberto neste workspace.</div>';
       return;
     }
-    const scroll = document.querySelector('.graph-scroll');
-    const top = scroll ? scroll.scrollTop : 0;
-    const pageTop = document.scrollingElement ? document.scrollingElement.scrollTop : 0;
+    const scrolls = [...document.querySelectorAll('.pane')].map(p => p.scrollTop);
     const focused = document.activeElement?.id;
-    app.innerHTML = toolbar() + worktreesSection() + branchesSection() + graphSection();
-    const s2 = document.querySelector('.graph-scroll');
-    if (s2) s2.scrollTop = top;
-    if (document.scrollingElement) document.scrollingElement.scrollTop = pageTop;
+    const tab = ui.layout === 'tabs' ? `<nav class="tabs">
+        <button data-local="tab" data-tab="a" class="${ui.tab === 'a' ? 'on' : ''}">Worktrees</button>
+        <button data-local="tab" data-tab="b" class="${ui.tab === 'b' ? 'on' : ''}">Histórico</button></nav>` : '';
+    app.innerHTML = `${toolbar()}${tab}
+      <div class="split layout-${ui.layout} ${ui.layout === 'tabs' ? `show-${ui.tab}` : ''}" style="--split:${ui.split}%">
+        <div class="pane pane-a">${flowSection()}${worktreesSection()}${branchesSection()}</div>
+        <div class="splitter" title="Arraste para redimensionar"></div>
+        <div class="pane pane-b">${graphSection()}</div>
+      </div>`;
+    document.querySelectorAll('.pane').forEach((p, i) => (p.scrollTop = scrolls[i] || 0));
     for (const [id, value] of [['filter', filter], ['wtfilter', wtFilter]]) {
       const f = /** @type {HTMLInputElement|null} */ (document.getElementById(id));
       if (!f) continue;
@@ -135,14 +142,54 @@
         <button data-action="createWorktree" class="primary">＋ Nova worktree</button>
         <button data-action="toggleAutoSync" class="${s.enabled ? 'on' : ''}" title="Mescla a base automaticamente nas worktrees limpas">
           ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : 'ligado') : 'desligado'}</button>
-        <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só GitHub Actions, dividido ou ambos">onde: ${{ local: 'local', github: 'GitHub Actions', split: 'dividido', both: 'local + GitHub' }[s.where] || 'local'}</button>
+        <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">onde: ${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'}</button>
         <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
-        <button data-action="generateCi" title="Gera .github/workflows para fazer o mesmo no GitHub">Gerar CI</button>
+        <button data-action="generateCi" title="Gera o workflow de sync para o GitHub Actions ou o GitLab CI">Gerar CI</button>
+        ${state.hosting && !state.hosting.connected ? `<button data-action="connectHosting" title="Para publicar e acompanhar ${state.hosting.label}s em ${esc(state.hosting.host)}">Conectar ${state.hosting.kind === 'gitlab' ? 'GitLab' : 'GitHub'}</button>` : ''}
+        <span class="layouts" title="Layout do painel">
+          <button data-local="layout" data-layout="rows" class="${ui.layout === 'rows' ? 'on' : ''}" title="Empilhado: worktrees em cima, histórico embaixo">⬒</button>
+          <button data-local="layout" data-layout="cols" class="${ui.layout === 'cols' ? 'on' : ''}" title="Lado a lado">◫</button>
+          <button data-local="layout" data-layout="tabs" class="${ui.layout === 'tabs' ? 'on' : ''}" title="Abas">▭</button>
+        </span>
         <button data-action="refresh" title="Atualizar">↻</button>
       </div>
       ${progressBar()}
     </header>
     ${state.error ? `<div class="error">${esc(state.error)}</div>` : ''}`;
+  }
+
+  /** Faixa dev → QA → homologação → produção, com o que espera promoção entre cada par. */
+  function flowSection() {
+    const f = state.flow;
+    if (!f || !f.length) {
+      return `<div class="flow-empty"><button class="link" data-action="configureFlow" title="Branches de ambiente em ordem de promoção">＋ Configurar fluxo de ambientes (dev → QA → homologação → produção)</button></div>`;
+    }
+    const L = state.hosting ? state.hosting.label : 'PR';
+    const stage = (s, date) => `<div class="stage" data-menu="${esc(s.branch)}" data-drop="${esc(s.branch)}">
+        <span class="stage-label">${esc(s.label)}</span>
+        <span class="ref ref-head ${s.branch === state.base ? 'ref-base' : ''}">${esc(s.branch)}</span>
+        <span class="muted">${date ? ago(date) : ''}</span></div>`;
+    const reqFor = (from, to) => {
+      const r = (state.worktrees.find(w => w.branch === from) || state.branches.find(b => b.name === from) || {}).request;
+      return r && r.target === to ? r : undefined;
+    };
+    let html = stage(f[0].from, f[0].fromDate);
+    for (const s of f) {
+      const req = reqFor(s.from.branch, s.to.branch);
+      html += `<div class="step">
+        ${!s.fromExists || !s.toExists
+          ? `<span class="chip bad">branch ${esc(!s.fromExists ? s.from.branch : s.to.branch)} não existe</span>`
+          : `<span class="arrow">→</span>
+             ${s.pending ? `<span class="chip info" title="${s.pending} commit(s) de ${esc(s.from.branch)} ainda não estão em ${esc(s.to.branch)}">↑${s.pending} para promover</span>` : `<span class="chip ok">em dia</span>`}
+             ${s.hotfix ? `<span class="chip warn" title="${s.hotfix} commit(s) feitos direto em ${esc(s.to.branch)} que ${esc(s.from.branch)} não tem (hotfix?)">↓${s.hotfix} só em ${esc(s.to.label)}</span>` : ''}
+             ${req ? requestChip(req) : ''}
+             <span class="step-actions">
+               <button data-action="promote" data-from="${esc(s.from.branch)}" data-to="${esc(s.to.branch)}" ${s.pending ? '' : 'disabled'} title="${L}, análise ou merge de ${esc(s.from.branch)} em ${esc(s.to.branch)}">Promover</button>
+               ${s.hotfix ? `<button data-action="mergeBranches" data-source="${esc(s.to.branch)}" data-target="${esc(s.from.branch)}" title="Mesclar ${esc(s.to.branch)} em ${esc(s.from.branch)} (back-merge)">↓ Trazer</button>` : ''}
+             </span>`}
+      </div>${stage(s.to, s.toDate)}`;
+    }
+    return `<section class="flow"><h2>Fluxo de ambientes <button class="link" data-action="configureFlow">editar</button></h2><div class="flow-strip">${html}</div></section>`;
   }
 
   /** Progresso do detalhamento: some quando todas as worktrees têm status e comparação. */
@@ -153,6 +200,11 @@
     return `<div class="progress" title="git status e comparação com ${esc(state.baseRef)}, das mais recentes para as mais antigas">
       <div class="bar"><div style="width:${Math.round((done / total) * 100)}%"></div></div>
       <span>Detalhando worktrees: ${done} de ${total}</span></div>`;
+  }
+
+  function requestChip(r) {
+    const st = { open: ['aberto', 'info'], draft: ['rascunho', 'muted'], merged: ['mesclado', 'ok'], closed: ['fechado', 'muted'] }[r.state] || [r.state, ''];
+    return `<span class="chip ${st[1]} link" data-action="openUrl" data-url="${esc(r.url)}" title="${esc(r.title)} — abrir no navegador">${esc(r.ref)} ${st[0]} ↗</span>`;
   }
 
   const arrows = (behind, ahead) => [behind ? `↓${behind}` : '', ahead ? `↑${ahead}` : ''].filter(Boolean).join(' ');
@@ -183,7 +235,7 @@
   }
 
   /** Em destaque (card): a principal, as favoritas, as com agente aberto e a desta janela. */
-  const featured = w => !w.prunable && (w.isMain || w.favorite || w.isCurrent || (w.agents && w.agents.length > 0));
+  const featured = w => !w.prunable && (w.isMain || w.favorite || w.isCurrent || (w.agents && w.agents.length > 0) || w.changes > 0 || !!w.operation);
   const starBtn = w =>
     `<button class="star ${w.favorite ? 'on' : ''}" data-action="toggleFavorite" data-path="${esc(w.path)}" title="${w.favorite ? 'Desfavoritar' : 'Favoritar: vira card e sobe na lista'}">${w.favorite ? '★' : '☆'}</button>`;
 
@@ -192,13 +244,14 @@
     const cards = all.filter(featured).map(card).join('');
     return `<section>
       <h2>Em destaque <span class="count">${all.filter(featured).length}</span>
-        <span class="hint">principal, favoritas (☆) e com agente aberto · arraste um sobre outro para mesclar · botão direito para mais opções</span></h2>
+        <span class="hint">principal, favoritas (☆), com agente aberto e com trabalho não commitado · arraste um sobre outro para mesclar</span></h2>
       <div class="cards">${cards}</div>
     </section>${tableSection()}`;
   }
 
   // ---------- tabela compacta ----------
   let wtFilter = '';
+  let onlyDirty = false;
   let rowLimit = 60;
 
   function tableSection() {
@@ -209,6 +262,7 @@
       <h2>Todas as worktrees <span class="count">${rest.length}</span>
         ${orphans ? `<button class="link" data-action="pruneWorktrees" title="Pastas que não existem mais (git worktree prune)">${orphans} órfã(s) · remover</button>` : ''}
         <button class="link" data-action="cleanupWorktrees" title="Remover várias de uma vez; já marca as mescladas e limpas">limpar em lote…</button>
+        <button class="link ${onlyDirty ? 'on' : ''}" data-local="dirty" title="Mostrar só worktrees com alterações não commitadas">${onlyDirty ? '✓ ' : ''}com alterações (${state.worktrees.filter(w => w.changes > 0).length})</button>
         <input id="wtfilter" type="search" placeholder="Filtrar por branch, pasta ou commit" /></h2>
       <div class="table-wrap"><table class="wts"><tbody id="wt-rows">${tableRows()}</tbody></table></div>
     </section>`;
@@ -217,7 +271,7 @@
   function tableRows() {
     const q = wtFilter.toLowerCase();
     const rest = state.worktrees.filter(w => !w.prunable && !featured(w));
-    const match = rest.filter(w => !q || `${w.name} ${w.path} ${w.subject}`.toLowerCase().includes(q));
+    const match = rest.filter(w => (!q || `${w.name} ${w.path} ${w.subject}`.toLowerCase().includes(q)) && (!onlyDirty || w.changes > 0));
     const agent = state.agentNames && state.agentNames[0];
     const rows = match.slice(0, rowLimit).map(w => {
       const b = esc(w.branch || '');
@@ -228,15 +282,16 @@
           ? chip(arrows(w.behind, w.ahead), w.behind ? 'info' : 'muted', `${w.behind} atrás · ${w.ahead} à frente de ${state.baseRef}`)
           : chip('=', 'muted', `igual a ${state.baseRef}`);
       const conf = w.preview?.conflict ? chip('⚠', 'bad', `conflita com ${state.base}: ${w.preview.files.join(', ')}`) : '';
-      return `<tr draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
+      return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
-        <td class="c-chips">${st}${cmp}${conf}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="c-chips">${st}${cmp}${conf}${w.request ? requestChip(w.request) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
           <button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>
           <button data-action="diffWithBase" data-branch="${b}" title="Revisar alterações × ${esc(state.base)}">Revisar</button>
+          <button data-action="analyzeMerge" data-branch="${b}" title="Analisar o merge em ${esc(state.base)}">Analisar</button>
           <button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="Trazer ${esc(state.baseRef)}">↓</button>
           <button data-action="mergeIntoBase" data-branch="${b}" ${w.ahead ? '' : 'disabled'} title="Mesclar em ${esc(state.base)}">↑</button>
           <button data-action="removeWorktree" data-branch="${b}" class="danger" title="Remover worktree">✕</button>
@@ -265,6 +320,7 @@
         else if (w.branch && !w.upstream && !w.isBase) chips.push(chip('não publicada', 'muted'));
         if (w.branch) chips.push(syncChip(w));
         if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
+        if (w.request) chips.push(requestChip(w.request));
 
         const agent = state.agentNames && state.agentNames[0];
         const act = [
@@ -277,6 +333,8 @@
         ].filter(Boolean);
         if (w.branch && !w.isBase) {
           act.push(`<button data-action="diffWithBase" data-branch="${b}" title="Arquivos alterados desde que saiu da base">Revisar</button>`);
+          act.push(`<button data-action="analyzeMerge" data-branch="${b}" title="Simular o merge em ${esc(state.base)}: commits, arquivos e conflitos">Analisar</button>`);
+          if (state.hosting && !w.request && w.ahead) act.push(`<button data-action="publishRequest" data-branch="${b}" title="Push + ${state.hosting.label} para ${esc(state.base)}">Publicar ${state.hosting.label}</button>`);
           act.push(`<button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="git merge ${esc(state.baseRef)}">↓ Trazer ${esc(state.base)}</button>`);
           act.push(`<button data-action="mergeIntoBase" data-branch="${b}" class="primary" ${w.ahead ? '' : 'disabled'} title="Mesclar em ${esc(state.base)}">↑ Mesclar em ${esc(state.base)}</button>`);
           act.push(`<button data-action="togglePause" data-branch="${b}" title="${w.paused ? 'Retomar' : 'Pausar'} o sync automático desta branch">${w.paused ? 'Retomar sync' : 'Pausar sync'}</button>`);
@@ -323,6 +381,11 @@
       <table class="branches">${rows}</table></details></section>`;
   }
 
+  function aheadOf(name) {
+    const v = state.worktrees.find(w => w.branch === name) || state.branches.find(b => b.name === name);
+    return v && v.compareKnown ? v.ahead : 0;
+  }
+
   function badge(r) {
     const cls = { head: 'ref-head', remote: 'ref-remote', tag: 'ref-tag', detached: 'ref-detached' }[r.kind];
     const base = r.name === state.base && r.kind === 'head' ? ' ref-base' : '';
@@ -330,13 +393,38 @@
     const cur = r.current ? ' ref-current' : '';
     const drag = r.kind === 'head' || r.kind === 'remote' ? `draggable="true" data-drag="${esc(r.name)}"` : '';
     const drop = r.kind === 'head' ? `data-drop="${esc(r.name)}" data-menu="${esc(r.name)}"` : r.kind === 'remote' ? `data-menu-remote="${esc(r.name)}"` : '';
-    const title = r.kind === 'head' ? (r.worktree ? 'branch com worktree' : 'branch local') : r.kind;
-    return `<span class="ref ${cls}${base}${wt}${cur}" ${drag} ${drop} title="${title}">${r.worktree ? '▣ ' : ''}${esc(r.name)}</span>`;
+    const pending = r.kind === 'head' && r.name !== state.base ? state.unmerged.includes(r.name) : undefined;
+    const ahead = pending ? aheadOf(r.name) : 0;
+    const merged = pending === false ? ' ref-merged' : '';
+    const title = r.kind === 'head' ? `${r.worktree ? 'branch com worktree' : 'branch local'}${pending ? ` · ${ahead || 'com'} commit(s) fora de ${state.base}` : pending === false ? ` · já mesclada em ${state.base}` : ''}` : r.kind;
+    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}">${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>`;
+  }
+
+  function graphHeader(n) {
+    const f = state.graphFilter;
+    return `<h2 class="graph-head">Histórico <span class="count">${n}</span>
+      <span class="seg" title="O que o grafo mostra">
+        <button data-action="setGraphFilter" data-value="all" class="${f === 'all' ? 'on' : ''}">Tudo</button>
+        <button data-action="setGraphFilter" data-value="unmerged" class="${f === 'unmerged' ? 'on' : ''}" title="Só commits de branches e worktrees que ainda não entraram em ${esc(state.base)}">Não mescladas <b>${state.unmerged.length}</b></button>
+      </span>
+      <input id="filter" type="search" placeholder="Filtrar por mensagem, autor, hash ou branch" /></h2>`;
   }
 
   function graphSection() {
-    const commits = state.commits;
-    if (!commits.length) return '<section><h2>Histórico</h2><div class="empty">Sem commits.</div></section>';
+    let commits = state.commits;
+    const head = graphHeader(commits.length);
+    if (!commits.length)
+      return `<section class="graph-section">${head}<div class="empty">${state.graphFilter === 'unmerged' ? `Tudo já está mesclado em ${esc(state.base)}.` : 'Sem commits.'}</div></section>`;
+    const wip = [];
+    state.worktrees.forEach((w, i) => {
+      if (!w.changes || !w.head) return;
+      const at = commits.findIndex(c => c.sha === w.head);
+      if (at >= 0) wip.push({ at, c: { sha: `wip-${i}`, parents: [w.head], author: '', date: Date.now() / 1000, subject: `Alterações não commitadas em ${w.name}: ${w.changes} arquivo(s)`, refs: [], wip: true, branch: w.branch, path: w.path } });
+    });
+    if (wip.length) {
+      commits = commits.slice();
+      wip.sort((a, b) => b.at - a.at).forEach(x => commits.splice(x.at, 0, x.c));
+    }
     const { edges, width } = layout(commits);
     const W = width * COL + 8;
     const H = commits.length * ROW;
@@ -347,6 +435,7 @@
       .map(c => {
         const color = COLORS[c.x % COLORS.length];
         const isMerge = c.parents.length > 1;
+        if (c.wip) return `<circle cx="${X(c.x)}" cy="${Y(c.y)}" r="${DOT}" fill="var(--bg)" stroke="var(--warn)" stroke-width="2" stroke-dasharray="2 2"/>`;
         return `<circle cx="${X(c.x)}" cy="${Y(c.y)}" r="${isMerge ? DOT - 1 : DOT}" fill="${isMerge ? 'var(--bg)' : color}" stroke="${color}" stroke-width="2"/>`;
       })
       .join('');
@@ -354,7 +443,12 @@
     const rows = commits
       .map(c => {
         const hide = q && !(c.subject.toLowerCase().includes(q) || c.author.toLowerCase().includes(q) || c.sha.startsWith(q) || c.refs.some(r => r.name.toLowerCase().includes(q)));
-        return `<div class="row ${hide ? 'dim' : ''}" data-sha="${c.sha}" style="padding-left:${W}px">
+        if (c.wip)
+          return `<div class="row wip ${hide ? 'dim' : ''}" data-menu="${esc(c.branch || '')}" style="padding-left:${W}px">
+            <span class="desc"><span class="subject">● ${esc(c.subject)}</span>
+            <button class="link" data-action="diffWithBase" data-branch="${esc(c.branch || '')}">revisar</button></span>
+            <span class="author"></span><span class="date">agora</span><span class="sha"></span></div>`;
+        return `<div class="row ${hide ? 'dim' : ''} ${c.boundary ? 'boundary' : ''}" data-sha="${c.sha}" style="padding-left:${W}px" ${c.boundary ? `title="Ponto de ${esc(state.base)} de onde branches pendentes saíram"` : ''}>
           <span class="desc">${c.refs.map(badge).join('')}<span class="subject">${esc(c.subject)}</span></span>
           <span class="author">${esc(c.author)}</span>
           <span class="date">${ago(c.date)}</span>
@@ -362,9 +456,7 @@
         </div>`;
       })
       .join('');
-    return `<section class="graph-section">
-      <h2>Histórico <span class="count">${commits.length}</span>
-        <input id="filter" type="search" placeholder="Filtrar por mensagem, autor, hash ou branch" /></h2>
+    return `<section class="graph-section">${head}
       <div class="graph-scroll"><div class="graph" style="height:${H}px">
         <svg class="lanes" width="${W}" height="${H}" fill="none" stroke-width="2">${paths}${dots}</svg>
         ${rows}
@@ -377,6 +469,23 @@
     const t = /** @type {HTMLElement} */ (e.target);
     hideMenu(t);
     const local = /** @type {HTMLElement|null} */ (t.closest('[data-local]'));
+    if (local && local.dataset.local === 'layout') {
+      ui.layout = local.dataset.layout;
+      saveUi();
+      render();
+      return;
+    }
+    if (local && local.dataset.local === 'tab') {
+      ui.tab = local.dataset.tab;
+      saveUi();
+      render();
+      return;
+    }
+    if (local && local.dataset.local === 'dirty') {
+      onlyDirty = !onlyDirty;
+      render();
+      return;
+    }
     if (local && local.dataset.local === 'more') {
       rowLimit += 60;
       const body = document.getElementById('wt-rows');
@@ -435,6 +544,30 @@
     if (target && target !== dragging) send('mergeBranches', { source: dragging, target });
   });
 
+  // divisor entre worktrees e histórico
+  document.addEventListener('mousedown', e => {
+    const sp = /** @type {HTMLElement} */ (e.target).closest?.('.splitter');
+    if (!sp) return;
+    e.preventDefault();
+    const box = /** @type {HTMLElement} */ (sp.parentElement);
+    const cols = box.classList.contains('layout-cols');
+    const move = ev => {
+      const r = box.getBoundingClientRect();
+      const pct = cols ? ((ev.clientX - r.left) / r.width) * 100 : ((ev.clientY - r.top) / r.height) * 100;
+      ui.split = Math.min(85, Math.max(15, Math.round(pct)));
+      box.style.setProperty('--split', `${ui.split}%`);
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('resizing');
+      saveUi();
+    };
+    document.body.classList.add('resizing');
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+
   // menu de contexto próprio (o do VS Code não sabe nada de branches)
   const menu = document.createElement('div');
   menu.className = 'menu';
@@ -471,6 +604,9 @@
       }
       items.push(item('createWorktree', 'Nova branch + worktree a partir daqui', { startPoint: b }));
       if (!isBase) items.push(item('diffWithBase', `Revisar alterações × ${state.base}`, { branch: b }));
+      if (!isBase) items.push(item('analyzeMerge', `Analisar merge em ${state.base}…`, { branch: b }));
+      const req = (wt && wt.request) || (state.branches.find(x => x.name === b) || {}).request;
+      if (!isBase && state.hosting) items.push(req ? item('openUrl', `Abrir ${req.ref} no navegador`, { url: req.url }) : item('publishRequest', `Publicar ${state.hosting.label}…`, { branch: b }));
       if (!isBase) {
         items.push('<hr>');
         if (wt) items.push(item('togglePause', wt.paused ? 'Retomar sync' : 'Pausar sync', { branch: b }));

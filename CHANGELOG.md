@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0
+- PR/MR com um clique: push da branch, título e descrição a partir dos commits, rascunho opcional;
+  `PR #12`/`MR !5` aparece no card, na tabela e na árvore. GitHub (login nativo do VS Code),
+  GitHub Enterprise e GitLab, inclusive self-hosted (token no cofre do VS Code).
+- Analisar merge: painel com commits que entram, arquivos (marcando os alterados nos dois lados) e
+  conflitos previstos; cada conflito abre como ficaria depois do merge, com os marcadores.
+  O diálogo de merge ganhou "Analisar antes".
+- Árvore de arquivos como a do Explorer: cores e letras do git (M/U/A/D), pastas compactas,
+  `files.exclude`, abrir ao lado, revelar no sistema, copiar caminho, comparar com a base e
+  "Adicionar ao Explorer".
+- Gerar CI: escolha da base, GitLab CI (jobs em sh POSIX, token SYNC_TOKEN, funciona em self-hosted)
+  e back-merge do fluxo de ambientes.
+- Fluxo de ambientes (dev → QA → homologação → produção): faixa no painel com o que espera
+  promoção e hotfixes que precisam descer; Promover abre PR/MR, analisa ou mescla.
+- Painel dividido (empilhado, lado a lado ou abas) com divisor arrastável; worktrees e histórico
+  rolam separados.
+- Histórico "Só não mescladas", com o ponto de saída de cada branch; etiquetas já mescladas apagadas.
+- Trabalho não commitado em destaque: vira card, filtro na tabela e linha "● alterações não
+  commitadas" no grafo.
+
 ## 0.4.0
 - Repositórios grandes: a ativação não espera mais a leitura do repositório; a lista aparece em ~1 s
   (lida direto de `.git/worktrees`) e cada worktree é detalhada em segundo plano, com barra de

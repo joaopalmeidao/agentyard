@@ -23,6 +23,9 @@ Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
 | **Navegar arquivos** | na barra lateral, cada worktree expande em *Alterações × base* (clique abre o diff) e na árvore de pastas; branches sem worktree também, lidas direto do git. **Arquivos** busca e abre qualquer arquivo de outra worktree sem trocar de janela. |
 | **Muitas worktrees** | a lista aparece em ~1 s mesmo com centenas de worktrees; o detalhe chega aos poucos, com barra de progresso. Cards só para a principal, as **favoritas (★)** e as com agente aberto; o resto fica numa tabela com filtro. |
 | **Limpeza** | *Limpar worktrees…* remove em lote (já marca as mescladas e limpas); seleção múltipla na árvore; *Remover órfãs* para pastas apagadas. |
+| **PR/MR** | *Publicar PR* faz o push e abre o PR (GitHub/GitHub Enterprise) ou MR (GitLab, inclusive self-hosted); o número aparece no card. |
+| **Analisar merge** | antes de mesclar: commits que entram, arquivos alterados nos dois lados e conflitos, com o arquivo já mostrando os marcadores. |
+| **Fluxo de ambientes** | dev → QA → homologação → produção: o que espera promoção em cada degrau, hotfixes que precisam descer e *Promover* por PR/MR ou merge. |
 | **Nova worktree** | cria branch + pasta a partir da base (ou de qualquer branch/commit) e roda um comando de setup (`npm install`, etc.). |
 | **Grafo** | histórico de todas as branches, worktrees (`▣`), remotas e tags, com filtro. |
 | **Sync automático** | quando a base anda, mescla nas worktrees que casam com os padrões — só se estiver limpa, sem conflito previsto, e roda um comando de verificação (desfaz o merge se falhar). |
@@ -105,6 +108,20 @@ do sync, use um PAT em `secrets.SYNC_TOKEN` (linha comentada no checkout).
 diferentes. Use o sync local para worktrees ainda não publicadas e o CI para branches
 compartilhadas — os padrões (`autoSync.branches`/`exclude`) ajudam a separar.
 
+## GitLab (inclusive self-hosted)
+
+Remotos cujo endereço contém "gitlab" são reconhecidos sozinhos. Para outros hosts:
+
+```jsonc
+"worktreeGraph.gitlab.hosts": ["git.empresa.com", "https://git.empresa.com:8443"]
+```
+
+*Conectar ao GitHub/GitLab* pede um token pessoal (escopo `api` no GitLab) e o guarda no cofre de
+segredos do VS Code. No GitHub.com usa o login do próprio VS Code.
+
+O **Gerar CI** detecta o GitLab e gera `.gitlab/worktree-graph-sync.gitlab-ci.yml`, incluído no
+`.gitlab-ci.yml`. Crie a variável `SYNC_TOKEN` (project access token com `write_repository`).
+
 ## Configurações
 
 | chave | padrão | |
@@ -137,6 +154,8 @@ compartilhadas — os padrões (`autoSync.branches`/`exclude`) ajudam a separar.
 ```bash
 node test/run.js                 # integração num VS Code real, perfil isolado
 node scripts/test-sync.js <repo> # sync contra um repositório, sem VS Code
+node test/hosting.test.js        # GitHub/GitLab contra um servidor falso
+bash test/ci.test.sh             # executa o job de GitLab CI gerado contra a demo
 ```
 
 ## Scripts

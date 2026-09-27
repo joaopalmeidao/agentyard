@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { agents } from './agents';
+import { computeFlow, flowStages } from './flow';
+import { RequestService } from './hosting/service';
 import { Repo } from './git';
 import { applyCache, buildState, enrich, GraphState, RepoCache, resolveBase, SyncStatus, SyncWhere } from './model';
 
@@ -23,6 +25,10 @@ export class Controller implements vscode.Disposable {
   private debounce?: NodeJS.Timeout;
   private poll?: NodeJS.Timeout;
   readonly cache = new RepoCache();
+  readonly requests = new RequestService(this);
+  private readonly cacheChanged = new vscode.EventEmitter<void>();
+  /** Disparado quando chegam status novos (as cores da árvore de arquivos dependem disso). */
+  readonly onDidChangeCache = this.cacheChanged.event;
   private enriching?: Promise<void>;
   private enrichAgain = false;
   private lastFire = 0;
@@ -118,7 +124,7 @@ export class Controller implements vscode.Disposable {
       this.state = await buildState(
         this.repo,
         {
-          configuredBase: c.get('baseBranch', ''),
+          configuredBase: this.configuredBase(),
           useRemoteBase: c.get('autoSync.fetchRemote', false),
           maxCommits: c.get('graph.maxCommits', 400),
           showRemotes: c.get('graph.showRemoteBranches', true),
@@ -134,9 +140,20 @@ export class Controller implements vscode.Disposable {
           agentNames: agents(this).map(a => a.name),
           agentsRunning: this.agentsRunning?.(),
           favorites: new Set(this.favorites()),
+          graphFilter: this.ctx.workspaceState.get<'all' | 'unmerged'>('graphFilter', 'all'),
         },
         this.cache,
       );
+      this.applyRequests();
+      this.requests.refresh();
+      const stages = flowStages(this);
+      if (stages.length > 1) {
+        const refs = [
+          ...this.state.worktrees.filter(w => w.branch).map(w => ({ name: w.branch!, kind: 'head', date: w.date })),
+          ...this.state.branches.map(b => ({ name: b.name, kind: 'head', date: b.date })),
+        ];
+        this.state.flow = await computeFlow(this.repo, stages, refs);
+      }
       if (!this.loadedOnce) this.log(`Leitura rápida: ${this.state.worktrees.length} worktrees em ${Date.now() - t0} ms`);
     } catch (e) {
       this.log(`Falha ao ler o repositório: ${(e as Error).message}`);
@@ -177,11 +194,24 @@ export class Controller implements vscode.Disposable {
         }
         if (this.state) applyCache(this.state, this.cache);
         this.changed.fire(this.state);
+        this.cacheChanged.fire();
         if (!this.loadedOnce) this.log(`Detalhamento completo em ${Date.now() - t0} ms`);
         this.loadedOnce = true;
         await this.ctx.workspaceState.update(this.cacheKey(), this.cache.exportCompares());
       } while (this.enrichAgain);
     })().finally(() => (this.enriching = undefined));
+  }
+
+  /** Copia os PRs/MRs conhecidos para as views. */
+  private applyRequests() {
+    const s = this.state;
+    if (!s) return;
+    const r = this.requests;
+    for (const w of s.worktrees) w.request = w.branch ? r.byBranch.get(w.branch) : undefined;
+    for (const b of s.branches) b.request = r.byBranch.get(b.name);
+    s.hosting = r.remote
+      ? { kind: r.remote.kind, label: r.remote.kind === 'gitlab' ? 'MR' : 'PR', host: r.remote.host, connected: r.connected, error: r.error }
+      : undefined;
   }
 
   /** Redesenha no máximo a cada 400 ms enquanto os resultados chegam. */
@@ -193,13 +223,14 @@ export class Controller implements vscode.Disposable {
       this.lastFire = Date.now();
       if (this.state) applyCache(this.state, this.cache);
       this.changed.fire(this.state);
+      this.cacheChanged.fire();
     }, wait);
   }
 
   async base(): Promise<{ base: string; baseRef: string }> {
     if (!this.repo) throw new Error('Nenhum repositório git aberto.');
     const c = this.cfg();
-    return resolveBase(this.repo, await this.repo.refs(), c.get('baseBranch', ''), c.get('autoSync.fetchRemote', false));
+    return resolveBase(this.repo, await this.repo.refs(), this.configuredBase(), c.get('autoSync.fetchRemote', false));
   }
 
   favorites(): string[] {
@@ -217,6 +248,11 @@ export class Controller implements vscode.Disposable {
     if (on) set.add(k);
     else set.delete(k);
     await this.ctx.globalState.update(`favorites:${this.repo.commonDir.toLowerCase()}`, [...set]);
+  }
+
+  /** Base explícita, ou o primeiro estágio do fluxo de ambientes. */
+  configuredBase(): string {
+    return this.cfg().get<string>('baseBranch', '') || flowStages(this)[0]?.branch || '';
   }
 
   paused(): string[] {
@@ -253,6 +289,7 @@ export class Controller implements vscode.Disposable {
   hasCiWorkflow(): boolean {
     if (!this.repo) return false;
     try {
+      if (fs.existsSync(path.join(this.repo.root, '.gitlab', 'worktree-graph-sync.gitlab-ci.yml'))) return true;
       return fs.readdirSync(path.join(this.repo.root, '.github', 'workflows')).some(f => /^sync-.*-into-branches\.ya?ml$/.test(f));
     } catch {
       return false;

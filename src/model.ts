@@ -1,5 +1,7 @@
 import * as path from 'path';
 import { Commit, MergePreview, pLimit, Ref, Repo, Worktree, WorktreeStatus } from './git';
+import type { FlowStep } from './flow';
+import type { ChangeRequest } from './hosting/core';
 
 export type SyncKind =
   | 'uptodate'
@@ -46,6 +48,8 @@ export interface WorktreeView extends Worktree {
   /** Agentes com terminal aberto nesta worktree. */
   agents: string[];
   favorite: boolean;
+  /** PR/MR aberto desta branch. */
+  request?: ChangeRequest;
 }
 
 export interface BranchView {
@@ -60,6 +64,7 @@ export interface BranchView {
   date: number;
   subject: string;
   isBase: boolean;
+  request?: ChangeRequest;
 }
 
 export interface RefBadge {
@@ -87,6 +92,14 @@ export interface GraphState {
   agentNames: string[];
   /** Quantas worktrees ainda faltam detalhar (status/comparação). 0 = tudo em dia. */
   pending: number;
+  /** Fluxo de ambientes (dev → QA → homologação → produção), se configurado. */
+  flow?: FlowStep[];
+  /** Filtro do histórico: tudo, ou só o que ainda não entrou na base. */
+  graphFilter: 'all' | 'unmerged';
+  /** Branches locais com commits fora da base. */
+  unmerged: string[];
+  /** Remoto reconhecido (GitHub/GitLab) e se há credencial. */
+  hosting?: { kind: 'github' | 'gitlab'; label: 'PR' | 'MR'; host: string; connected: boolean; error?: string };
   error?: string;
 }
 
@@ -103,6 +116,7 @@ export interface BuildOptions {
   agentsRunning?: Map<string, string[]>;
   /** Caminhos (minúsculos) das worktrees favoritas. */
   favorites?: Set<string>;
+  graphFilter?: 'all' | 'unmerged';
 }
 
 export interface CompareResult {
@@ -202,7 +216,15 @@ export async function buildState(repo: Repo, opts: BuildOptions, cache: RepoCach
     )
     .sort((a, b) => b.date - a.date);
 
-  const revs = ['--branches', '--tags', ...(opts.showRemotes ? ['--remotes'] : []), ...new Set(wts.filter(w => w.detached && w.head).map(w => w.head))];
+  const unmerged = baseSha ? await repo.unmerged(baseRef) : [];
+  const graphFilter = opts.graphFilter ?? 'all';
+  // "Só não mescladas": os commits das branches pendentes, mais o ponto da base de onde cada uma saiu.
+  const revs =
+    graphFilter === 'unmerged'
+      ? unmerged.length
+        ? ['--boundary', ...unmerged.map(b => `refs/heads/${b}`), `^${baseRef}`]
+        : []
+      : ['--branches', '--tags', ...(opts.showRemotes ? ['--remotes'] : []), ...new Set(wts.filter(w => w.detached && w.head).map(w => w.head))];
   const commits = await repo.log(revs, opts.maxCommits);
   const badges = new Map<string, RefBadge[]>();
   const add = (sha: string, b: RefBadge) => {
@@ -238,6 +260,8 @@ export async function buildState(repo: Repo, opts: BuildOptions, cache: RepoCach
     autoSync: opts.autoSync,
     agentNames: opts.agentNames ?? [],
     pending: 0,
+    graphFilter,
+    unmerged,
   };
   applyCache(state, cache);
   return state;
