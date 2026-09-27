@@ -133,7 +133,7 @@
       state.unmerged,
       state.commits.map(c => c.sha + c.refs.map(r => r.name + (r.current ? '*' : '')).join(',')),
       state.worktrees.filter(w => w.changes && w.head).map(w => w.head + ':' + w.changes),
-      [...shown].map(n => n + ':' + aheadOf(n) + ':' + (requestOf(n) ? requestOf(n).ref + requestOf(n).state + (requestOf(n).review ? requestOf(n).review.state + requestOf(n).review.approvals : '') : '')),
+      [...shown].map(n => n + ':' + (state.pending ? '' : aheadOf(n)) + ':' + (requestOf(n) ? requestOf(n).ref + requestOf(n).state + (requestOf(n).review ? requestOf(n).review.state + requestOf(n).review.approvals : '') : '')),
     ]);
   }
 
@@ -668,6 +668,11 @@
       return;
     }
     const el = /** @type {HTMLElement|null} */ (t.closest('[data-action]'));
+    if (el && el.dataset.action === 'setGraphFilter' && !el.classList.contains('on')) {
+      el.parentElement?.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el));
+      const pane = document.querySelector('.pane-b .graph-scroll');
+      if (pane) pane.classList.add('loading');
+    }
     if (!el || /** @type {HTMLButtonElement} */ (el).disabled) return;
     const { action, ...args } = el.dataset;
     send(action, args);

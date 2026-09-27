@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.2
+- Repositórios com centenas de worktrees: menos processos git em paralelo (4), status das worktrees
+  paradas menos frequente, painel redesenhado no máximo 1×/s e o grafo não é refeito enquanto as
+  worktrees são detalhadas. O clique em "Tudo"/"Não mescladas" responde na hora.
+
 ## 0.9.1
 - O histórico abre em "Não mescladas" por padrão; a escolha entre "Tudo" e "Não mescladas" fica salva.
 

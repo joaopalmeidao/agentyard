@@ -350,7 +350,7 @@ export async function enrich(repo: Repo, state: GraphState, cache: RepoCache, o:
 
   for (const w of state.worktrees) {
     if (w.bare || w.prunable) continue;
-    const active = w.isCurrent || w.favorite || w.agents.length > 0 || w.changes > 0 || !!w.operation || w.date > dayAgo;
+    const active = w.isCurrent || w.favorite || w.agents.length > 0 || w.changes > 0 || !!w.operation;
     const st = cache.statuses.get(key(w.path));
     const maxAge = (active ? o.activeSeconds : o.idleSeconds) * 1000;
     if (!st || now - st.at > maxAge) {
