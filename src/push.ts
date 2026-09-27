@@ -3,6 +3,7 @@ import type { Controller } from './controller';
 import { discoverCiBranches } from './ciBranches';
 import { flowStages } from './flow';
 import { guardForce, guardPush } from './guards';
+import { t } from './i18n';
 import type { RemoteTrack } from './git';
 export { parseTrack } from './git';
 
@@ -27,7 +28,7 @@ export async function pushBranch(ctl: Controller, branch: string, opts: { quiet?
   if (upstream) {
     const [, ahead] = await repo.aheadBehind(upstream, branch);
     if (ahead === 0) {
-      if (!opts.quiet) vscode.window.showInformationMessage(`${branch} já está em dia com ${upstream}.`);
+      if (!opts.quiet) vscode.window.showInformationMessage(t('{0} is already up to date with {1}.', branch, upstream));
       return true;
     }
   }
@@ -46,54 +47,55 @@ export async function pushBranch(ctl: Controller, branch: string, opts: { quiet?
   const err = (r.stderr || r.stdout).trim();
   const rejected = /rejected|non-fast-forward|fetch first|stale info/i.test(err);
   if (!rejected || opts.quiet) {
-    if (!opts.quiet) vscode.window.showErrorMessage(`O push de ${branch} falhou: ${err}`);
-    ctl.log(`push ${branch} falhou: ${err}`);
+    if (!opts.quiet) vscode.window.showErrorMessage(t('Push of {0} failed: {1}', branch, err));
+    ctl.log(t('push {0} failed: {1}', branch, err));
     return false;
   }
 
+  const force = t('Force (--force-with-lease)');
   const pick = await vscode.window.showWarningMessage(
-    `O remoto recusou o push de ${branch}: ele tem commits que a sua branch não tem.`,
-    { modal: true, detail: 'Trazer do remoto faz um merge local e tenta de novo. Forçar sobrescreve o remoto, mas só se ninguém tiver enviado nada além do que você já viu (--force-with-lease).' },
-    'Trazer do remoto e tentar de novo',
-    'Forçar (--force-with-lease)',
+    t('The remote rejected the push of {0}: it has commits your branch does not have.', branch),
+    { modal: true, detail: t('Pull from remote does a local merge and tries again. Force overwrites the remote, but only if nobody pushed anything beyond what you have already seen (--force-with-lease).') },
+    t('Pull from remote and try again'),
+    force,
   );
   if (!pick) return false;
-  if (pick.startsWith('Forçar')) {
+  if (pick === force) {
     if (!(await guardForce(ctl, branch))) return false;
     r = await run(['--force-with-lease']);
     if (r.code === 0) return done(ctl, branch, remote, false, false);
-    vscode.window.showErrorMessage(`Nem o push forçado passou (o remoto mudou de novo?): ${(r.stderr || r.stdout).trim()}`);
+    vscode.window.showErrorMessage(t('Even the forced push failed (did the remote change again?): {0}', (r.stderr || r.stdout).trim()));
     return false;
   }
   const cwd = await cwdOf(ctl, branch);
   const hasWorktree = cwd !== repo.root || (await repo.worktreesFast())[0]?.branch === branch;
   if (!hasWorktree) {
-    vscode.window.showWarningMessage(`${branch} não está aberta numa worktree; crie uma para trazer as mudanças do remoto.`);
+    vscode.window.showWarningMessage(t('{0} is not open in a worktree; create one to pull the changes from the remote.', branch));
     return false;
   }
-  const pull = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Trazendo ${remote}/${branch}…` }, () =>
+  const pull = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Pulling {0}…', `${remote}/${branch}`) }, () =>
     repo.run(['pull', '--no-rebase', '--no-edit', remote, branch], cwd, 300_000),
   );
   if (pull.code !== 0) {
     const conflicts = await repo.conflictedFiles(cwd);
     vscode.window.showErrorMessage(
       conflicts.length
-        ? `Conflito ao trazer ${remote}/${branch} (${conflicts.length} arquivo(s)). Resolva na worktree e faça o push de novo.`
-        : `Não consegui trazer ${remote}/${branch}: ${(pull.stderr || pull.stdout).trim()}`,
+        ? t('Conflict while pulling {0} ({1} file(s)). Resolve it in the worktree and push again.', `${remote}/${branch}`, conflicts.length)
+        : t('Could not pull {0}: {1}', `${remote}/${branch}`, (pull.stderr || pull.stdout).trim()),
     );
     ctl.scheduleRefresh(50);
     return false;
   }
   r = await run([]);
   if (r.code === 0) return done(ctl, branch, remote, false, false);
-  vscode.window.showErrorMessage(`O push de ${branch} falhou de novo: ${(r.stderr || r.stdout).trim()}`);
+  vscode.window.showErrorMessage(t('Push of {0} failed again: {1}', branch, (r.stderr || r.stdout).trim()));
   return false;
 }
 
 function done(ctl: Controller, branch: string, remote: string, quiet: boolean | undefined, published: boolean) {
-  ctl.log(`push ${remote} ${branch}: ok${published ? ' (publicada)' : ''}`);
+  ctl.log(`push ${remote} ${branch}: ok${published ? ` ${t('(published)')}` : ''}`);
   ctl.scheduleRefresh(50);
-  if (!quiet) vscode.window.setStatusBarMessage(`$(cloud-upload) ${branch} ${published ? 'publicada em' : 'enviada para'} ${remote}`, 4000);
+  if (!quiet) vscode.window.setStatusBarMessage(`$(cloud-upload) ${published ? t('{0} published to {1}', branch, remote) : t('{0} pushed to {1}', branch, remote)}`, 4000);
   return true;
 }
 
@@ -107,7 +109,7 @@ export async function pushMany(ctl: Controller) {
     ...s.branches.map(b => ({ name: b.name, track: b.remote, wt: false, date: b.date })),
   ].filter(c => c.track && (c.track.ahead > 0 || !c.track.published));
   if (!cands.length) {
-    vscode.window.showInformationMessage('Nenhuma branch com commits para enviar.');
+    vscode.window.showInformationMessage(t('No branches with commits to push.'));
     return;
   }
   const items = cands
@@ -115,8 +117,8 @@ export async function pushMany(ctl: Controller) {
     .map(c => ({
       label: c.name,
       description: [
-        c.track.published ? `↑${c.track.ahead} não enviado(s)` : c.track.gone ? 'apagada no remoto' : 'não publicada',
-        c.track.behind ? `↓${c.track.behind} no remoto` : '',
+        c.track.published ? t('↑{0} not pushed', c.track.ahead) : c.track.gone ? t('deleted on remote') : t('not published'),
+        c.track.behind ? t('↓{0} on remote', c.track.behind) : '',
         c.wt ? 'worktree' : '',
       ]
         .filter(Boolean)
@@ -128,8 +130,8 @@ export async function pushMany(ctl: Controller) {
   const chosen = await vscode.window.showQuickPick(items, {
     canPickMany: true,
     matchOnDescription: true,
-    title: `Enviar branches: ${items.filter(i => i.picked).length} marcadas (publicadas com commits pendentes)`,
-    placeHolder: 'Marque as branches para enviar; as não publicadas ganham upstream (push -u)',
+    title: t('Push branches: {0} selected (published with pending commits)', items.filter(i => i.picked).length),
+    placeHolder: t('Select the branches to push; unpublished ones get an upstream (push -u)'),
   });
   if (chosen?.length) await pushList(ctl, chosen.map(c => c.name));
 }
@@ -138,7 +140,7 @@ export async function pushMany(ctl: Controller) {
 async function pushList(ctl: Controller, names: string[]) {
   const ok: string[] = [];
   const failed: string[] = [];
-  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Enviando branches', cancellable: true }, async (progress, token) => {
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Pushing branches'), cancellable: true }, async (progress, token) => {
     for (const name of names) {
       if (token.isCancellationRequested) break;
       progress.report({ message: `${name} (${ok.length + failed.length + 1}/${names.length})`, increment: 100 / names.length });
@@ -148,12 +150,12 @@ async function pushList(ctl: Controller, names: string[]) {
   ctl.scheduleRefresh(50);
   if (failed.length) {
     const pick = await vscode.window.showWarningMessage(
-      `${ok.length} enviada(s); ${failed.length} recusada(s): ${failed.join(', ')}. Envie essas uma a uma para escolher entre trazer do remoto ou forçar.`,
-      'Ver log',
+      t('{0} pushed; {1} rejected: {2}. Push those one by one to choose between pulling from the remote or forcing.', ok.length, failed.length, failed.join(', ')),
+      t('View log'),
     );
     if (pick) ctl.out.show();
   } else {
-    vscode.window.showInformationMessage(`${ok.length} branch(es) enviada(s).`);
+    vscode.window.showInformationMessage(t('{0} branch(es) pushed.', ok.length));
   }
 }
 
@@ -184,8 +186,11 @@ export function defaultPushBranches(ctl: Controller): string[] {
   return [...new Set([s.base, ...ci])].filter(b => heads.includes(b));
 }
 
-const trackText = (t: RemoteTrack) =>
-  [t.published ? (t.ahead ? `↑${t.ahead} não enviado(s)` : 'em dia') : t.gone ? 'apagada no remoto' : 'não publicada', t.behind ? `↓${t.behind} no remoto` : '']
+const trackText = (tr: RemoteTrack) =>
+  [
+    tr.published ? (tr.ahead ? t('↑{0} not pushed', tr.ahead) : t('up to date')) : tr.gone ? t('deleted on remote') : t('not published'),
+    tr.behind ? t('↓{0} on remote', tr.behind) : '',
+  ]
     .filter(Boolean)
     .join(' · ');
 
@@ -193,7 +198,7 @@ const trackText = (t: RemoteTrack) =>
 export async function pushSelected(ctl: Controller) {
   if (!ctl.state || !ctl.repo) return;
   const defaults = new Set(defaultPushBranches(ctl));
-  const pending = (t: RemoteTrack) => t.ahead > 0 || !t.published;
+  const pending = (tr: RemoteTrack) => tr.ahead > 0 || !tr.published;
   const all = localBranches(ctl).sort(
     (a, b) => Number(defaults.has(b.name)) - Number(defaults.has(a.name)) || Number(pending(b.track)) - Number(pending(a.track)) || b.date - a.date,
   );
@@ -206,24 +211,26 @@ export async function pushSelected(ctl: Controller) {
   const marked = all.filter(c => defaults.has(c.name));
   const rest = all.filter(c => !defaults.has(c.name));
   const items: (vscode.QuickPickItem & { name?: string })[] = [
-    ...(marked.length ? [{ label: 'Base e CI', kind: vscode.QuickPickItemKind.Separator }, ...marked.map(item)] : []),
-    ...(rest.length ? [{ label: 'Outras branches', kind: vscode.QuickPickItemKind.Separator }, ...rest.map(item)] : []),
+    ...(marked.length ? [{ label: t('Base and CI'), kind: vscode.QuickPickItemKind.Separator }, ...marked.map(item)] : []),
+    ...(rest.length ? [{ label: t('Other branches'), kind: vscode.QuickPickItemKind.Separator }, ...rest.map(item)] : []),
   ];
   const chosen = await vscode.window.showQuickPick(items, {
     canPickMany: true,
     matchOnDescription: true,
-    title: 'Push das branches selecionadas',
-    placeHolder: 'Marcadas: a base e as branches do CI. As em dia são puladas; as não publicadas ganham upstream (push -u)',
+    title: t('Push selected branches'),
+    placeHolder: t('Selected: the base and the CI branches. Up-to-date ones are skipped; unpublished ones get an upstream (push -u)'),
   });
   if (!chosen?.length) return;
   const byName = new Map(all.map(c => [c.name, c]));
   const send = chosen.map(c => c.name!).filter(n => n && pending(byName.get(n)!.track));
   const skipped = chosen.length - send.length;
   if (!send.length) {
-    vscode.window.showInformationMessage(`${skipped === 1 ? 'A branch escolhida já está' : 'As branches escolhidas já estão'} em dia com o remoto.`);
+    vscode.window.showInformationMessage(
+      skipped === 1 ? t('The chosen branch is already up to date with the remote.') : t('The chosen branches are already up to date with the remote.'),
+    );
     return;
   }
-  if (skipped) ctl.log(`push selecionadas: ${skipped} já em dia, puladas`);
+  if (skipped) ctl.log(t('push selected: {0} already up to date, skipped', skipped));
   await pushList(ctl, send);
 }
 
@@ -233,7 +240,7 @@ export class PushStatus implements vscode.Disposable {
   private readonly subs: vscode.Disposable[];
 
   constructor(private readonly ctl: Controller) {
-    this.item.name = 'Push das branches';
+    this.item.name = t('Branch push');
     this.item.command = 'worktreeGraph.pushSelected';
     this.subs = [
       ctl.onDidChange(() => this.update()),
@@ -251,10 +258,14 @@ export class PushStatus implements vscode.Disposable {
     const others = branches.filter(b => !defaults.has(b.name) && b.track.published && b.track.ahead > 0).length;
     this.item.text = `$(cloud-upload) Push${waiting.length ? ` ${waiting.length}` : ''}`;
     const tip = new vscode.MarkdownString(undefined, true);
-    tip.appendMarkdown('**Push das branches selecionadas**\n\n');
-    tip.appendMarkdown(`Já vêm marcadas: ${[...defaults].map(b => `\`${b}\``).join(', ') || 'nenhuma'} (base e CI).\n\n`);
-    tip.appendMarkdown(waiting.length ? `Com commits a enviar: ${waiting.map(b => `\`${b.name}\` ↑${b.track.ahead}`).join(', ')}` : 'Base e CI em dia com o remoto.');
-    if (others) tip.appendMarkdown(`\n\n+${others} outra(s) branch(es) com commits a enviar.`);
+    tip.appendMarkdown(`**${t('Push selected branches')}**\n\n`);
+    tip.appendMarkdown(t('Already selected: {0} (base and CI).', [...defaults].map(b => `\`${b}\``).join(', ') || t('no branches')) + '\n\n');
+    tip.appendMarkdown(
+      waiting.length
+        ? t('With commits to push: {0}', waiting.map(b => `\`${b.name}\` ↑${b.track.ahead}`).join(', '))
+        : t('Base and CI up to date with the remote.'),
+    );
+    if (others) tip.appendMarkdown('\n\n' + t('+{0} other branch(es) with commits to push.', others));
     this.item.tooltip = tip;
     this.item.show();
   }

@@ -1,5 +1,6 @@
 import { Issue, IssueScope, mapGitHubIssue, mapGitLabIssue, NewIssue } from '../issues/core';
 import { parsePlatformRemote } from './platforms';
+import { t } from '../i18n';
 
 /**
  * GitHub (incl. Enterprise) e GitLab (incl. self-hosted) via REST, sem depender da API do VS Code
@@ -207,7 +208,7 @@ async function call<T>(f: Fetch, url: string, init: RequestInit): Promise<T> {
   try {
     res = await f(url, init);
   } catch (e) {
-    throw new HostError(0, `Não consegui falar com ${new URL(url).host}: ${(e as Error).message}`);
+    throw new HostError(0, t('Could not reach {0}: {1}', new URL(url).host, (e as Error).message));
   }
   const text = await res.text();
   let body: any;
@@ -411,7 +412,7 @@ export function suggestTitle(branch: string, subjects: string[]): string {
 
 /** `extra`: linhas no fim, como "Closes #12" quando a branch veio de uma issue. */
 export function suggestBody(subjects: string[], label: 'PR' | 'MR', extra: string[] = []): string {
-  const parts = subjects.length ? [`## Commits neste ${label}`, '', ...subjects.map(s => `- ${s}`)] : [];
+  const parts = subjects.length ? [t('## Commits in this {0}', label), '', ...subjects.map(s => `- ${s}`)] : [];
   if (extra.length) parts.push(...(parts.length ? [''] : []), ...extra);
   return parts.join('\n');
 }

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { Controller } from '../controller';
 import { Issue } from './core';
 import { IssueService } from './service';
+import { t } from '../i18n';
 import { IssueItem, IssueTreeProvider, showIssue } from './view';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
@@ -44,10 +45,10 @@ export function registerIssues(ctx: vscode.ExtensionContext, ctl: Controller, gu
     await svc.refresh(true);
     const items = svc.groups.flatMap(g => g.issues.map(i => ({ label: `${i.key} ${i.title}`, description: g.title, detail: i.labels.join(' · '), issue: i })));
     if (!items.length) {
-      vscode.window.showInformationMessage('Nenhuma issue encontrada. Conecte o remoto, o Jira ou o Redmine na view Issues.');
+      vscode.window.showInformationMessage(t('No issues found. Connect the remote, Jira or Redmine in the Issues view.'));
       return;
     }
-    const pick = await vscode.window.showQuickPick(items, { title: 'Começar trabalho numa issue (com Claude)', matchOnDescription: true, matchOnDetail: true });
+    const pick = await vscode.window.showQuickPick(items, { title: t('Start work on an issue (with Claude)'), matchOnDescription: true, matchOnDetail: true });
     if (pick) await svc.start(pick.issue, true);
   });
   reg('connectRedmine', () => svc.connectRedmine());
@@ -63,7 +64,7 @@ export function registerIssues(ctx: vscode.ExtensionContext, ctl: Controller, gu
     const a = ed.selection.start.line + 1;
     const b = ed.selection.end.line + (ed.selection.end.character === 0 ? 0 : 1);
     const code = doc.getText(ed.selection).replace(/\s+$/, '');
-    return svc.create(`Em \`${rel}\` (linhas ${a}–${b}):\n\n\`\`\`${doc.languageId}\n${code}\n\`\`\``);
+    return svc.create(`${t('In {0} (lines {1}–{2}):', `\`${rel}\``, a, b)}\n\n\`\`\`${doc.languageId}\n${code}\n\`\`\``);
   });
   reg('disconnectRedmine', () => svc.disconnectRedmine());
   return svc;

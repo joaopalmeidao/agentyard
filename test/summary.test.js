@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { LOG_FORMAT, parseLog, summaryMarkdown, askPrompt, ASK_PRESETS } = require('../out/summary/core');
+const { LOG_FORMAT, parseLog, summaryMarkdown, askPrompt, askPresets } = require('../out/summary/core');
 
 let failures = 0;
 const check = (name, fn) => {
@@ -58,33 +58,33 @@ check('parseLog: commits × base, mais recente primeiro, com corpo multilinha', 
 check('summaryMarkdown: cabeçalho, commits, arquivos e não commitado', () => {
   const md = summaryMarkdown(facts);
   assert.match(md, /^# ai\/login/);
-  assert.match(md, /2 commit\(s\) à frente, 0 atrás/);
+  assert.match(md, /2 commit\(s\) ahead, 0 behind/);
   assert.match(md, /`[0-9a-f]{7}` Cria login — Teste/);
   assert.match(md, /  > segunda linha/);
   assert.match(md, /login\.ts/);
-  assert.match(md, /## Não commitado[\s\S]* M a\.txt/);
+  assert.match(md, /## Uncommitted[\s\S]* M a\.txt/);
 });
 
 check('summaryMarkdown: branch sem worktree não tem seção de não commitado; limite de commits', () => {
   const md = summaryMarkdown({ ...facts, path: undefined, uncommitted: [] }, 1);
-  assert.doesNotMatch(md, /Não commitado/);
-  assert.match(md, /Sem worktree/);
-  assert.match(md, /e mais 1 commit\(s\)/);
-  assert.match(summaryMarkdown({ ...facts, commits: [], diffStat: '' }), /Nenhum commit além da base/);
+  assert.doesNotMatch(md, /Uncommitted/);
+  assert.match(md, /No worktree/);
+  assert.match(md, /and 1 more older commit\(s\)/);
+  assert.match(summaryMarkdown({ ...facts, commits: [], diffStat: '' }), /No commits beyond the base/);
 });
 
 check('askPrompt: tarefa pronta, pergunta livre e branch sem worktree', () => {
-  assert.strictEqual(ASK_PRESETS.length, 4);
+  assert.strictEqual(askPresets().length, 4);
   const p = askPrompt(facts, 'review');
-  assert.match(p, /^Revise as mudanças/);
+  assert.match(p, /^Review the changes/);
   assert.match(p, /git log main\.\.ai\/login/);
   assert.match(p, /- [0-9a-f]{7} Cria login/);
-  assert.match(p, /Não commitado \(1\)/);
-  assert.match(p, /Não altere nenhum arquivo\.$/);
+  assert.match(p, /Uncommitted \(1\)/);
+  assert.match(p, /Don't change any file\.$/);
   const free = askPrompt({ ...facts, path: undefined, uncommitted: [] }, 'free', '  Por que mudou o a.txt?  ');
   assert.match(free, /^Por que mudou o a\.txt\?\n/);
-  assert.match(free, /não faça checkout/);
-  assert.match(free, /Se a pergunta não pedir alterações/);
+  assert.match(free, /don't check it out/);
+  assert.match(free, /If the question doesn't ask for changes/);
 });
 
 fs.rmSync(dir, { recursive: true, force: true });

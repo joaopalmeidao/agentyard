@@ -21,8 +21,8 @@ check('cron: listas, faixas e passos', () => {
   assert.deepStrictEqual([...c.hours], [9, 10, 11]);
   assert.deepStrictEqual([...parseCron('*/15 * * * *').minutes], [0, 15, 30, 45]);
   assert.deepStrictEqual([...parseCron('0 8-18/4 * * *').hours], [8, 12, 16]);
-  assert.throws(() => parseCron('61 * * * *'), /intervalo/);
-  assert.throws(() => parseCron('* * *'), /5 campos/);
+  assert.throws(() => parseCron('61 * * * *'), /range/);
+  assert.throws(() => parseCron('* * *'), /5 fields/);
 });
 
 check('próximo horário: mesmo dia, dia seguinte, virada de mês e de ano', () => {
@@ -59,7 +59,23 @@ check('atalhos em português', () => {
   const once = parseWhen('uma vez em 2026-10-01 14:00');
   assert.strictEqual(once.kind, 'once');
   assert.strictEqual(fmt(new Date(once.at)), '2026-10-01 14:00');
-  assert.throws(() => parseWhen('quando der'), /campo|cron/);
+  assert.throws(() => parseWhen('quando der'), /field|cron/);
+});
+
+check('atalhos em inglês', () => {
+  assert.deepStrictEqual(parseWhen('every day at 9am'), { kind: 'cron', expr: '0 9 * * *' });
+  assert.deepStrictEqual(parseWhen('daily at 6:30 pm'), { kind: 'cron', expr: '30 18 * * *' });
+  assert.deepStrictEqual(parseWhen('weekdays at 8:30'), { kind: 'cron', expr: '30 8 * * 1-5' });
+  assert.deepStrictEqual(parseWhen('Every Monday at 10:15'), { kind: 'cron', expr: '15 10 * * 1' });
+  assert.deepStrictEqual(parseWhen('every thurs at 12am'), { kind: 'cron', expr: '0 0 * * 4' });
+  assert.deepStrictEqual(parseWhen('every 2 hours'), { kind: 'cron', expr: '0 */2 * * *' });
+  assert.deepStrictEqual(parseWhen('every 30 min'), { kind: 'cron', expr: '*/30 * * * *' });
+  assert.deepStrictEqual(parseWhen('hourly'), { kind: 'cron', expr: '0 * * * *' });
+  assert.deepStrictEqual(parseWhen('every minute'), { kind: 'cron', expr: '* * * * *' });
+  const once = parseWhen('once on 2026-10-01 2pm');
+  assert.strictEqual(once.kind, 'once');
+  assert.strictEqual(fmt(new Date(once.at)), '2026-10-01 14:00');
+  assert.throws(() => parseWhen('every day at 13pm'), /time/);
 });
 
 check('uma vez: só antes do horário', () => {
@@ -90,9 +106,9 @@ check('template, nome da branch nova e texto relativo', () => {
   assert.strictEqual(renderTemplate('Revise ${branch} contra ${base} em ${date} (${x})', { branch: 'ai/a', base: 'master', date: '2026-09-27' }), 'Revise ai/a contra master em 2026-09-27 (${x})');
   assert.strictEqual(newBranchName('agendado', 'Relatório semanal!', at(2026, 9, 27)), 'agendado/relatorio-semanal-2026-09-27');
   const now = at(2026, 9, 27, 8);
-  assert.strictEqual(relativeTime(at(2026, 9, 27, 9), now), 'hoje 09:00');
-  assert.strictEqual(relativeTime(at(2026, 9, 28, 9), now), 'amanhã 09:00');
-  assert.strictEqual(relativeTime(at(2026, 9, 30, 9), now), 'qua 09:00');
+  assert.strictEqual(relativeTime(at(2026, 9, 27, 9), now), 'today 09:00');
+  assert.strictEqual(relativeTime(at(2026, 9, 28, 9), now), 'tomorrow 09:00');
+  assert.strictEqual(relativeTime(at(2026, 9, 30, 9), now), 'Wed 09:00');
 });
 
 if (failures) process.exit(1);

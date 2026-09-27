@@ -3,6 +3,8 @@
  * para poder ser testado contra um servidor falso (test/issues.test.js).
  */
 
+import { t } from '../i18n';
+
 export type IssueProvider = 'github' | 'gitlab' | 'bitbucket' | 'azure' | 'redmine' | 'jira';
 export type IssueScope = 'mine' | 'all';
 
@@ -35,7 +37,7 @@ export async function callJson<T>(f: Fetch, url: string, init: RequestInit): Pro
   try {
     res = await f(url, init);
   } catch (e) {
-    throw new IssueError(0, `Não consegui falar com ${new URL(url).host}: ${(e as Error).message}`);
+    throw new IssueError(0, t('Could not reach {0}: {1}', new URL(url).host, (e as Error).message));
   }
   const text = await res.text();
   let body: any;
@@ -172,18 +174,19 @@ export function issueTrailer(issue: Pick<Issue, 'provider' | 'id'>): string {
   }
 }
 
+/** Montado ao carregar o módulo (o bundle de tradução do VS Code já está disponível na ativação). */
 export const DEFAULT_ISSUE_PROMPT = [
-  'Trabalhe na issue ${key}: ${title}',
+  t('Work on issue {0}: {1}', '${key}', '${title}'),
   '',
-  'Link: ${url}',
+  t('Link: {0}', '${url}'),
   '',
-  'Descrição da issue:',
+  t('Issue description:'),
   '${body}',
   '',
-  'Você está na worktree da branch ${branch}, criada a partir de ${base}.',
-  'Implemente o que a issue pede, em commits pequenos e com mensagens claras.',
-  'Rode os testes do projeto antes de terminar e corrija o que quebrar.',
-  'No fim, resuma o que mudou, o que ficou de fora e como validar.',
+  t('You are in the worktree of branch {0}, created from {1}.', '${branch}', '${base}'),
+  t('Implement what the issue asks for, in small commits with clear messages.'),
+  t('Run the project\'s tests before finishing and fix whatever breaks.'),
+  t('At the end, summarize what changed, what was left out and how to validate it.'),
 ].join('\n');
 
 export function renderPrompt(template: string, vars: Record<string, string>): string {

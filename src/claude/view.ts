@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { Controller } from '../controller';
 import type { GraphState } from '../model';
+import { locale, t } from '../i18n';
 import {
   currentBlock,
   dailyTotals,
@@ -14,6 +15,7 @@ import {
   renderTranscript,
   scanSessions,
   ScanCache,
+  ClaudeCommand,
   SessionInfo,
   sessionTitle,
   totalTokens,
@@ -28,14 +30,21 @@ const norm = (p: string) => path.normalize(p).replace(/[\\/]+$/, '').toLowerCase
 
 function ago(ms: number): string {
   const s = Math.max(0, (Date.now() - ms) / 1000);
-  if (s < 60) return 'agora';
-  if (s < 3600) return `há ${Math.floor(s / 60)} min`;
-  if (s < 86400) return `há ${Math.floor(s / 3600)} h`;
-  if (s < 86400 * 30) return `há ${Math.floor(s / 86400)} d`;
-  return new Date(ms).toLocaleDateString('pt-BR');
+  if (s < 60) return t('now');
+  if (s < 3600) return t('{0} min ago', Math.floor(s / 60));
+  if (s < 86400) return t('{0} h ago', Math.floor(s / 3600));
+  if (s < 86400 * 30) return t('{0} d ago', Math.floor(s / 86400));
+  return new Date(ms).toLocaleDateString(locale());
 }
 
-const hhmm = (ms: number) => new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+function sourceLabel(source: ClaudeCommand['source']): string {
+  if (source === 'project') return t('project');
+  if (source === 'user') return t('user');
+  if (source === 'builtin') return t('built-in');
+  return source;
+}
+
+const hhmm = (ms: number) => new Date(ms).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
 
 /**
  * Lê os logs do Claude Code em segundo plano (incremental, com cache em disco) e alimenta a view de
@@ -57,12 +66,12 @@ export class ClaudeService implements vscode.Disposable {
 
   constructor(readonly ctl: Controller) {
     this.status.command = 'worktreeGraph.claude.usage';
-    this.status.name = 'Uso do Claude Code';
+    this.status.name = t('Claude Code usage');
     this.loadCache();
     ctl.stateHooks.push(s => this.applyToState(s));
     this.disposables.push(
-      vscode.window.onDidCloseTerminal(t => {
-        for (const [k, v] of this.terminals) if (v === t) this.terminals.delete(k);
+      vscode.window.onDidCloseTerminal(term => {
+        for (const [k, v] of this.terminals) if (v === term) this.terminals.delete(k);
       }),
       vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph.claude') && this.updateStatus()),
     );
@@ -99,7 +108,7 @@ export class ClaudeService implements vscode.Disposable {
         fs.mkdirSync(path.dirname(this.cacheFile()), { recursive: true });
         fs.writeFileSync(this.cacheFile(), JSON.stringify(this.cache));
       } catch (e) {
-        this.ctl.log(`Sessões Claude: não consegui salvar o cache: ${(e as Error).message}`);
+        this.ctl.log(t('Claude sessions: couldn\'t save the cache: {0}', (e as Error).message));
       }
     }, 2000);
   }
@@ -108,7 +117,7 @@ export class ClaudeService implements vscode.Disposable {
     if (this.scanning) return this.scanning;
     const first = !this.loaded;
     if (first) {
-      this.status.text = '$(loading~spin) Claude: lendo sessões…';
+      this.status.text = '$(loading~spin) ' + t('Claude: reading sessions…');
       this.status.show();
     }
     this.scanning = (async () => {
@@ -117,7 +126,7 @@ export class ClaudeService implements vscode.Disposable {
         const r = await scanSessions(this.claudeDir(), this.cache);
         this.sessions = r.sessions;
         if (r.filesRead) this.saveCache();
-        if (first || r.filesRead) this.ctl.log(`Sessões Claude: ${r.sessions.length} sessões, ${r.filesRead} arquivo(s) lidos (${(r.bytesRead / 1e6).toFixed(1)} MB) em ${Date.now() - t0} ms`);
+        if (first || r.filesRead) this.ctl.log(t('Claude sessions: {0} sessions, {1} file(s) read ({2} MB) in {3} ms', r.sessions.length, r.filesRead, (r.bytesRead / 1e6).toFixed(1), Date.now() - t0));
         const changed = first || r.filesRead > 0;
         this.loaded = true;
         this.updateStatus();
@@ -126,7 +135,7 @@ export class ClaudeService implements vscode.Disposable {
           this.ctl.scheduleRefresh(50);
         }
       } catch (e) {
-        this.ctl.log(`Sessões Claude: ${(e as Error).message}`);
+        this.ctl.log(t('Claude sessions: {0}', (e as Error).message));
       }
     })().finally(() => (this.scanning = undefined));
     return this.scanning;
@@ -171,17 +180,17 @@ export class ClaudeService implements vscode.Disposable {
     const week = weekWindow(this.sessions, this.weekMode());
     const pct = (n: number, of: number) => (of > 0 ? ` (${Math.round((n / of) * 100)}%)` : '');
     const blockText = block ? `${formatTokens(block.tokens)}${pct(block.tokens, b.session)}` : '—';
-    this.status.text = `$(sparkle) 5h ${blockText} · sem ${formatTokens(week.tokens)}${pct(week.tokens, b.week)}`;
+    this.status.text = '$(sparkle) ' + t('5h {0} · wk {1}', blockText, `${formatTokens(week.tokens)}${pct(week.tokens, b.week)}`);
     const md = new vscode.MarkdownString(undefined, true);
-    md.appendMarkdown('**Uso do Claude Code** — estimativa a partir dos logs locais\n\n');
+    md.appendMarkdown(t('**Claude Code usage** — estimate from local logs') + '\n\n');
     md.appendMarkdown(
       block
-        ? `Janela atual: **${formatTokens(block.tokens)}** tokens em ${block.responses} respostas, das ${hhmm(block.start)} até **${hhmm(block.end)}** (reinicia)\n\n`
-        : 'Nenhuma janela de 5 h ativa agora.\n\n',
+        ? t('Current window: **{0}** tokens in {1} responses, from {2} to **{3}** (resets)', formatTokens(block.tokens), block.responses, hhmm(block.start), hhmm(block.end)) + '\n\n'
+        : t('No active 5 h window right now.') + '\n\n',
     );
-    md.appendMarkdown(`${this.weekMode() === 'monday' ? 'Desde segunda' : 'Últimos 7 dias'}: **${formatTokens(week.tokens)}** tokens em ${week.responses} respostas\n\n`);
-    md.appendMarkdown('Conta entrada + criação de cache + saída; leitura de cache fica de fora. Os limites oficiais do plano não ficam no disco: use `/usage` no Claude Code para os números exatos.\n\n');
-    if (!b.session && !b.week) md.appendMarkdown('Defina `worktreeGraph.claude.sessionBudgetTokens` e `weeklyBudgetTokens` para ver a porcentagem.');
+    md.appendMarkdown(t('{0}: **{1}** tokens in {2} responses', this.weekMode() === 'monday' ? t('Since Monday') : t('Last 7 days'), formatTokens(week.tokens), week.responses) + '\n\n');
+    md.appendMarkdown(t('Counts input + cache creation + output; cache reads are left out. The plan\'s official limits aren\'t stored on disk: use `/usage` in Claude Code for the exact numbers.') + '\n\n');
+    if (!b.session && !b.week) md.appendMarkdown(t('Set `worktreeGraph.claude.sessionBudgetTokens` and `weeklyBudgetTokens` to see the percentage.'));
     this.status.tooltip = md;
     this.status.show();
   }
@@ -189,9 +198,9 @@ export class ClaudeService implements vscode.Disposable {
   // ---------- ações ----------
 
   private terminalFor(cwd: string, name: string): vscode.Terminal {
-    const t = vscode.window.createTerminal({ name, cwd, iconPath: new vscode.ThemeIcon('sparkle') });
-    this.terminals.set(norm(cwd), t);
-    return t;
+    const term = vscode.window.createTerminal({ name, cwd, iconPath: new vscode.ThemeIcon('sparkle') });
+    this.terminals.set(norm(cwd), term);
+    return term;
   }
 
   private existingDir(...candidates: (string | undefined)[]): string | undefined {
@@ -201,18 +210,18 @@ export class ClaudeService implements vscode.Disposable {
   resume(s: SessionInfo) {
     const cwd = this.existingDir(s.cwd, this.ctl.repo?.root);
     if (!cwd) {
-      vscode.window.showWarningMessage(`A pasta da sessão não existe mais: ${s.cwd}`);
+      vscode.window.showWarningMessage(t('The session folder no longer exists: {0}', s.cwd ?? ''));
       return;
     }
-    const t = this.terminalFor(cwd, `Claude · ${sessionTitle(s).slice(0, 30)}`);
-    t.show();
-    t.sendText(`claude --resume ${s.id}`);
+    const term = this.terminalFor(cwd, `Claude · ${sessionTitle(s).slice(0, 30)}`);
+    term.show();
+    term.sendText(`claude --resume ${s.id}`);
   }
 
   newSession(cwd: string, label?: string) {
-    const t = this.terminalFor(cwd, `Claude · ${label ?? path.basename(cwd)}`);
-    t.show();
-    t.sendText('claude');
+    const term = this.terminalFor(cwd, `Claude · ${label ?? path.basename(cwd)}`);
+    term.show();
+    term.sendText('claude');
   }
 
   async transcript(s: SessionInfo) {
@@ -223,7 +232,7 @@ export class ClaudeService implements vscode.Disposable {
 
   async renderById(id: string): Promise<string> {
     const s = this.sessions.find(x => x.id === id);
-    return s ? renderTranscript(s) : `Sessão ${id} não encontrada.`;
+    return s ? renderTranscript(s) : t('Session {0} not found.', id);
   }
 
   async usagePanel() {
@@ -244,21 +253,21 @@ export class ClaudeService implements vscode.Disposable {
       .sort((a, b) => b.tokens - a.tokens)
       .slice(0, 8);
     const items: vscode.QuickPickItem[] = [
-      { label: 'Janela de 5 h', kind: vscode.QuickPickItemKind.Separator },
+      { label: t('5 h window'), kind: vscode.QuickPickItemKind.Separator },
       block
-        ? { label: `$(pulse) ${formatTokens(block.tokens)} tokens`, description: `${hhmm(block.start)} → reinicia às ${hhmm(block.end)}`, detail: `${block.responses} respostas` }
-        : { label: '$(circle-slash) Nenhuma janela ativa' },
-      { label: this.weekMode() === 'monday' ? 'Desde segunda' : 'Últimos 7 dias', kind: vscode.QuickPickItemKind.Separator },
-      { label: `$(calendar) ${formatTokens(week.tokens)} tokens`, detail: `${week.responses} respostas` },
-      { label: 'Por dia', kind: vscode.QuickPickItemKind.Separator },
+        ? { label: `$(pulse) ${formatTokens(block.tokens)} tokens`, description: t('{0} → resets at {1}', hhmm(block.start), hhmm(block.end)), detail: t('{0} responses', block.responses) }
+        : { label: '$(circle-slash) ' + t('No active window') },
+      { label: this.weekMode() === 'monday' ? t('Since Monday') : t('Last 7 days'), kind: vscode.QuickPickItemKind.Separator },
+      { label: `$(calendar) ${formatTokens(week.tokens)} tokens`, detail: t('{0} responses', week.responses) },
+      { label: t('Per day'), kind: vscode.QuickPickItemKind.Separator },
       ...days.map(d => ({ label: `${d.day.slice(5)}  ${bar(d.tokens)}`, description: formatTokens(d.tokens) })),
-      ...(perWt.length ? [{ label: 'Worktrees que mais usaram na semana', kind: vscode.QuickPickItemKind.Separator } as vscode.QuickPickItem] : []),
+      ...(perWt.length ? [{ label: t('Worktrees that used the most this week'), kind: vscode.QuickPickItemKind.Separator } as vscode.QuickPickItem] : []),
       ...perWt.map(x => ({ label: `$(git-branch) ${this.ctl.state?.worktrees.find(w => w.path === x.p)?.name ?? path.basename(x.p)}`, description: formatTokens(x.tokens) })),
       { label: '', kind: vscode.QuickPickItemKind.Separator },
-      { label: '$(gear) Configurar orçamentos e semana', description: 'worktreeGraph.claude' },
+      { label: '$(gear) ' + t('Configure budgets and week'), description: 'worktreeGraph.claude' },
     ];
     const pick = await vscode.window.showQuickPick(items, {
-      title: 'Uso do Claude Code (estimativa a partir dos logs locais; /usage no Claude mostra os limites oficiais)',
+      title: t('Claude Code usage (estimate from local logs; /usage in Claude shows the official limits)'),
     });
     if (pick?.label.startsWith('$(gear)')) vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.claude');
   }
@@ -269,23 +278,23 @@ export class ClaudeService implements vscode.Disposable {
     const open = this.terminals.get(norm(cwd));
     const alive = open && open.exitStatus === undefined;
     const items: (vscode.QuickPickItem & { run?: () => void })[] = [
-      { label: 'Sessão', kind: vscode.QuickPickItemKind.Separator },
-      { label: '$(debug-continue) Continuar a última sessão aqui', description: 'claude -c', run: () => this.send(cwd, label, 'claude -c', false) },
-      { label: '$(history) Escolher uma sessão para retomar', description: 'claude --resume', run: () => this.send(cwd, label, 'claude --resume', false) },
-      { label: '$(add) Nova sessão', description: 'claude', run: () => this.send(cwd, label, 'claude', false) },
-      { label: alive ? 'Comandos (enviados ao Claude aberto nesta worktree)' : 'Comandos (abrem uma sessão nova)', kind: vscode.QuickPickItemKind.Separator },
-      ...list.map(c => ({ label: c.name, description: c.source, detail: c.description || undefined, run: () => this.send(cwd, label, c.name, true) })),
+      { label: t('Session'), kind: vscode.QuickPickItemKind.Separator },
+      { label: '$(debug-continue) ' + t('Continue the last session here'), description: 'claude -c', run: () => this.send(cwd, label, 'claude -c', false) },
+      { label: '$(history) ' + t('Pick a session to resume'), description: 'claude --resume', run: () => this.send(cwd, label, 'claude --resume', false) },
+      { label: '$(add) ' + t('New session'), description: 'claude', run: () => this.send(cwd, label, 'claude', false) },
+      { label: alive ? t('Commands (sent to the Claude open in this worktree)') : t('Commands (open a new session)'), kind: vscode.QuickPickItemKind.Separator },
+      ...list.map(c => ({ label: c.name, description: sourceLabel(c.source), detail: c.description || undefined, run: () => this.send(cwd, label, c.name, true) })),
     ];
-    const pick = await vscode.window.showQuickPick(items, { title: `Claude Code em ${label}`, matchOnDescription: true, matchOnDetail: true });
+    const pick = await vscode.window.showQuickPick(items, { title: t('Claude Code in {0}', label), matchOnDescription: true, matchOnDetail: true });
     pick?.run?.();
   }
 
   /** `slash`: se já há um Claude aberto nesta worktree, digita o comando nele; senão abre com o comando. */
   private send(cwd: string, label: string, text: string, slash: boolean) {
-    const t = this.terminals.get(norm(cwd));
-    if (slash && t && t.exitStatus === undefined) {
-      t.show();
-      t.sendText(text);
+    const term = this.terminals.get(norm(cwd));
+    if (slash && term && term.exitStatus === undefined) {
+      term.show();
+      term.sendText(text);
       return;
     }
     const nt = this.terminalFor(cwd, `Claude · ${label}`);
@@ -328,13 +337,13 @@ export class SessionItem extends vscode.TreeItem {
     md.appendMarkdown(`**${sessionTitle(session)}**\n\n`);
     if (session.firstPrompt && session.firstPrompt !== sessionTitle(session)) md.appendMarkdown(`> ${session.firstPrompt}\n\n`);
     md.appendMarkdown(`\`${session.id}\`\n\n${session.cwd ?? ''}${session.gitBranch ? ` · ${session.gitBranch}` : ''}\n\n`);
-    md.appendMarkdown(`${new Date(session.start).toLocaleString('pt-BR')} → ${new Date(session.end).toLocaleString('pt-BR')}\n\n`);
-    md.appendMarkdown(`${session.userMessages} mensagens suas · ${session.assistantMessages} respostas · ${session.models.join(', ')}\n\n`);
+    md.appendMarkdown(`${new Date(session.start).toLocaleString(locale())} → ${new Date(session.end).toLocaleString(locale())}\n\n`);
+    md.appendMarkdown(t('{0} messages from you · {1} responses · {2}', session.userMessages, session.assistantMessages, session.models.join(', ')) + '\n\n');
     md.appendMarkdown(
-      `Tokens: entrada ${formatTokens(u.input)} · saída ${formatTokens(u.output)} · criação de cache ${formatTokens(u.cacheCreate)} · leitura de cache ${formatTokens(u.cacheRead)} (total ${formatTokens(totalTokens(u))})`,
+      t('Tokens: input {0} · output {1} · cache creation {2} · cache read {3} (total {4})', formatTokens(u.input), formatTokens(u.output), formatTokens(u.cacheCreate), formatTokens(u.cacheRead), formatTokens(totalTokens(u))),
     );
     this.tooltip = md;
-    this.command = { command: 'worktreeGraph.claude.transcript', title: 'Ver transcrição', arguments: [this] };
+    this.command = { command: 'worktreeGraph.claude.transcript', title: t('View transcript'), arguments: [this] };
   }
 }
 
@@ -356,9 +365,9 @@ export class ClaudeSessionsProvider implements vscode.TreeDataProvider<ClaudeNod
   getChildren(el?: ClaudeNode): ClaudeNode[] {
     if (!el) {
       if (!this.svc.loaded) {
-        const t = new vscode.TreeItem('Lendo sessões do Claude Code…');
-        t.iconPath = new vscode.ThemeIcon('loading~spin');
-        return [t];
+        const item = new vscode.TreeItem(t('Reading Claude Code sessions…'));
+        item.iconPath = new vscode.ThemeIcon('loading~spin');
+        return [item];
       }
       const state = this.svc.ctl.state;
       const m = this.svc.byWorktree();
@@ -371,8 +380,8 @@ export class ClaudeSessionsProvider implements vscode.TreeDataProvider<ClaudeNod
         groups.push(new WorktreeGroup(w.path, w.name, list, w.isCurrent || groups.length === 0));
       }
       const others = this.svc.sessions.filter(s => !inRepo.has(s.id));
-      if (others.length) groups.push(new WorktreeGroup(undefined, 'Outras pastas', others, false));
-      if (!groups.length) groups.push(new vscode.TreeItem('Nenhuma sessão do Claude Code encontrada'));
+      if (others.length) groups.push(new WorktreeGroup(undefined, t('Other folders'), others, false));
+      if (!groups.length) groups.push(new vscode.TreeItem(t('No Claude Code sessions found')));
       return groups;
     }
     if (el instanceof WorktreeGroup) {

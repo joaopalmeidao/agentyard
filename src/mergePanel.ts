@@ -4,6 +4,7 @@ import { analyzeMerge, MergeAnalysis } from './analysis';
 import { resolverName, runResolve } from './conflicts';
 import { Controller } from './controller';
 import { gitUri } from './diff';
+import { locale, t } from './i18n';
 import { describePlan, needsAttention, needsRechain } from './migrations/core';
 import { applyRechain, checkMigrations, MigrationCheck, rechainSideOf } from './migrations/register';
 
@@ -44,7 +45,7 @@ export class MergePanel {
   }
 
   private async load() {
-    this.panel.webview.html = this.html('<div class="empty">Simulando o merge…</div>');
+    this.panel.webview.html = this.html(`<div class="empty">${t('Simulating the merge…')}</div>`);
     try {
       const side = await rechainSideOf(this.ctl, this.source, this.target);
       [this.analysis, this.migrations] = await Promise.all([
@@ -67,11 +68,11 @@ export class MergePanel {
       case 'conflict':
         return vscode.commands.executeCommand('vscode.open', gitUri(root, a.resultTree!, m.path!), { preview: true });
       case 'diff':
-        return vscode.commands.executeCommand('vscode.diff', gitUri(root, a.mergeBase, m.path!), gitUri(root, a.sourceSha, m.path!), `${name(m.path!)} (o que ${a.source} mudou)`);
+        return vscode.commands.executeCommand('vscode.diff', gitUri(root, a.mergeBase, m.path!), gitUri(root, a.sourceSha, m.path!), t('{0} (what {1} changed)', name(m.path!)!, a.source));
       case 'sides':
         return vscode.commands.executeCommand('vscode.diff', gitUri(root, a.targetSha, m.path!), gitUri(root, a.sourceSha, m.path!), `${name(m.path!)} (${a.target} ↔ ${a.source})`);
       case 'targetDiff':
-        return vscode.commands.executeCommand('vscode.diff', gitUri(root, a.mergeBase, m.path!), gitUri(root, a.targetSha, m.path!), `${name(m.path!)} (o que ${a.target} mudou)`);
+        return vscode.commands.executeCommand('vscode.diff', gitUri(root, a.mergeBase, m.path!), gitUri(root, a.targetSha, m.path!), t('{0} (what {1} changed)', name(m.path!)!, a.target));
       case 'merge':
         await this.onMerge(a.source, a.target);
         return this.load();
@@ -79,7 +80,7 @@ export class MergePanel {
         return this.onPublish(a.source);
       case 'rechain':
         if (this.migrations && (await applyRechain(this.ctl, this.migrations, { commit: true }))) {
-          vscode.window.showInformationMessage(`Migrations de ${this.migrations.branch} reencadeadas após ${this.migrations.onto}.`);
+          vscode.window.showInformationMessage(t('Migrations from {0} rechained after {1}.', this.migrations.branch, this.migrations.onto));
         }
         return this.load();
       case 'resolve':
@@ -91,66 +92,66 @@ export class MergePanel {
   private body(a: MergeAnalysis): string {
     const base = this.ctl.state?.base;
     const verdict = a.incoming.length === 0
-      ? { cls: 'ok', text: `${a.target} já contém tudo de ${a.source}.` }
+      ? { cls: 'ok', text: t('{0} already contains everything from {1}.', a.target, a.source) }
       : a.conflicts.length
-        ? { cls: 'bad', text: `Vai dar conflito em ${a.conflicts.length} arquivo(s).` }
+        ? { cls: 'bad', text: t('There will be conflicts in {0} file(s).', a.conflicts.length) }
         : a.fastForward
-          ? { cls: 'ok', text: 'Fast-forward: sem commit de merge, sem conflito.' }
-          : { cls: 'ok', text: 'Merge limpo: nenhum conflito previsto.' };
+          ? { cls: 'ok', text: t('Fast-forward: no merge commit, no conflicts.') }
+          : { cls: 'ok', text: t('Clean merge: no conflicts expected.') };
     const both = a.files.filter(f => f.bothSides && !f.conflict).length;
     const added = a.files.reduce((s, f) => s + f.added, 0);
     const deleted = a.files.reduce((s, f) => s + f.deleted, 0);
 
     const conflicts = a.conflicts.length
-      ? `<section><h2>Conflitos <span class="count">${a.conflicts.length}</span><span class="hint">o arquivo abre como ficaria depois do merge, com os marcadores</span></h2>
+      ? `<section><h2>${t('Conflicts')} <span class="count">${a.conflicts.length}</span><span class="hint">${t('the file opens as it would look after the merge, with the markers')}</span></h2>
         <table class="files">${a.conflicts
           .map(
-            c => `<tr><td class="p">${esc(c.path)}</td><td class="muted">${c.hunks || '?'} trecho(s)</td><td class="row-actions">
-              <button class="primary" data-action="conflict" data-path="${esc(c.path)}">Ver conflito</button>
+            c => `<tr><td class="p">${esc(c.path)}</td><td class="muted">${t('{0} hunk(s)', c.hunks || '?')}</td><td class="row-actions">
+              <button class="primary" data-action="conflict" data-path="${esc(c.path)}">${t('View conflict')}</button>
               <button data-action="sides" data-path="${esc(c.path)}">${esc(a.target)} ↔ ${esc(a.source)}</button>
-              <button data-action="targetDiff" data-path="${esc(c.path)}">O que ${esc(a.target)} mudou</button></td></tr>`,
+              <button data-action="targetDiff" data-path="${esc(c.path)}">${t('What {0} changed', esc(a.target))}</button></td></tr>`,
           )
           .join('')}</table></section>`
       : '';
 
     const mig = this.migrations;
     const migrations = mig && needsAttention(mig.plan)
-      ? `<section><h2>Migrations <span class="chip bad">colidem</span><span class="hint">o git não acusa conflito, mas a cadeia de ${esc(mig.onto)} e a de ${esc(mig.branch)} se cruzam</span></h2>
+      ? `<section><h2>${t('Migrations')} <span class="chip bad">${t('collide')}</span><span class="hint">${t('git reports no conflict, but the chain on {0} and the one on {1} cross', esc(mig.onto), esc(mig.branch))}</span></h2>
         <pre class="muted">${esc(describePlan(mig.plan).join('\n'))}</pre>
-        ${needsRechain(mig.plan) ? `<button class="primary" data-action="rechain">Reencadear as de ${esc(mig.branch)} após ${esc(mig.onto)} (commit)</button>` : ''}</section>`
+        ${needsRechain(mig.plan) ? `<button class="primary" data-action="rechain">${t('Rechain the ones from {0} after {1} (commit)', esc(mig.branch), esc(mig.onto))}</button>` : ''}</section>`
       : '';
 
-    const files = `<section><h2>Arquivos que ${esc(a.source)} altera <span class="count">${a.files.length}</span>
-      <span class="hint"><span class="chip warn">nos dois lados</span> = ${esc(a.target)} também mexeu; revise mesmo sem conflito</span></h2>
+    const files = `<section><h2>${t('Files {0} changes', esc(a.source))} <span class="count">${a.files.length}</span>
+      <span class="hint"><span class="chip warn">${t('on both sides')}</span> = ${t('{0} also touched it; review even without conflicts', esc(a.target))}</span></h2>
       <table class="files">${a.files
         .map(
           f => `<tr><td class="p">${esc(f.path)}</td>
-            <td>${f.conflict ? '<span class="chip bad">conflito</span>' : f.bothSides ? '<span class="chip warn">nos dois lados</span>' : ''}</td>
-            <td class="num">${f.binary ? '<span class="muted">binário</span>' : `<span class="add">+${f.added}</span> <span class="del">−${f.deleted}</span>`}</td>
-            <td class="row-actions"><button data-action="diff" data-path="${esc(f.path)}">Diff</button>${f.bothSides ? `<button data-action="sides" data-path="${esc(f.path)}">Comparar lados</button>` : ''}</td></tr>`,
+            <td>${f.conflict ? `<span class="chip bad">${t('conflict')}</span>` : f.bothSides ? `<span class="chip warn">${t('on both sides')}</span>` : ''}</td>
+            <td class="num">${f.binary ? `<span class="muted">${t('binary')}</span>` : `<span class="add">+${f.added}</span> <span class="del">−${f.deleted}</span>`}</td>
+            <td class="row-actions"><button data-action="diff" data-path="${esc(f.path)}">${t('Diff')}</button>${f.bothSides ? `<button data-action="sides" data-path="${esc(f.path)}">${t('Compare sides')}</button>` : ''}</td></tr>`,
         )
         .join('')}</table></section>`;
 
-    const commits = `<section><h2>Commits que entram <span class="count">${a.incoming.length}</span></h2>
+    const commits = `<section><h2>${t('Incoming commits')} <span class="count">${a.incoming.length}</span></h2>
       <table class="files">${a.incoming
         .map(c => `<tr><td class="sha">${c.sha.slice(0, 7)}</td><td class="p">${esc(c.subject)}</td><td class="muted">${esc(c.author)}</td><td class="muted">${ago(c.date)}</td></tr>`)
         .join('')}</table></section>`;
 
     const canPublish = a.target === base && this.ctl.requests?.remote;
-    return `<header class="toolbar"><div class="title"><span class="repo">Analisar merge</span>
+    return `<header class="toolbar"><div class="title"><span class="repo">${t('Analyze merge')}</span>
         <span class="ref ref-head">${esc(a.source)}</span> <span class="muted">→</span> <span class="ref ref-base">${esc(a.target)}</span></div>
       <div class="tools">
-        ${canPublish ? `<button data-action="publish">Publicar ${this.ctl.requests?.label ?? 'PR'}</button>` : ''}
-        ${a.conflicts.length ? `<button data-action="resolve" class="agent" title="Abre o agente na worktree com a tarefa de trazer ${esc(a.target === this.ctl.state?.base ? a.target : a.source)} e resolver os conflitos">✦ Pedir ao ${esc(resolverName(this.ctl))} para mesclar e resolver</button>` : ''}
-        <button data-action="merge" class="primary" ${a.incoming.length ? '' : 'disabled'}>Mesclar ${esc(a.source)} em ${esc(a.target)}</button>
-        <button data-action="refresh" title="Refazer a simulação">↻</button></div></header>
+        ${canPublish ? `<button data-action="publish">${t('Publish {0}', this.ctl.requests?.label ?? 'PR')}</button>` : ''}
+        ${a.conflicts.length ? `<button data-action="resolve" class="agent" title="${t('Opens the agent in the worktree with the task of bringing in {0} and resolving the conflicts', esc(a.target === this.ctl.state?.base ? a.target : a.source))}">✦ ${t('Ask {0} to merge and resolve', esc(resolverName(this.ctl)))}</button>` : ''}
+        <button data-action="merge" class="primary" ${a.incoming.length ? '' : 'disabled'}>${t('Merge {0} into {1}', esc(a.source), esc(a.target))}</button>
+        <button data-action="refresh" title="${t('Run the simulation again')}">↻</button></div></header>
       <div class="verdict ${verdict.cls}">${esc(verdict.text)}</div>
       <div class="stats">
-        <div><b>${a.incoming.length}</b><span>commits entram</span></div>
-        <div><b>${a.behind}</b><span>commits de ${esc(a.target)} que ${esc(a.source)} não tem</span></div>
-        <div><b>${a.files.length}</b><span>arquivos (<span class="add">+${added}</span> <span class="del">−${deleted}</span>)</span></div>
-        <div class="${a.conflicts.length ? 'bad' : ''}"><b>${a.conflicts.length}</b><span>com conflito</span></div>
-        <div class="${both ? 'warn' : ''}"><b>${both}</b><span>alterados nos dois lados sem conflito</span></div>
+        <div><b>${a.incoming.length}</b><span>${t('incoming commits')}</span></div>
+        <div><b>${a.behind}</b><span>${t('commits on {0} that {1} does not have', esc(a.target), esc(a.source))}</span></div>
+        <div><b>${a.files.length}</b><span>${t('files ({0})', `<span class="add">+${added}</span> <span class="del">−${deleted}</span>`)}</span></div>
+        <div class="${a.conflicts.length ? 'bad' : ''}"><b>${a.conflicts.length}</b><span>${t('with conflicts')}</span></div>
+        <div class="${both ? 'warn' : ''}"><b>${both}</b><span>${t('changed on both sides without conflicts')}</span></div>
       </div>
       ${conflicts}${migrations}${a.files.length ? files : ''}${a.incoming.length ? commits : ''}`;
   }
@@ -159,7 +160,7 @@ export class MergePanel {
     const w = this.panel.webview;
     const nonce = crypto.randomBytes(16).toString('base64');
     const css = w.asWebviewUri(vscode.Uri.joinPath(this.ctl.ctx.extensionUri, 'media', 'graph.css'));
-    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    return `<!DOCTYPE html><html lang="${locale()}"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${w.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${css}"></head><body>${body}
 <script nonce="${nonce}">

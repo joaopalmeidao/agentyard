@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { locale, t } from '../i18n';
 
 /**
  * Ambiente por worktree, sem depender do VS Code: portas, .env, setup e espaço em disco.
@@ -49,7 +50,7 @@ export function rewriteEnv(text: string, vars: Record<string, string>): string {
   if (missing.length) {
     while (out.length && out[out.length - 1] === '') out.pop();
     if (out.length) out.push('');
-    out.push('# portas desta worktree (AgentYard)');
+    out.push(t('# ports for this worktree (AgentYard)'));
     for (const k of missing) out.push(`${k}=${vars[k]}`);
   }
   return out.join(eol) + eol;
@@ -136,7 +137,7 @@ export async function dirSize(root: string, deadline = Date.now() + 5000): Promi
   return { bytes, complete: true };
 }
 
-/** "1,2 GB", "340 MB", "12 KB" (pt-BR). */
+/** "1,2 GB", "340 MB", "12 KB" (separador decimal do idioma da interface). */
 export function formatBytes(b: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let i = 0;
@@ -145,6 +146,6 @@ export function formatBytes(b: number): string {
     v /= 1024;
     i++;
   }
-  const s = v >= 100 || i === 0 ? Math.round(v).toString() : v.toFixed(1).replace('.', ',');
+  const s = v >= 100 || i === 0 ? Math.round(v).toString() : v.toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false });
   return `${s} ${units[i]}`;
 }

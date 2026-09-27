@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import * as actions from '../actions';
 import type { AgentTerminals } from '../agents';
 import type { Controller } from '../controller';
+import { t } from '../i18n';
 import type { Issue } from '../issues/core';
 import { DEFAULT_ISSUE_PROMPT, renderPrompt } from '../issues/core';
 import { Attempts } from './attempts';
@@ -43,19 +44,26 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     if (!ctl.cfg().get<boolean>('agents.notifyReady', true)) return;
     const name = r.branch ?? path.basename(r.path);
     const L = ctl.requests.label;
+    const review = t('Review');
+    const analyze = t('Analyze merge');
+    const publish = t('Publish {0}', L);
+    const openTerminal = t('Open terminal');
     const pick = await vscode.window.showInformationMessage(
-      `✓ ${name}: o agente terminou${r.commits ? ` (${r.commits} commit(s) novos)` : ''}. Pronto para revisar.`,
-      'Revisar',
-      'Analisar merge',
-      `Publicar ${L}`,
-      'Abrir terminal',
+      '✓ ' +
+        (r.commits
+          ? t('{0}: the agent finished ({1} new commit(s)). Ready for review.', name, r.commits)
+          : t('{0}: the agent finished. Ready for review.', name)),
+      review,
+      analyze,
+      publish,
+      openTerminal,
     );
     if (!pick) return;
-    if (pick !== 'Abrir terminal') await watch.clearReady(r.path);
-    if (pick === 'Revisar' && r.branch) await actions.diffWithBase(ctl, r.branch);
-    if (pick === 'Analisar merge' && r.branch) await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', r.branch);
-    if (pick === `Publicar ${L}` && r.branch) await ctl.requests.publish(r.branch);
-    if (pick === 'Abrir terminal') await actions.openTerminal(ctl, { path: r.path });
+    if (pick !== openTerminal) await watch.clearReady(r.path);
+    if (pick === review && r.branch) await actions.diffWithBase(ctl, r.branch);
+    if (pick === analyze && r.branch) await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', r.branch);
+    if (pick === publish && r.branch) await ctl.requests.publish(r.branch);
+    if (pick === openTerminal) await actions.openTerminal(ctl, { path: r.path });
   };
 
   const watch = new AgentWatch(ctl, agentTerms, r => void notify(r));
@@ -86,7 +94,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
 
   reg('tasks.add', async (arg?: Arg, text?: string) => {
-    const wt = await resolveWorktree(ctl, arg, 'Adicionar tarefa em qual worktree?');
+    const wt = await resolveWorktree(ctl, arg, t('Add a task to which worktree?'));
     if (wt) await tasks.add(wt.path, wt.branch, text);
   });
   reg('tasks.runNow', (it: TaskItem) => it && tasks.run(it.q.path, it.task.id));
@@ -99,10 +107,10 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
   reg('agents.checkReady', async (arg?: Arg) => {
     const wt = typeof arg === 'object' || typeof arg === 'string' ? await resolveWorktree(ctl, arg, '') : undefined;
     const any = await watch.checkNow(wt?.path);
-    if (!any) vscode.window.showInformationMessage('Nenhum agente pronto: ainda sem commits novos, ou a worktree tem alterações não commitadas.');
+    if (!any) vscode.window.showInformationMessage(t('No agent ready: no new commits yet, or the worktree has uncommitted changes.'));
   });
   reg('agents.dismissReady', async (arg?: Arg) => {
-    const wt = await resolveWorktree(ctl, arg, 'Tirar o "pronto para revisar" de qual worktree?');
+    const wt = await resolveWorktree(ctl, arg, t('Remove "ready for review" from which worktree?'));
     if (wt) await watch.clearReady(wt.path);
   });
   reg('attempts.try', (o?: { prompt?: string; title?: string; n?: number; variations?: string[]; quiet?: boolean }) => attempts.tryApproaches(o ?? {}));
@@ -111,7 +119,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     if (!issue) return attempts.tryApproaches();
     const { base } = await ctl.base();
     const template = ctl.cfg().get<string>('prompts.issue', '') || DEFAULT_ISSUE_PROMPT;
-    const prompt = renderPrompt(template, { key: issue.key, title: issue.title, body: issue.body || '(sem descrição)', url: issue.url, branch: '(uma por tentativa)', base });
+    const prompt = renderPrompt(template, { key: issue.key, title: issue.title, body: issue.body || t('(no description)'), url: issue.url, branch: t('(one per attempt)'), base });
     return attempts.tryApproaches({ title: `${issue.key} ${issue.title}`, prompt });
   });
   reg('attempts.compare', () => attempts.pickAndCompare());

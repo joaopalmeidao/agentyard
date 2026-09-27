@@ -67,7 +67,7 @@ exports.run = async () => {
     const root = await tree.getChildren();
     const labels = root.map(n => (typeof n.label === 'string' ? n.label : n.label.label));
     // principal primeiro, depois as mais recentes
-    assert.deepStrictEqual(labels, ['master', 'ai/precos-promo', 'ai/refatorar-api', 'ai/login-oauth', 'Branches sem worktree', 'Stashes']);
+    assert.deepStrictEqual(labels, ['master', 'ai/precos-promo', 'ai/refatorar-api', 'ai/login-oauth', 'Branches without a worktree', 'Stashes']);
     // os grupos da worktree dependem do estado detalhado (alterações, à frente), que chega em segundo plano
     await until(() => ctl.state.pending === 0, 30000);
   });
@@ -113,7 +113,7 @@ exports.run = async () => {
     const text = await vscode.env.clipboard.readText();
     assert.match(text, /^# ai\/login-oauth/);
     assert.ok(text.includes(commits[0].label), 'resumo traz o commit mais recente');
-    assert.match(text, /## Não commitado/);
+    assert.match(text, /## Uncommitted changes/);
   });
 
   await check('árvore: navegar pasta da worktree e abrir arquivo', async () => {
@@ -226,7 +226,7 @@ exports.run = async () => {
     const before = vscode.window.terminals.length;
     await vscode.commands.executeCommand('worktreeGraph.resolveConflict', 'ai/precos-promo');
     await until(() => vscode.window.terminals.length === before + 1);
-    const t = vscode.window.terminals.find(x => x.name === 'Eco · ai/precos-promo · tarefa');
+    const t = vscode.window.terminals.find(x => x.name === 'Eco · ai/precos-promo · task');
     assert.ok(t, 'terminal da tarefa');
     assert.strictEqual(t.creationOptions.cwd, wt.path);
     const text = fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8');
@@ -239,7 +239,7 @@ exports.run = async () => {
     const before = vscode.window.terminals.length;
     await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { branch: 'ai/login-oauth', prompt: 'linha 1\nlinha 2' });
     await until(() => vscode.window.terminals.length === before + 1);
-    assert.ok(vscode.window.terminals.some(x => x.name === 'Eco · ai/login-oauth · tarefa'));
+    assert.ok(vscode.window.terminals.some(x => x.name === 'Eco · ai/login-oauth · task'));
     assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'linha 1\nlinha 2');
   });
 
@@ -281,7 +281,7 @@ exports.run = async () => {
     const wt = ctl.state.worktrees.find(w => w.branch === 'issue/99-teste-de-issue');
     assert.ok(wt, 'worktree criada');
     // com launchAgentWithPrompt disponível, o prompt vai para o agente (arquivo da tarefa)
-    await until(() => api.agentTerms.lastPromptFile && require('fs').readFileSync(api.agentTerms.lastPromptFile, 'utf8').includes('Trabalhe na issue #99: Teste de issue'));
+    await until(() => api.agentTerms.lastPromptFile && require('fs').readFileSync(api.agentTerms.lastPromptFile, 'utf8').includes('Work on issue #99: Teste de issue'));
     assert.deepStrictEqual(api.issues.trailers('issue/99-teste-de-issue'), ['Closes #99']);
     // de novo: reaproveita a worktree, não cria outra
     await api.issues.start(issue, false);
@@ -337,7 +337,7 @@ exports.run = async () => {
     const { PipelineTreeProvider } = require('../out/hosting/pipelinesView');
     const kids = await new PipelineTreeProvider(api.pipelines).getChildren();
     assert.strictEqual(kids.length, 1);
-    assert.ok(String(kids[0].label).includes('Remoto'), String(kids[0].label));
+    assert.ok(String(kids[0].label).includes('Remote'), String(kids[0].label));
     // dados injetados: o gancho do estado escolhe o mais recente por branch
     const now = Math.floor(Date.now() / 1000);
     api.pipelines.pipelines = [
@@ -355,7 +355,7 @@ exports.run = async () => {
   await check('atividade: painel abre e soma commits e tokens por branch; custo por tarefa com preço', async () => {
     await until(() => api.claude.loaded, 20000);
     await vscode.commands.executeCommand('worktreeGraph.activity');
-    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Atividade');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Activity');
     const week = await api.activity.compute('week');
     const row = week.report.rows.find(r => r.branch === 'ai/login-oauth');
     assert.ok(row, 'linha da worktree com sessão sintética');
@@ -525,7 +525,7 @@ exports.run = async () => {
       answers = [undefined];
       ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'master', { confirm: false, quiet: true });
       assert.strictEqual(ok, false, 'require-pr bloqueia');
-      assert.ok(seen.some(m => m.includes('master é protegida')), seen.join(' | '));
+      assert.ok(seen.some(m => m.includes('master is protected')), seen.join(' | '));
       await cfg.update('protection.mode', 'confirm', G);
       typed = 'errado';
       ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'master', { confirm: false, quiet: true });
@@ -542,7 +542,7 @@ exports.run = async () => {
       guards.lastReminder = undefined;
       guards.maybeRemind();
       assert.ok(guards.lastReminder && guards.lastReminder.stale >= 1, JSON.stringify(guards.lastReminder));
-      assert.ok(seen.some(m => /worktrees sobrando/.test(m)));
+      assert.ok(seen.some(m => /leftover worktrees/.test(m)));
       const again = guards.lastReminder.at;
       guards.maybeRemind();
       assert.strictEqual(guards.lastReminder.at, again, 'no máximo um aviso por dia');
@@ -591,10 +591,10 @@ exports.run = async () => {
   await check('tentativas: cria worktrees try/* com agente em cada e abre o painel de comparação', async () => {
     const g = await api.agentFlow.attempts.tryApproaches({ prompt: 'Implementar cache de preços', n: 2, quiet: true });
     assert.deepStrictEqual(g.attempts.map(a => a.branch), ['try/implementar-cache-de-precos-a', 'try/implementar-cache-de-precos-b']);
-    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Tentativas: Implementar cache de preços');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Attempts: Implementar cache de preços');
     await ctl.refresh();
     assert.ok(ctl.state.worktrees.some(w => w.branch === 'try/implementar-cache-de-precos-b'));
-    assert.ok(vscode.window.terminals.some(t => t.name === 'Eco · try/implementar-cache-de-precos-a · tarefa'));
+    assert.ok(vscode.window.terminals.some(t => t.name === 'Eco · try/implementar-cache-de-precos-a · task'));
     assert.strictEqual(api.agentFlow.attempts.groups()[0].attempts[1].variation.length > 0, true, 'B recebe uma variação');
   });
 
@@ -700,7 +700,7 @@ exports.run = async () => {
     prs.svc.resetForProject();
     await prs.svc.refresh(true);
     let root = await prs.tree.getChildren();
-    if (!ctl.requests.remote) assert.ok(String(root[0].label).startsWith('Conectar'), String(root[0].label));
+    if (!ctl.requests.remote) assert.ok(String(root[0].label).startsWith('Connect'), String(root[0].label));
 
     // remoto local com uma branch que ainda não existe aqui
     const repoRoot = ctl.repo.root;
@@ -722,12 +722,12 @@ exports.run = async () => {
     await prs.svc.refresh(true);
     root = await prs.tree.getChildren();
     const labels = root.map(n => `${n.label}:${n.description}`);
-    assert.deepStrictEqual(labels, ['Meus:1', 'Pedem minha revisão:1', 'Abertos:2', 'Mesclados (7 dias):0']);
+    assert.deepStrictEqual(labels, ['Mine:1', 'Awaiting my review:1', 'All open:2', 'Merged (7 days):0']);
     const mine = await prs.tree.getChildren(root[0]);
     assert.ok(String(mine[0].label).startsWith('#1'), String(mine[0].label));
     assert.ok(mine[0].contextValue.includes('nowt'));
     const rev = await prs.tree.getChildren(root[1]);
-    assert.ok(rev[0].description.includes('mudanças pedidas'), rev[0].description);
+    assert.ok(rev[0].description.includes('changes requested'), rev[0].description);
 
     await vscode.commands.executeCommand('worktreeGraph.pullRequests.bringWorktree', '#1');
     await ctl.refresh();
@@ -789,7 +789,7 @@ exports.run = async () => {
     await sch.tick();
     assert.ok(before >= 0);
     try {
-      await until(() => vscode.window.terminals.some(x => x.name === 'Eco · sched/limpa · tarefa'), 15000);
+      await until(() => vscode.window.terminals.some(x => x.name === 'Eco · sched/limpa · task'), 15000);
     } catch {
       assert.fail(`terminal da tarefa não abriu: ${vscode.window.terminals.map(x => x.name).join(' | ')} · histórico: ${JSON.stringify(sch.history().slice(0, 3))}`);
     }
@@ -813,7 +813,7 @@ exports.run = async () => {
     const byBranch = Object.fromEntries(res.map(x => [x.target, x.result]));
     assert.strictEqual(byBranch['sched/suja'], 'skipped', JSON.stringify(res));
     assert.strictEqual(byBranch['sched/limpa'], 'skipped', 'já há agente aberto (do passo 1)');
-    assert.ok(sch.history().some(h => h.scheduleId === 'teste-limpa' && /alteraç/.test(h.message)), JSON.stringify(sch.history().filter(h => h.scheduleId === 'teste-limpa')));
+    assert.ok(sch.history().some(h => h.scheduleId === 'teste-limpa' && /change/.test(h.message)), JSON.stringify(sch.history().filter(h => h.scheduleId === 'teste-limpa')));
     await sch.remove('teste-limpa');
 
     // 4. horário perdido com política "pular": registra e não executa
@@ -937,7 +937,7 @@ exports.run = async () => {
     for (const b of ['ai/login-oauth', 'ai/precos-promo', 'ai/refatorar-api']) assert.ok(names.includes(b), names.join(','));
     assert.deepStrictEqual((await api.delivery.timeline(30, 'ai/*')).every(r => r.branch.startsWith('ai/')), true);
     await vscode.commands.executeCommand('worktreeGraph.timeline');
-    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Linha do tempo');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Timeline');
   });
 
   await check('entrega: relatório do dia lista as branches com commits hoje', async () => {
@@ -945,7 +945,7 @@ exports.run = async () => {
     const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
     execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "feat: ajuste do relatório"', { cwd: wt.path });
     const md = await api.delivery.report('today');
-    assert.ok(md.startsWith('# Relatório de hoje'), md.slice(0, 80));
+    assert.ok(md.startsWith('# Report for today'), md.slice(0, 80));
     assert.ok(md.includes('### `ai/precos-promo`'), md);
     assert.ok(md.includes('feat: ajuste do relatório'));
   });
@@ -972,7 +972,7 @@ exports.run = async () => {
     const cl = fs.readFileSync(path.join(clone, 'CHANGELOG.md'), 'utf8');
     assert.ok(cl.indexOf('## 1.2.0') < cl.indexOf('## 1.1.0') && cl.includes('versão anterior'), cl);
     assert.ok(cl.includes('**api:** rota nova'), cl);
-    assert.strictEqual(g('log -1 --format=%s'), 'Versão 1.2.0');
+    assert.strictEqual(g('log -1 --format=%s'), 'Version 1.2.0');
     // o repositório da demo não ganhou tag
     assert.strictEqual(execSync('git tag', { cwd: ctl.repo.root, encoding: 'utf8' }).includes('v1.2.0'), false);
     try {
@@ -995,7 +995,7 @@ exports.run = async () => {
     assert.ok(!candidates.includes('master') && !candidates.some(b => b.startsWith('ai/')), 'base e branches de worktree ficam');
 
     const original = vscode.window.showWarningMessage;
-    const stub = async () => 'Excluir branches';
+    const stub = async () => 'Delete branches';
     vscode.window.showWarningMessage = stub;
     assert.strictEqual(vscode.window.showWarningMessage, stub, 'consegue substituir o diálogo');
     try {

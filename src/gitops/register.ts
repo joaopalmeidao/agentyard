@@ -6,6 +6,7 @@ import { createWorktree } from '../actions';
 import type { Controller } from '../controller';
 import { gitUri } from '../diff';
 import { Worktree } from '../git';
+import { t } from '../i18n';
 import { extraTree } from '../treeView';
 import {
   buildTodo,
@@ -45,7 +46,7 @@ class StashGroup extends vscode.TreeItem {
     this.id = 'stashes';
     this.iconPath = new vscode.ThemeIcon('archive');
     this.contextValue = 'stashGroup';
-    this.tooltip = 'Alterações guardadas com git stash (compartilhadas por todas as worktrees do repositório)';
+    this.tooltip = t('Changes saved with git stash (shared by all worktrees in the repository)');
   }
 }
 
@@ -58,7 +59,7 @@ class StashItem extends vscode.TreeItem {
     this.tooltip = `${entry.ref}\n${entry.message}`;
     this.iconPath = new vscode.ThemeIcon('git-stash');
     this.contextValue = 'stash';
-    this.command = { command: 'worktreeGraph.stashShow', title: 'Ver diff', arguments: [this] };
+    this.command = { command: 'worktreeGraph.stashShow', title: t('Show diff'), arguments: [this] };
   }
 }
 
@@ -76,7 +77,7 @@ export class GitOps implements vscode.Disposable {
   }
 
   private get repo() {
-    if (!this.ctl.repo) throw new Error('Nenhum repositório git aberto.');
+    if (!this.ctl.repo) throw new Error(t('No git repository open.'));
     return this.ctl.repo;
   }
 
@@ -98,7 +99,7 @@ export class GitOps implements vscode.Disposable {
       const w = await this.worktreeOf(b);
       return w ? { path: w.path, branch: b } : undefined;
     }
-    return this.pickWorktree('Em qual worktree?');
+    return this.pickWorktree(t('In which worktree?'));
   }
 
   async pickWorktree(placeHolder: string, exclude?: string): Promise<{ path: string; branch?: string } | undefined> {
@@ -126,22 +127,26 @@ export class GitOps implements vscode.Disposable {
   private async onConflict(op: 'merge' | 'cherry-pick' | 'rebase', wtPath: string, branch: string | undefined, what: string) {
     const files = await this.repo.conflictedFiles(wtPath);
     const agent = this.ctl.cfg().get<{ name: string }[]>('agents', [])[0]?.name ?? 'Claude Code';
+    const list = `${files.slice(0, 5).join(', ')}${files.length > 5 ? '…' : ''}`;
+    const openFiles = t('Open files');
     const pick = await vscode.window.showWarningMessage(
-      `Conflito ao ${what}${branch ? ` em ${branch}` : ''}: ${files.slice(0, 5).join(', ')}${files.length > 5 ? '…' : ''}. O ${op} ficou em andamento na worktree.`,
-      `✦ Resolver com ${agent}`,
-      'Abrir arquivos',
-      `Abortar ${op}`,
+      branch
+        ? t('Conflict while {0} on {1}: {2}. The {3} is still in progress in the worktree.', what, branch, list, op)
+        : t('Conflict while {0}: {1}. The {2} is still in progress in the worktree.', what, list, op),
+      t('✦ Resolve with {0}', agent),
+      openFiles,
+      t('Abort {0}', op),
     );
     if (!pick) return;
     if (pick.startsWith('✦')) {
       const prompt = [
-        `Na worktree da branch ${branch ?? path.basename(wtPath)} há um ${op} em andamento com conflito em: ${files.join(', ')}.`,
-        `Contexto: ${what}.`,
-        `Resolva os conflitos preservando a intenção das duas mudanças, rode os testes do projeto, faça git add dos arquivos resolvidos e continue com git ${op} --continue.`,
-        'Se algo for ambíguo, pergunte antes de decidir.',
+        t('In the worktree of branch {0} there is a {1} in progress with conflicts in: {2}.', branch ?? path.basename(wtPath), op, files.join(', ')),
+        t('Context: {0}.', what),
+        t('Resolve the conflicts preserving the intent of both changes, run the project tests, git add the resolved files and continue with git {0} --continue.', op),
+        t('If anything is ambiguous, ask before deciding.'),
       ].join('\n');
       await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: wtPath, branch, prompt });
-    } else if (pick === 'Abrir arquivos') {
+    } else if (pick === openFiles) {
       for (const f of files.slice(0, 20)) await vscode.window.showTextDocument(vscode.Uri.file(path.join(wtPath, f)), { preview: false });
     } else {
       await this.repo.run([op, '--abort'], wtPath);
@@ -157,7 +162,7 @@ export class GitOps implements vscode.Disposable {
     const remote = this.remoteName();
     const upstream = await repo.upstream(branch);
     if (!upstream) {
-      if (!opts.quiet) vscode.window.showInformationMessage(`${branch} ainda não foi publicada; não há o que trazer.`);
+      if (!opts.quiet) vscode.window.showInformationMessage(t('{0} has not been published yet; there is nothing to pull.', branch));
       return false;
     }
     const remoteBranch = upstream.startsWith(`${remote}/`) ? upstream.slice(remote.length + 1) : upstream.split('/').slice(1).join('/');
@@ -167,37 +172,39 @@ export class GitOps implements vscode.Disposable {
 
     if (!wt) {
       // sem worktree: avança a ref local só se for fast-forward (sem "+" no refspec)
-      const r = await progress(`Trazendo ${upstream}…`, () => repo.run(['fetch', remote, `refs/heads/${remoteBranch}:refs/heads/${branch}`], repo.root, 300_000));
+      const r = await progress(t('Pulling {0}…', upstream), () => repo.run(['fetch', remote, `refs/heads/${remoteBranch}:refs/heads/${branch}`], repo.root, 300_000));
       if (r.code === 0) return this.pulled(branch, opts.quiet);
       if (!opts.quiet) {
         const go = await vscode.window.showWarningMessage(
-          `${branch} e ${upstream} divergiram; sem worktree não dá para mesclar aqui.`,
-          'Criar worktree para mesclar',
+          t('{0} and {1} have diverged; without a worktree they cannot be merged here.', branch, upstream),
+          t('Create worktree to merge'),
         );
         if (go) {
           await createWorktree(this.ctl, { existing: branch, quiet: true });
           return this.pull(branch);
         }
       }
-      this.ctl.log(`pull ${branch} (sem worktree) falhou: ${(r.stderr || r.stdout).trim()}`);
+      this.ctl.log(t('pull {0} (no worktree) failed: {1}', branch, (r.stderr || r.stdout).trim()));
       return false;
     }
 
     const st = await repo.status(wt.path);
     if (st.operation) {
-      if (!opts.quiet) vscode.window.showWarningMessage(`${branch} está no meio de um ${st.operation}; termine ou aborte antes.`);
+      if (!opts.quiet) vscode.window.showWarningMessage(t('{0} is in the middle of a {1}; finish or abort it first.', branch, st.operation));
       return false;
     }
     let stashed: string | undefined;
+    // mensagem do stash: o prefixo "worktree-graph:" fica fixo, o resto segue o idioma
+    const stashMsg = 'worktree-graph: ' + t('before pulling {0}', upstream);
     if (st.changes > 0) {
       if (opts.quiet) return false;
       const go = await vscode.window.showWarningMessage(
-        `${branch} tem ${st.changes} alteração(ões) não commitada(s).`,
-        { modal: true, detail: 'Dá para guardar as alterações num stash, trazer o remoto e devolvê-las em seguida.' },
-        'Guardar, trazer e devolver',
+        t('{0} has {1} uncommitted change(s).', branch, st.changes),
+        { modal: true, detail: t('The changes can be stashed, the remote pulled and the changes restored afterwards.') },
+        t('Stash, pull and restore'),
       );
       if (!go) return false;
-      stashed = await this.stashCreate(wt.path, `worktree-graph: antes de trazer ${upstream}`, { quiet: true });
+      stashed = await this.stashCreate(wt.path, stashMsg, { quiet: true });
     }
 
     let r = await progress(`git pull --ff-only ${upstream}…`, () => repo.run(['pull', '--ff-only', remote, remoteBranch], wt.path, 300_000));
@@ -205,14 +212,14 @@ export class GitOps implements vscode.Disposable {
       const err = (r.stderr || r.stdout).trim();
       const diverged = /fast-forward|diverg/i.test(err);
       if (!diverged || opts.quiet) {
-        if (!opts.quiet) vscode.window.showErrorMessage(`Não consegui trazer ${upstream}: ${err}`);
-        this.ctl.log(`pull ${branch} falhou: ${err}`);
+        if (!opts.quiet) vscode.window.showErrorMessage(t('Could not pull {0}: {1}', upstream, err));
+        this.ctl.log(t('pull {0} failed: {1}', branch, err));
         if (stashed) await this.stashApply(stashed, wt.path, true, { quiet: true });
         return false;
       }
       const how = await vscode.window.showWarningMessage(
-        `${branch} e ${upstream} divergiram (commits dos dois lados).`,
-        { modal: true, detail: 'Merge cria um commit juntando os dois lados. Rebase reaplica os seus commits por cima do remoto (reescreve o histórico local).' },
+        t('{0} and {1} have diverged (commits on both sides).', branch, upstream),
+        { modal: true, detail: t('Merge creates a commit joining both sides. Rebase replays your commits on top of the remote (rewrites local history).') },
         'Merge',
         'Rebase',
       );
@@ -225,15 +232,15 @@ export class GitOps implements vscode.Disposable {
         repo.run(['pull', op === 'merge' ? '--no-rebase' : '--rebase', '--no-edit', remote, remoteBranch], wt.path, 300_000),
       );
       if (r.code !== 0) {
-        if ((await repo.conflictedFiles(wt.path)).length) await this.onConflict(op, wt.path, branch, `trazer ${upstream}`);
-        else vscode.window.showErrorMessage(`O pull falhou: ${(r.stderr || r.stdout).trim()}`);
-        if (stashed) vscode.window.showInformationMessage(`Suas alterações estão guardadas no stash "${`worktree-graph: antes de trazer ${upstream}`}"; aplique depois de resolver.`);
+        if ((await repo.conflictedFiles(wt.path)).length) await this.onConflict(op, wt.path, branch, t('pulling {0}', upstream));
+        else vscode.window.showErrorMessage(t('Pull failed: {0}', (r.stderr || r.stdout).trim()));
+        if (stashed) vscode.window.showInformationMessage(t('Your changes are saved in the stash "{0}"; apply it after resolving.', stashMsg));
         this.ctl.scheduleRefresh(50);
         return false;
       }
     }
     if (stashed && !(await this.stashApply(stashed, wt.path, true, { quiet: true }))) {
-      vscode.window.showWarningMessage(`${upstream} foi trazido, mas devolver suas alterações deu conflito; elas continuam no stash.`);
+      vscode.window.showWarningMessage(t('{0} was pulled, but restoring your changes conflicted; they are still in the stash.', upstream));
     }
     return this.pulled(branch, opts.quiet);
   }
@@ -241,7 +248,7 @@ export class GitOps implements vscode.Disposable {
   private pulled(branch: string, quiet?: boolean) {
     this.ctl.log(`pull ${branch}: ok`);
     this.ctl.scheduleRefresh(50);
-    if (!quiet) vscode.window.setStatusBarMessage(`$(cloud-download) ${branch} em dia com o remoto`, 4000);
+    if (!quiet) vscode.window.setStatusBarMessage(t('$(cloud-download) {0} is up to date with the remote', branch), 4000);
     return true;
   }
 
@@ -258,23 +265,23 @@ export class GitOps implements vscode.Disposable {
   async pullMany() {
     const list = this.behindList();
     if (!list.length) {
-      vscode.window.showInformationMessage('Nenhuma branch com novidades no remoto (faça um fetch para conferir).', 'Fetch agora').then(g => g && this.fetchNow());
+      vscode.window.showInformationMessage(t('No branch has news on the remote (fetch to check).'), t('Fetch now')).then(g => void (g && this.fetchNow()));
       return;
     }
     const items = list.map(x => ({
       label: x.name,
-      description: [`↓${x.behind}`, x.ahead ? `↑${x.ahead} local (vai pedir merge/rebase)` : 'fast-forward', x.wt ? (x.clean ? 'worktree limpa' : 'worktree com alterações') : 'sem worktree'].join(' · '),
+      description: [`↓${x.behind}`, x.ahead ? t('↑{0} local (will ask for merge/rebase)', x.ahead) : 'fast-forward', x.wt ? (x.clean ? t('clean worktree') : t('worktree with changes')) : t('no worktree')].join(' · '),
       picked: x.clean && !x.ahead,
       name: x.name,
     }));
     const chosen = await vscode.window.showQuickPick(items, {
       canPickMany: true,
-      title: `Trazer do remoto: ${items.filter(i => i.picked).length} marcadas (fast-forward em worktree limpa ou sem worktree)`,
+      title: t('Pull from remote: {0} selected (fast-forward in a clean worktree or without a worktree)', items.filter(i => i.picked).length),
     });
     if (!chosen?.length) return;
     const ok: string[] = [];
     const failed: string[] = [];
-    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Trazendo branches', cancellable: true }, async (p, token) => {
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Pulling branches'), cancellable: true }, async (p, token) => {
       for (const c of chosen) {
         if (token.isCancellationRequested) break;
         p.report({ message: `${c.name} (${ok.length + failed.length + 1}/${chosen.length})`, increment: 100 / chosen.length });
@@ -282,8 +289,8 @@ export class GitOps implements vscode.Disposable {
       }
     });
     this.ctl.scheduleRefresh(50);
-    if (failed.length) vscode.window.showWarningMessage(`${ok.length} em dia; ${failed.length} precisam de atenção (divergiram ou têm alterações): ${failed.join(', ')}. Traga essas uma a uma.`);
-    else vscode.window.showInformationMessage(`${ok.length} branch(es) em dia com o remoto.`);
+    if (failed.length) vscode.window.showWarningMessage(t('{0} up to date; {1} need attention (diverged or have changes): {2}. Pull those one at a time.', ok.length, failed.length, failed.join(', ')));
+    else vscode.window.showInformationMessage(t('{0} branch(es) up to date with the remote.', ok.length));
   }
 
   /** git fetch --prune; com notify, avisa as branches que ganharam novidades desde o último aviso. */
@@ -295,20 +302,23 @@ export class GitOps implements vscode.Disposable {
       () => repo.run(['fetch', '--prune', remote], repo.root, 300_000),
     );
     if (r.code !== 0) {
-      this.ctl.log(`fetch falhou: ${(r.stderr || r.stdout).trim()}`);
-      if (!opts.quiet) vscode.window.showErrorMessage(`O fetch falhou: ${(r.stderr || r.stdout).trim()}`);
+      this.ctl.log(t('fetch failed: {0}', (r.stderr || r.stdout).trim()));
+      if (!opts.quiet) vscode.window.showErrorMessage(t('Fetch failed: {0}', (r.stderr || r.stdout).trim()));
       return;
     }
     await this.ctl.refresh();
     const behind = this.behindList();
     const sig = behind.map(b => `${b.name}:${b.behind}`).join(',');
     if (!opts.quiet) {
-      vscode.window.setStatusBarMessage(`$(cloud-download) fetch ok: ${behind.length} branch(es) com novidades`, 4000);
+      vscode.window.setStatusBarMessage(t('$(cloud-download) fetch ok: {0} branch(es) with news', behind.length), 4000);
     } else if (opts.notify && behind.length && sig !== this.notifiedBehind) {
       this.notifiedBehind = sig;
       vscode.window
-        .showInformationMessage(`${behind.length} branch(es) com novidades no remoto: ${behind.slice(0, 4).map(b => b.name).join(', ')}${behind.length > 4 ? '…' : ''}`, 'Trazer todas')
-        .then(g => g && this.pullMany());
+        .showInformationMessage(
+          t('{0} branch(es) with news on the remote: {1}', behind.length, `${behind.slice(0, 4).map(b => b.name).join(', ')}${behind.length > 4 ? '…' : ''}`),
+          t('Pull all'),
+        )
+        .then(g => void (g && this.pullMany()));
     }
   }
 
@@ -319,7 +329,7 @@ export class GitOps implements vscode.Disposable {
     if (!minutes || minutes <= 0) return;
     this.fetchTimer = setInterval(() => {
       if (!this.ctl.repo || !vscode.window.state.focused) return;
-      this.fetchNow({ quiet: true, notify: true }).catch(e => this.ctl.log(`fetch periódico: ${(e as Error).message}`));
+      this.fetchNow({ quiet: true, notify: true }).catch(e => this.ctl.log(t('periodic fetch: {0}', (e as Error).message)));
     }, Math.max(1, minutes) * 60_000);
   }
 
@@ -334,18 +344,18 @@ export class GitOps implements vscode.Disposable {
   async stashCreate(wtPath: string, message?: string, opts: { quiet?: boolean } = {}): Promise<string | undefined> {
     const repo = this.repo;
     if (message === undefined) {
-      message = await vscode.window.showInputBox({ title: 'Guardar alterações (stash)', prompt: 'Mensagem para achar depois (opcional)', ignoreFocusOut: true });
+      message = await vscode.window.showInputBox({ title: t('Stash changes'), prompt: t('Message to find it later (optional)'), ignoreFocusOut: true });
       if (message === undefined) return undefined;
     }
     const r = await repo.run(['stash', 'push', '--include-untracked', ...(message.trim() ? ['-m', message.trim()] : [])], wtPath, 120_000);
     if (r.code !== 0 || /No local changes/i.test(r.stdout + r.stderr)) {
-      if (!opts.quiet) vscode.window.showInformationMessage(r.code !== 0 ? `O stash falhou: ${(r.stderr || r.stdout).trim()}` : 'Nada para guardar: a worktree está limpa.');
+      if (!opts.quiet) vscode.window.showInformationMessage(r.code !== 0 ? t('Stash failed: {0}', (r.stderr || r.stdout).trim()) : t('Nothing to stash: the worktree is clean.'));
       return undefined;
     }
     const sha = (await repo.run(['rev-parse', 'stash@{0}'])).stdout.trim();
-    this.ctl.log(`stash ${short(sha)} criado em ${wtPath}`);
+    this.ctl.log(t('stash {0} created in {1}', short(sha), wtPath));
     this.ctl.scheduleRefresh(50);
-    if (!opts.quiet) vscode.window.setStatusBarMessage(`$(archive) Alterações guardadas no stash ${short(sha)}`, 4000);
+    if (!opts.quiet) vscode.window.setStatusBarMessage(t('$(archive) Changes saved in stash {0}', short(sha)), 4000);
     return sha;
   }
 
@@ -359,14 +369,14 @@ export class GitOps implements vscode.Disposable {
       if (!opts.quiet) {
         vscode.window.showWarningMessage(
           conflicts.length
-            ? `O stash conflitou em ${conflicts.length} arquivo(s) (${conflicts.slice(0, 4).join(', ')}); resolva na worktree. O stash foi mantido.`
-            : `Não consegui aplicar o stash: ${(r.stderr || r.stdout).trim()}`,
+            ? t('The stash conflicted in {0} file(s) ({1}); resolve it in the worktree. The stash was kept.', conflicts.length, conflicts.slice(0, 4).join(', '))
+            : t('Could not apply the stash: {0}', (r.stderr || r.stdout).trim()),
         );
       }
       return false;
     }
     if (pop) await this.stashDrop(sha, { confirm: false });
-    if (!opts.quiet) vscode.window.setStatusBarMessage(`$(archive) Stash ${short(sha)} aplicado`, 4000);
+    if (!opts.quiet) vscode.window.setStatusBarMessage(t('$(archive) Stash {0} applied', short(sha)), 4000);
     return true;
   }
 
@@ -374,7 +384,7 @@ export class GitOps implements vscode.Disposable {
     const entry = (await this.stashes()).find(e => e.sha === sha);
     if (!entry) return false;
     if (opts.confirm !== false) {
-      const ok = await vscode.window.showWarningMessage(`Apagar o stash "${stashTitle(entry)}"?`, { modal: true, detail: 'As alterações guardadas nele se perdem.' }, 'Apagar');
+      const ok = await vscode.window.showWarningMessage(t('Delete stash "{0}"?', stashTitle(entry)), { modal: true, detail: t('The changes saved in it will be lost.') }, t('Delete'));
       if (!ok) return false;
     }
     const r = await this.repo.run(['stash', 'drop', entry.ref]);
@@ -385,7 +395,7 @@ export class GitOps implements vscode.Disposable {
   async stashShow(sha: string) {
     let r = await this.repo.run(['stash', 'show', '-p', '--include-untracked', sha]);
     if (r.code !== 0) r = await this.repo.run(['stash', 'show', '-p', sha]);
-    const doc = await vscode.workspace.openTextDocument({ language: 'diff', content: r.stdout || (r.stderr || '(vazio)') });
+    const doc = await vscode.workspace.openTextDocument({ language: 'diff', content: r.stdout || (r.stderr || t('(empty)')) });
     await vscode.window.showTextDocument(doc, { preview: true });
   }
 
@@ -393,14 +403,14 @@ export class GitOps implements vscode.Disposable {
   async moveChanges(fromPath: string, toPath: string): Promise<boolean> {
     const wts = await this.repo.worktreesFast();
     const name = (p: string) => wts.find(w => w.path.toLowerCase() === p.toLowerCase())?.branch ?? path.basename(p);
-    const sha = await this.stashCreate(fromPath, `worktree-graph: de ${name(fromPath)} para ${name(toPath)}`, { quiet: true });
+    const sha = await this.stashCreate(fromPath, 'worktree-graph: ' + t('from {0} to {1}', name(fromPath), name(toPath)), { quiet: true });
     if (!sha) {
-      vscode.window.showInformationMessage(`${name(fromPath)} não tem alterações para mover.`);
+      vscode.window.showInformationMessage(t('{0} has no changes to move.', name(fromPath)));
       return false;
     }
     const ok = await this.stashApply(sha, toPath, true, { quiet: true });
-    if (ok) vscode.window.showInformationMessage(`Alterações movidas de ${name(fromPath)} para ${name(toPath)}.`);
-    else vscode.window.showWarningMessage(`Não deu para aplicar em ${name(toPath)} sem conflito; as alterações ficaram guardadas no stash ${short(sha)} (view Worktrees → Stashes).`);
+    if (ok) vscode.window.showInformationMessage(t('Changes moved from {0} to {1}.', name(fromPath), name(toPath)));
+    else vscode.window.showWarningMessage(t('Could not apply to {0} without conflicts; the changes were kept in stash {1} (Worktrees view → Stashes).', name(toPath), short(sha)));
     return ok;
   }
 
@@ -432,16 +442,16 @@ export class GitOps implements vscode.Disposable {
       if (r.stdout) parts.push(r.stdout.trimEnd());
     }
     for (const u of items.filter(x => x.letter === '?')) parts.push(newFilePatch(wtPath, u.path));
-    return parts.join('\n') || '(nada)';
+    return parts.join('\n') || t('(nothing)');
   }
 
   async showUncommitted(wtPath: string, items?: Uncommitted[], title?: string) {
     items ??= await this.uncommitted(wtPath);
     if (!items.length) {
-      vscode.window.showInformationMessage('A worktree está limpa: nada não commitado.');
+      vscode.window.showInformationMessage(t('The worktree is clean: nothing uncommitted.'));
       return;
     }
-    const head = title ? `# ${title}\n# ${items.length} arquivo(s)\n\n` : '';
+    const head = title ? `# ${title}\n# ${t('{0} file(s)', items.length)}\n\n` : '';
     const doc = await vscode.workspace.openTextDocument({ language: 'diff', content: head + (await this.uncommittedPatch(wtPath, items)) });
     await vscode.window.showTextDocument(doc, { preview: true });
   }
@@ -455,7 +465,7 @@ export class GitOps implements vscode.Disposable {
     const repo = this.repo;
     const st = await repo.status(wtPath);
     if (st.operation) {
-      vscode.window.showWarningMessage(`Há um ${st.operation} em andamento nesta worktree; termine ou aborte antes de descartar.`);
+      vscode.window.showWarningMessage(t('There is a {0} in progress in this worktree; finish or abort it before discarding.', st.operation));
       return false;
     }
     const wts = await repo.worktreesFast();
@@ -463,7 +473,7 @@ export class GitOps implements vscode.Disposable {
     const all = await this.uncommitted(wtPath);
     let items = paths ? all.filter(u => paths.includes(u.path)) : all;
     if (!items.length) {
-      vscode.window.showInformationMessage(paths ? 'Esses arquivos não têm alterações não commitadas.' : `${name} está limpa: nada para descartar.`);
+      vscode.window.showInformationMessage(paths ? t('These files have no uncommitted changes.') : t('{0} is clean: nothing to discard.', name));
       return false;
     }
     if (!paths) {
@@ -476,44 +486,48 @@ export class GitOps implements vscode.Disposable {
           picked: true,
           u,
         })),
-        { canPickMany: true, title: `Descartar alterações de ${name}: desmarque o que quer manter`, matchOnDescription: true, ignoreFocusOut: true },
+        { canPickMany: true, title: t('Discard changes in {0}: uncheck what you want to keep', name), matchOnDescription: true, ignoreFocusOut: true },
       );
       if (!picked?.length) return false;
       items = picked.map(p => p.u);
     }
     const partial = items.length < all.length;
-    await this.showUncommitted(wtPath, items, `O que será descartado de ${name}`);
+    await this.showUncommitted(wtPath, items, t('What will be discarded from {0}', name));
+    const discardBtn = t('Discard');
     const ok = await vscode.window.showWarningMessage(
-      `Descartar ${items.length} arquivo(s) não commitado(s) de ${name}?`,
+      t('Discard {0} uncommitted file(s) from {1}?', items.length, name),
       {
         modal: true,
         detail:
-          `${discardSummary(items)}\n\nO patch completo está aberto no editor. Antes de descartar, uma cópia vai para um stash ` +
-          `(view Worktrees → Stashes), então dá para desfazer.` +
-          (partial ? `\n\nOs outros ${all.length - items.length} arquivo(s) alterado(s) não são tocados.` : ''),
+          `${discardSummary(items)}\n\n` +
+          t('The full patch is open in the editor. Before discarding, a copy goes to a stash (Worktrees view → Stashes), so it can be undone.') +
+          (partial ? '\n\n' + t('The other {0} changed file(s) are not touched.', all.length - items.length) : ''),
       },
-      'Descartar',
+      discardBtn,
     );
-    if (ok !== 'Descartar') return false;
+    if (ok !== discardBtn) return false;
 
-    const message = `worktree-graph: descartado de ${name} (${items.length} arquivo(s)) ${new Date().toLocaleString()}`;
+    // o stash é achado logo abaixo pela mensagem exata (endsWith), então ela vem desta mesma variável
+    const message = 'worktree-graph: ' + t('discarded from {0} ({1} file(s)) {2}', name, items.length, new Date().toLocaleString());
     const args = ['stash', 'push', '--include-untracked', '-m', message];
     const r = await repo.run(partial ? [...args, '--', ...items.map(u => u.path)] : args, wtPath, 120_000);
     this.ctl.scheduleRefresh(50);
     if (r.code !== 0) {
-      vscode.window.showErrorMessage(`Não consegui descartar (nada foi apagado): ${(r.stderr || r.stdout).trim()}`);
+      vscode.window.showErrorMessage(t('Could not discard (nothing was deleted): {0}', (r.stderr || r.stdout).trim()));
       return false;
     }
     const entry = (await this.stashes()).find(e => e.message.endsWith(message));
-    this.ctl.log(`descartado em ${wtPath}: ${items.map(u => u.path).join(', ')}${entry ? ` (cópia no stash ${short(entry.sha)})` : ''}`);
+    const files = items.map(u => u.path).join(', ');
+    this.ctl.log(entry ? t('discarded in {0}: {1} (copy in stash {2})', wtPath, files, short(entry.sha)) : t('discarded in {0}: {1}', wtPath, files));
     if (!entry) {
-      vscode.window.showInformationMessage(`${items.length} arquivo(s) descartado(s) de ${name}.`);
+      vscode.window.showInformationMessage(t('{0} file(s) discarded from {1}.', items.length, name));
       return true;
     }
-    vscode.window.showInformationMessage(`${items.length} arquivo(s) descartado(s) de ${name}. Cópia no stash ${short(entry.sha)}.`, 'Desfazer', 'Ver o que saiu').then(async pick => {
-      if (pick === 'Desfazer') {
-        if (await this.stashApply(entry.sha, wtPath, true, { quiet: true })) vscode.window.setStatusBarMessage(`$(discard) Descarte desfeito em ${name}`, 4000);
-        else vscode.window.showWarningMessage(`Não deu para devolver sem conflito; a cópia continua no stash ${short(entry.sha)}.`);
+    const undo = t('Undo');
+    vscode.window.showInformationMessage(t('{0} file(s) discarded from {1}. Copy in stash {2}.', items.length, name, short(entry.sha)), undo, t('Show what was removed')).then(async pick => {
+      if (pick === undo) {
+        if (await this.stashApply(entry.sha, wtPath, true, { quiet: true })) vscode.window.setStatusBarMessage(t('$(discard) Discard undone in {0}', name), 4000);
+        else vscode.window.showWarningMessage(t('Could not restore without conflicts; the copy is still in stash {0}.', short(entry.sha)));
       } else if (pick) {
         await this.stashShow(entry.sha);
       }
@@ -532,7 +546,7 @@ export class GitOps implements vscode.Disposable {
     if (!wt) {
       const go =
         opts.confirm === false ||
-        (await vscode.window.showInformationMessage(`${target} não está aberta numa worktree.`, { modal: true, detail: 'O cherry-pick precisa de uma worktree da branch de destino.' }, 'Criar worktree e aplicar'));
+        (await vscode.window.showInformationMessage(t('{0} is not open in a worktree.', target), { modal: true, detail: t('Cherry-pick needs a worktree of the target branch.') }, t('Create worktree and apply')));
       if (!go) return false;
       await createWorktree(this.ctl, { existing: target, quiet: true });
       wt = await this.worktreeOf(target);
@@ -540,32 +554,36 @@ export class GitOps implements vscode.Disposable {
     }
     const st = await repo.status(wt.path);
     if (st.operation || st.changes > 0) {
-      vscode.window.showWarningMessage(`${target} tem ${st.operation ? `um ${st.operation} em andamento` : `${st.changes} alteração(ões) não commitada(s)`}; resolva antes do cherry-pick.`);
+      vscode.window.showWarningMessage(
+        st.operation
+          ? t('{0} has a {1} in progress; resolve it before the cherry-pick.', target, st.operation)
+          : t('{0} has {1} uncommitted change(s); resolve them before the cherry-pick.', target, st.changes),
+      );
       return false;
     }
     if (opts.confirm !== false) {
       const ok = await vscode.window.showInformationMessage(
-        `Aplicar o commit ${short(sha)} em ${target}?`,
-        { modal: true, detail: `"${subject}"${parents.length > 1 ? '\n\nÉ um commit de merge: será aplicado em relação ao primeiro pai (-m 1).' : ''}` },
-        'Aplicar',
+        t('Apply commit {0} to {1}?', short(sha), target),
+        { modal: true, detail: `"${subject}"${parents.length > 1 ? '\n\n' + t('This is a merge commit: it will be applied relative to the first parent (-m 1).') : ''}` },
+        t('Apply'),
       );
       if (!ok) return false;
     }
     const r = await repo.run(['cherry-pick', ...(parents.length > 1 ? ['-m', '1'] : []), sha], wt.path, 120_000);
     this.ctl.scheduleRefresh(50);
     if (r.code === 0) {
-      this.ctl.log(`cherry-pick ${short(sha)} em ${target}: ok`);
-      if (opts.confirm !== false) vscode.window.showInformationMessage(`Commit ${short(sha)} aplicado em ${target}.`);
+      this.ctl.log(t('cherry-pick {0} on {1}: ok', short(sha), target));
+      if (opts.confirm !== false) vscode.window.showInformationMessage(t('Commit {0} applied to {1}.', short(sha), target));
       return true;
     }
     if ((await repo.conflictedFiles(wt.path)).length) {
-      await this.onConflict('cherry-pick', wt.path, target, `aplicar o commit ${short(sha)} ("${subject}")`);
+      await this.onConflict('cherry-pick', wt.path, target, t('applying commit {0} ("{1}")', short(sha), subject));
     } else if (/empty|nothing to commit/i.test(r.stderr + r.stdout)) {
       await repo.run(['cherry-pick', '--abort'], wt.path);
-      vscode.window.showInformationMessage(`${target} já tem as mudanças do commit ${short(sha)}; nada a aplicar.`);
+      vscode.window.showInformationMessage(t('{0} already has the changes from commit {1}; nothing to apply.', target, short(sha)));
     } else {
       await repo.run(['cherry-pick', '--abort'], wt.path);
-      vscode.window.showErrorMessage(`O cherry-pick falhou: ${(r.stderr || r.stdout).trim()}`);
+      vscode.window.showErrorMessage(t('Cherry-pick failed: {0}', (r.stderr || r.stdout).trim()));
     }
     return false;
   }
@@ -592,17 +610,17 @@ export class GitOps implements vscode.Disposable {
     let current = plan;
     for (;;) {
       const items: (vscode.QuickPickItem & { id: string; i?: number })[] = [
-        { label: '$(play) Aplicar', description: 'reorganiza os commits (antes cria uma cópia de segurança)', id: 'apply' },
-        { label: '$(close) Cancelar', id: 'cancel' },
-        { label: 'do mais antigo para o mais novo', kind: vscode.QuickPickItemKind.Separator, id: 'sep' },
+        { label: t('$(play) Apply'), description: t('reorganizes the commits (creates a backup first)'), id: 'apply' },
+        { label: t('$(close) Cancel'), id: 'cancel' },
+        { label: t('oldest to newest'), kind: vscode.QuickPickItemKind.Separator, id: 'sep' },
         ...current.map((s, i) => ({
           label: `${icon[s.action]} ${s.action === 'reword' ? s.message : s.subject}`,
-          description: `${s.action}${s.action === 'squash' || s.action === 'fixup' ? ' ↑ junta com o anterior' : ''} · ${short(s.sha)}`,
+          description: `${s.action}${s.action === 'squash' || s.action === 'fixup' ? ` ↑ ${t('joins the previous one')}` : ''} · ${short(s.sha)}`,
           id: 'step',
           i,
         })),
       ];
-      const pick = await vscode.window.showQuickPick(items, { title: `Reorganizar commits de ${branch}`, placeHolder: 'Escolha um commit para mudar, ou Aplicar', ignoreFocusOut: true });
+      const pick = await vscode.window.showQuickPick(items, { title: t('Reorganize commits of {0}', branch), placeHolder: t('Choose a commit to change, or Apply'), ignoreFocusOut: true });
       if (!pick || pick.id === 'cancel') return undefined;
       if (pick.id === 'apply') {
         const err = validatePlan(current);
@@ -614,13 +632,13 @@ export class GitOps implements vscode.Disposable {
       const step = current[i];
       const act = await vscode.window.showQuickPick(
         [
-          { label: '$(arrow-up) Mover para cima (mais antigo)', v: 'up' },
-          { label: '$(arrow-down) Mover para baixo (mais novo)', v: 'down' },
-          { label: '$(check) pick', description: 'manter como está', v: 'pick' },
-          { label: '$(fold-up) squash', description: 'juntar com o anterior, somando as mensagens', v: 'squash' },
-          { label: '$(fold-up) fixup', description: 'juntar com o anterior, descartando esta mensagem', v: 'fixup' },
-          { label: '$(edit) reword', description: 'trocar a mensagem', v: 'reword' },
-          { label: '$(trash) drop', description: 'descartar este commit', v: 'drop' },
+          { label: t('$(arrow-up) Move up (older)'), v: 'up' },
+          { label: t('$(arrow-down) Move down (newer)'), v: 'down' },
+          { label: '$(check) pick', description: t('keep as is'), v: 'pick' },
+          { label: '$(fold-up) squash', description: t('combine with the previous one, merging the messages'), v: 'squash' },
+          { label: '$(fold-up) fixup', description: t('combine with the previous one, discarding this message'), v: 'fixup' },
+          { label: '$(edit) reword', description: t('change the message'), v: 'reword' },
+          { label: '$(trash) drop', description: t('drop this commit'), v: 'drop' },
         ],
         { title: step.subject },
       );
@@ -628,7 +646,7 @@ export class GitOps implements vscode.Disposable {
       if (act.v === 'up') current = movePlan(current, i, -1);
       else if (act.v === 'down') current = movePlan(current, i, 1);
       else if (act.v === 'reword') {
-        const msg = await vscode.window.showInputBox({ title: 'Nova mensagem', value: step.message ?? step.subject, ignoreFocusOut: true });
+        const msg = await vscode.window.showInputBox({ title: t('New message'), value: step.message ?? step.subject, ignoreFocusOut: true });
         if (msg?.trim()) current = current.map((s, k) => (k === i ? { ...s, action: 'reword', message: msg.trim() } : s));
       } else current = current.map((s, k) => (k === i ? { ...s, action: act.v as RebaseAction, message: undefined } : s));
     }
@@ -639,21 +657,25 @@ export class GitOps implements vscode.Disposable {
     const repo = this.repo;
     const branch = (await repo.worktreesFast()).find(w => w.path.toLowerCase() === wtPath.toLowerCase())?.branch;
     if (!branch) {
-      vscode.window.showWarningMessage('A worktree precisa estar numa branch.');
+      vscode.window.showWarningMessage(t('The worktree must be on a branch.'));
       return false;
     }
     const st = await repo.status(wtPath);
     if (st.operation || st.changes > 0) {
-      vscode.window.showWarningMessage(`${branch} precisa estar limpa para reorganizar commits (${st.operation ? `${st.operation} em andamento` : `${st.changes} alteração(ões)`}).`);
+      vscode.window.showWarningMessage(
+        st.operation
+          ? t('{0} must be clean to reorganize commits ({1} in progress).', branch, st.operation)
+          : t('{0} must be clean to reorganize commits ({1} change(s)).', branch, st.changes),
+      );
       return false;
     }
     const { mb, baseRef, commits } = await this.commitsSinceBase(wtPath);
     if (commits.length < 1) {
-      vscode.window.showInformationMessage(`${branch} não tem commits além de ${baseRef}.`);
+      vscode.window.showInformationMessage(t('{0} has no commits beyond {1}.', branch, baseRef));
       return false;
     }
     if (commits.some(c => c.merge)) {
-      vscode.window.showWarningMessage(`${branch} tem commits de merge desde ${baseRef}; reorganizar com rebase os achataria. Faça isso no terminal com git rebase -i --rebase-merges.`);
+      vscode.window.showWarningMessage(t('{0} has merge commits since {1}; reorganizing with rebase would flatten them. Do it in the terminal with git rebase -i --rebase-merges.', branch, baseRef));
       return false;
     }
     if (!plan) {
@@ -667,7 +689,7 @@ export class GitOps implements vscode.Disposable {
     }
     const unchanged = plan.every((s, i) => s.action === 'pick' && s.sha === commits[i]?.sha) && plan.length === commits.length;
     if (unchanged) {
-      vscode.window.showInformationMessage('Nada mudou no plano.');
+      vscode.window.showInformationMessage(t('Nothing changed in the plan.'));
       return false;
     }
 
@@ -683,7 +705,7 @@ export class GitOps implements vscode.Disposable {
     const todo = path.join(dir, 'todo.txt');
     fs.writeFileSync(todo, buildTodo(plan, msgFile));
 
-    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Reorganizando commits de ${branch}…` }, () =>
+    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Reorganizing commits of {0}…', branch) }, () =>
       repo.run(['rebase', '-i', mb], wtPath, 300_000, {
         // o git chama `$GIT_SEQUENCE_EDITOR <arquivo-do-roteiro>` pelo sh: basta copiar o nosso por cima
         GIT_SEQUENCE_EDITOR: `cp "${todo.replace(/\\/g, '/')}"`,
@@ -692,15 +714,15 @@ export class GitOps implements vscode.Disposable {
     );
     this.ctl.scheduleRefresh(50);
     if (r.code === 0) {
-      this.ctl.log(`rebase -i em ${branch}: ok (cópia de segurança ${backup})`);
-      vscode.window.showInformationMessage(`Commits de ${branch} reorganizados.`, 'Desfazer').then(g => g && this.undoReorganize(branch));
+      this.ctl.log(t('rebase -i on {0}: ok (backup {1})', branch, backup));
+      vscode.window.showInformationMessage(t('Commits of {0} reorganized.', branch), t('Undo')).then(g => void (g && this.undoReorganize(branch)));
       return true;
     }
     if ((await repo.conflictedFiles(wtPath)).length) {
-      await this.onConflict('rebase', wtPath, branch, 'reorganizar os commits (rebase interativo)');
+      await this.onConflict('rebase', wtPath, branch, t('reorganizing the commits (interactive rebase)'));
     } else {
       await repo.run(['rebase', '--abort'], wtPath);
-      vscode.window.showErrorMessage(`Não deu para reorganizar; nada foi alterado: ${(r.stderr || r.stdout).trim()}`);
+      vscode.window.showErrorMessage(t('Could not reorganize; nothing was changed: {0}', (r.stderr || r.stdout).trim()));
     }
     return false;
   }
@@ -715,16 +737,16 @@ export class GitOps implements vscode.Disposable {
     }
     const wt = await this.worktreeOf(branch);
     if (!backup || !wt) {
-      vscode.window.showInformationMessage(`Não há cópia de segurança de ${branch}.`);
+      vscode.window.showInformationMessage(t('There is no backup of {0}.', branch));
       return false;
     }
     const r = await repo.run(['reset', '--keep', backup], wt.path);
     this.ctl.scheduleRefresh(50);
     if (r.code !== 0) {
-      vscode.window.showErrorMessage(`Não consegui desfazer: ${(r.stderr || r.stdout).trim()}`);
+      vscode.window.showErrorMessage(t('Could not undo: {0}', (r.stderr || r.stdout).trim()));
       return false;
     }
-    vscode.window.setStatusBarMessage(`$(history) ${branch} voltou ao estado anterior`, 4000);
+    vscode.window.setStatusBarMessage(t('$(history) {0} is back to its previous state', branch), 4000);
     return true;
   }
 
@@ -765,19 +787,19 @@ export class GitOps implements vscode.Disposable {
   }
 
   async compareWith(a?: string, b?: string) {
-    a ??= await this.pickBranch('Comparar qual branch?');
+    a ??= await this.pickBranch(t('Compare which branch?'));
     if (!a) return;
-    b ??= await this.pickBranch(`Comparar ${a} com…`, a);
+    b ??= await this.pickBranch(t('Compare {0} with…', a), a);
     if (!b) return;
     const files = await this.compareFiles(a, b);
     if (!files.length) {
-      vscode.window.showInformationMessage(`${a} e ${b} têm o mesmo conteúdo.`);
+      vscode.window.showInformationMessage(t('{0} and {1} have the same content.', a, b));
       return;
     }
-    const label: Record<string, string> = { A: `só em ${b}`, D: `só em ${a}`, M: 'diferente', T: 'tipo diferente' };
+    const label: Record<string, string> = { A: t('only in {0}', b), D: t('only in {0}', a), M: t('different'), T: t('different type') };
     const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { f: (typeof files)[number] }>();
-    qp.title = `${a} ↔ ${b}: ${files.length} arquivo(s)`;
-    qp.placeholder = 'Enter abre o diff; a lista continua aberta';
+    qp.title = t('{0} ↔ {1}: {2} file(s)', a, b, files.length);
+    qp.placeholder = t('Enter opens the diff; the list stays open');
     qp.ignoreFocusOut = true;
     qp.matchOnDescription = true;
     qp.items = files.map(f => ({ label: path.basename(f.path), description: `${path.dirname(f.path) === '.' ? '' : path.dirname(f.path)}  ${label[f.status] ?? f.status}`, f }));
@@ -813,7 +835,7 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
   };
 
   reg('pullBranch', async (a: Arg) => {
-    const b = await need(a, 'Trazer qual branch do remoto?');
+    const b = await need(a, t('Pull which branch from the remote?'));
     if (b) await ops.pull(b);
   });
   reg('pullMany', () => ops.pullMany());
@@ -826,7 +848,7 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
   const applyTo = async (a: any, pop: boolean) => {
     const sha = shaOf(a) ?? (await pickStash(ops));
     if (!sha) return;
-    const target = typeof a === 'object' && a?.path ? { path: a.path } : await ops.pickWorktree(pop ? 'Aplicar e remover o stash em qual worktree?' : 'Aplicar o stash em qual worktree?');
+    const target = typeof a === 'object' && a?.path ? { path: a.path } : await ops.pickWorktree(pop ? t('Apply and drop the stash in which worktree?') : t('Apply the stash in which worktree?'));
     if (target) await ops.stashApply(sha, target.path, pop);
   };
   reg('stashApply', (a: any) => applyTo(a, false));
@@ -842,7 +864,7 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
   reg('moveChanges', async (a: Arg) => {
     const from = await ops.pathOf(a);
     if (!from) return;
-    const to = typeof a === 'object' && a?.target ? await ops.pathOf(a.target) : await ops.pickWorktree(`Mover as alterações de ${from.branch ?? path.basename(from.path)} para…`, from.path);
+    const to = typeof a === 'object' && a?.target ? await ops.pathOf(a.target) : await ops.pickWorktree(t('Move the changes from {0} to…', from.branch ?? path.basename(from.path)), from.path);
     if (to) await ops.moveChanges(from.path, to.path);
   });
 
@@ -853,7 +875,7 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
   };
   reg('showUncommittedPatch', async (a: Arg) => {
     const w = await ops.pathOf(a);
-    if (w) await ops.showUncommitted(w.path, undefined, `Não commitado em ${w.branch ?? path.basename(w.path)}`);
+    if (w) await ops.showUncommitted(w.path, undefined, t('Uncommitted in {0}', w.branch ?? path.basename(w.path)));
   });
   reg('discardChanges', async (a: any, sel?: any[]) => {
     const w = await ops.pathOf(a);
@@ -863,7 +885,7 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
   reg('cherryPick', async (a: any) => {
     const sha = shaOf(a);
     if (!sha) return;
-    const target = a?.target ?? (await ops.pickBranch(`Aplicar o commit ${short(sha)} em…`));
+    const target = a?.target ?? (await ops.pickBranch(t('Apply commit {0} to…', short(sha))));
     if (target) await ops.cherryPick(sha, target);
   });
   reg('reorganizeCommits', async (a: Arg) => {
@@ -871,7 +893,7 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
     if (w) await ops.reorganize(w.path);
   });
   reg('undoReorganize', async (a: Arg) => {
-    const b = await need(a, 'Desfazer a reorganização de qual branch?');
+    const b = await need(a, t('Undo the reorganization of which branch?'));
     if (b) await ops.undoReorganize(b);
   });
   reg('compareWith', (a: Arg, b?: string) => ops.compareWith(branchOf(a), typeof b === 'string' ? b : undefined));
@@ -882,12 +904,12 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
 async function pickStash(ops: GitOps): Promise<string | undefined> {
   const list = await ops.stashes();
   if (!list.length) {
-    vscode.window.showInformationMessage('Não há stashes.');
+    vscode.window.showInformationMessage(t('There are no stashes.'));
     return undefined;
   }
   const pick = await vscode.window.showQuickPick(
     list.map(e => ({ label: stashTitle(e), description: [e.branch, ago(e.date)].filter(Boolean).join(' · '), sha: e.sha })),
-    { placeHolder: 'Qual stash?' },
+    { placeHolder: t('Which stash?') },
   );
   return pick?.sha;
 }
@@ -908,13 +930,13 @@ function untrackedStats(file: string): { added: number; deleted: number; binary:
 
 /** Patch de "arquivo novo" para um não rastreado, no formato do git diff. */
 function newFilePatch(cwd: string, rel: string): string {
-  const head = `diff --git a/${rel} b/${rel}\nnew file (não rastreado)\n--- /dev/null\n+++ b/${rel}`;
-  if (untrackedStats(path.join(cwd, rel)).binary) return `${head}\n(binário ou grande demais para mostrar)`;
+  const head = `diff --git a/${rel} b/${rel}\nnew file (${t('untracked')})\n--- /dev/null\n+++ b/${rel}`;
+  if (untrackedStats(path.join(cwd, rel)).binary) return `${head}\n${t('(binary or too large to show)')}`;
   let text: string;
   try {
     text = fs.readFileSync(path.join(cwd, rel), 'utf8');
   } catch {
-    return `${head}\n(não consegui ler o arquivo)`;
+    return `${head}\n${t('(could not read the file)')}`;
   }
   const lines = text.split('\n');
   if (text.endsWith('\n')) lines.pop();

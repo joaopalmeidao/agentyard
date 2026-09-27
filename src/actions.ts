@@ -11,11 +11,12 @@ import { gitUri } from './diff';
 import { guardMerge } from './guards';
 import { migrationGate } from './migrations/register';
 import { Repo, Worktree } from './git';
+import { t } from './i18n';
 
 type BranchArg = string | { branch?: string } | undefined;
 
 function repoOf(ctl: Controller): Repo {
-  if (!ctl.repo) throw new Error('Nenhum repositório git aberto neste workspace.');
+  if (!ctl.repo) throw new Error(t('No git repository open in this workspace.'));
   return ctl.repo;
 }
 
@@ -31,7 +32,7 @@ export async function pickBranch(ctl: Controller, arg: BranchArg, placeHolder: s
   if (!onlyWorktrees) {
     const withWt = new Set(items.map(i => i.label));
     for (const r of await repo.refs()) {
-      if (r.kind === 'head' && !withWt.has(r.name)) items.push({ label: r.name, description: 'sem worktree', iconPath: new vscode.ThemeIcon('git-branch') });
+      if (r.kind === 'head' && !withWt.has(r.name)) items.push({ label: r.name, description: t('no worktree'), iconPath: new vscode.ThemeIcon('git-branch') });
     }
   }
   return (await vscode.window.showQuickPick(items, { placeHolder }))?.label;
@@ -52,7 +53,7 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
 
   const [targetAhead, sourceAhead] = await repo.aheadBehind(target, source);
   if (sourceAhead === 0) {
-    vscode.window.showInformationMessage(`${target} já contém tudo de ${source}.`);
+    vscode.window.showInformationMessage(t('{0} already contains everything from {1}.', target, source));
     return false;
   }
   // Migrations que colidem não dão conflito no git: confere e oferece reencadear (src/migrations).
@@ -60,18 +61,24 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
   if (opts.confirm !== false) {
     const preview = await repo.mergePreview(target, source);
     const detail = [
-      `${sourceAhead} commit(s) de ${source} entram em ${target}.`,
-      targetAhead === 0 ? 'Vai ser um fast-forward.' : '',
-      preview?.conflict ? `⚠ A simulação prevê conflito em: ${preview.files.slice(0, 8).join(', ')}${preview.files.length > 8 ? '…' : ''}` : preview ? 'A simulação não encontrou conflitos.' : '',
+      t('{0} commit(s) from {1} will go into {2}.', sourceAhead, source, target),
+      targetAhead === 0 ? t('This will be a fast-forward.') : '',
+      preview?.conflict
+        ? t('⚠ The simulation predicts conflicts in: {0}', `${preview.files.slice(0, 8).join(', ')}${preview.files.length > 8 ? '…' : ''}`)
+        : preview
+          ? t('The simulation found no conflicts.')
+          : '',
     ]
       .filter(Boolean)
       .join('\n');
-    const ok = await vscode.window.showInformationMessage(`Mesclar ${source} em ${target}?`, { modal: true, detail }, 'Mesclar', 'Analisar antes');
-    if (ok === 'Analisar antes') {
+    const mergeBtn = t('Merge');
+    const analyzeBtn = t('Analyze first');
+    const ok = await vscode.window.showInformationMessage(t('Merge {0} into {1}?', source, target), { modal: true, detail }, mergeBtn, analyzeBtn);
+    if (ok === analyzeBtn) {
       await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', source, target);
       return false;
     }
-    if (ok !== 'Mesclar') return false;
+    if (ok !== mergeBtn) return false;
   }
 
   // branch protegida e checagens (src/guards.ts)
@@ -85,18 +92,18 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
     if (wt) {
       const st = await repo.status(wt.path);
       if (st.operation) {
-        vscode.window.showErrorMessage(`A worktree de ${target} está no meio de um ${st.operation}. Termine ou aborte antes.`);
+        vscode.window.showErrorMessage(t('The {0} worktree is in the middle of a {1}. Finish or abort it first.', target, st.operation));
         return false;
       }
       if (st.changes > 0) {
         const go = await vscode.window.showWarningMessage(
-          `A worktree de ${target} tem ${st.changes} alteração(ões) não commitada(s).`,
-          { modal: true, detail: 'O git recusa o merge se ele tocar nesses arquivos. Se for um agente trabalhando nela, o ideal é esperar o commit.' },
-          'Mesclar mesmo assim',
+          t('The {0} worktree has {1} uncommitted change(s).', target, st.changes),
+          { modal: true, detail: t('Git refuses the merge if it touches those files. If an agent is working in it, better wait for its commit.') },
+          t('Merge anyway'),
         );
         if (!go) return false;
       }
-      ctl.log(`git ${args.join(' ')}  (em ${wt.path})`);
+      ctl.log(t('git {0}  (in {1})', args.join(' '), wt.path));
       const r = await repo.run(args, wt.path, 300_000);
       if (r.code === 0) {
         await afterMerge(ctl, source, target, base, opts.quiet);
@@ -104,23 +111,26 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
       }
       const conflicts = await repo.conflictedFiles(wt.path);
       if (conflicts.length === 0) {
-        vscode.window.showErrorMessage(`Merge falhou: ${(r.stderr || r.stdout).trim()}`);
+        vscode.window.showErrorMessage(t('Merge failed: {0}', (r.stderr || r.stdout).trim()));
         return false;
       }
+      const openFiles = t('Open files');
+      const openWt = t('Open worktree');
+      const abort = t('Abort merge');
       const pick = await vscode.window.showWarningMessage(
-        `Conflito ao mesclar ${source} em ${target} (${conflicts.length} arquivo(s)). O merge ficou em andamento na worktree.`,
+        t('Conflict merging {0} into {1} ({2} file(s)). The merge is still in progress in the worktree.', source, target, conflicts.length),
         resolveButton(ctl),
-        'Abrir arquivos',
-        'Abrir worktree',
-        'Abortar merge',
+        openFiles,
+        openWt,
+        abort,
       );
       if (pick === resolveButton(ctl)) {
         await runResolve(target, { base: source });
-      } else if (pick === 'Abrir arquivos') {
+      } else if (pick === openFiles) {
         for (const f of conflicts.slice(0, 20)) await vscode.window.showTextDocument(vscode.Uri.file(path.join(wt.path, f)), { preview: false });
-      } else if (pick === 'Abrir worktree') {
+      } else if (pick === openWt) {
         await openWorktree(ctl, target);
-      } else if (pick === 'Abortar merge') {
+      } else if (pick === abort) {
         await repo.run(['merge', '--abort'], wt.path);
       }
       return false;
@@ -129,7 +139,7 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
     const tmp = path.join(os.tmpdir(), `wtgraph-${process.pid}-${Date.now()}`);
     await repo.exec(['worktree', 'add', '--quiet', tmp, target]);
     try {
-      ctl.log(`git ${args.join(' ')}  (em worktree temporária ${tmp})`);
+      ctl.log(t('git {0}  (in temporary worktree {1})', args.join(' '), tmp));
       const r = await repo.run(args, tmp, 300_000);
       if (r.code === 0) {
         await afterMerge(ctl, source, target, base, opts.quiet);
@@ -139,10 +149,10 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
       await repo.run(['merge', '--abort'], tmp);
       const pick = await vscode.window.showWarningMessage(
         conflicts.length
-          ? `Conflito ao mesclar ${source} em ${target}: ${conflicts.slice(0, 5).join(', ')}. Nada foi alterado.`
-          : `Merge falhou: ${(r.stderr || r.stdout).trim()}`,
+          ? t('Conflict merging {0} into {1}: {2}. Nothing was changed.', source, target, conflicts.slice(0, 5).join(', '))
+          : t('Merge failed: {0}', (r.stderr || r.stdout).trim()),
         ...(conflicts.length ? [resolveButton(ctl)] : []),
-        `Criar worktree de ${target} para resolver`,
+        t('Create a worktree for {0} to resolve it', target),
       );
       // Mesclando na base: quem resolve é a branch, trazendo a base; senão, o destino traz a origem.
       if (pick === resolveButton(ctl)) await (target === base ? runResolve(source, { intoBase: true }) : runResolve(target, { base: source }));
@@ -157,44 +167,43 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
 }
 
 async function afterMerge(ctl: Controller, source: string, target: string, base: string, quiet?: boolean) {
-  ctl.log(`${source} mesclada em ${target}.`);
+  ctl.log(t('{0} merged into {1}.', source, target));
   if (quiet) return;
   if (target === base && source !== base) {
     const repo = repoOf(ctl);
     const wt = await worktreeOf(repo, source);
-    const pick = await vscode.window.showInformationMessage(
-      `${source} mesclada em ${target}.`,
-      wt ? 'Remover worktree e branch' : 'Excluir branch',
-    );
-    if (pick === 'Remover worktree e branch') await removeWorktree(ctl, source, { alsoBranch: true });
-    else if (pick === 'Excluir branch') await deleteBranch(ctl, source);
+    const removeBoth = t('Remove worktree and branch');
+    const delBranch = t('Delete branch');
+    const pick = await vscode.window.showInformationMessage(t('{0} merged into {1}.', source, target), wt ? removeBoth : delBranch);
+    if (pick === removeBoth) await removeWorktree(ctl, source, { alsoBranch: true });
+    else if (pick === delBranch) await deleteBranch(ctl, source);
   } else {
-    vscode.window.showInformationMessage(`${source} mesclada em ${target}.`);
+    vscode.window.showInformationMessage(t('{0} merged into {1}.', source, target));
   }
 }
 
 export async function mergeBaseInto(ctl: Controller, arg: BranchArg) {
-  const branch = await pickBranch(ctl, arg, 'Trazer a base para qual branch?');
+  const branch = await pickBranch(ctl, arg, t('Bring the base into which branch?'));
   if (!branch) return;
   const { baseRef } = await ctl.base();
   await mergeBranches(ctl, baseRef, branch);
 }
 
 export async function mergeIntoBase(ctl: Controller, arg: BranchArg) {
-  const branch = await pickBranch(ctl, arg, 'Mesclar qual branch na base?');
+  const branch = await pickBranch(ctl, arg, t('Merge which branch into the base?'));
   if (!branch) return;
   const { base } = await ctl.base();
   await mergeBranches(ctl, branch, base);
 }
 
 export async function mergeInto(ctl: Controller, arg: BranchArg) {
-  const source = await pickBranch(ctl, arg, 'Mesclar qual branch?');
+  const source = await pickBranch(ctl, arg, t('Merge which branch?'));
   if (!source) return;
   const repo = repoOf(ctl);
   const items = (await repo.refs())
     .filter(r => r.kind === 'head' && r.name !== source)
     .map(r => ({ label: r.name, description: r.subject }));
-  const target = await vscode.window.showQuickPick(items, { placeHolder: `Mesclar ${source} em…` });
+  const target = await vscode.window.showQuickPick(items, { placeHolder: t('Merge {0} into…', source) });
   if (target) await mergeBranches(ctl, source, target.label);
 }
 
@@ -208,12 +217,12 @@ export async function pickStartPoint(ctl: Controller, title: string): Promise<st
   const heads = refs.filter(r => r.kind === 'head' && r.name !== base);
   const items: Item[] = [
     { label: `$(home) ${base}`, description: 'base', detail: refs.find(r => r.kind === 'head' && r.name === base)?.subject, ref: base },
-    { label: 'Branches locais', kind: vscode.QuickPickItemKind.Separator },
-    ...heads.map(r => ({ label: `${wtBranches.has(r.name) ? '$(folder)' : '$(git-branch)'} ${r.name}`, description: wtBranches.has(r.name) ? 'com worktree' : undefined, detail: r.subject, ref: r.name })),
-    { label: 'Remotas', kind: vscode.QuickPickItemKind.Separator },
+    { label: t('Local branches'), kind: vscode.QuickPickItemKind.Separator },
+    ...heads.map(r => ({ label: `${wtBranches.has(r.name) ? '$(folder)' : '$(git-branch)'} ${r.name}`, description: wtBranches.has(r.name) ? t('has a worktree') : undefined, detail: r.subject, ref: r.name })),
+    { label: t('Remote'), kind: vscode.QuickPickItemKind.Separator },
     ...refs.filter(r => r.kind === 'remote').map(r => ({ label: `$(cloud) ${r.name}`, detail: r.subject, ref: r.name })),
   ];
-  return (await vscode.window.showQuickPick(items, { title, placeHolder: 'Criar a worktree a partir de qual branch?', matchOnDetail: true }))?.ref;
+  return (await vscode.window.showQuickPick(items, { title, placeHolder: t('Create the worktree from which branch?'), matchOnDetail: true }))?.ref;
 }
 
 /**
@@ -232,18 +241,18 @@ export async function createWorktree(
   let branch = opts.existing ?? opts.branch;
   let startPoint = opts.startPoint;
   if (!branch && !startPoint) {
-    startPoint = await pickStartPoint(ctl, 'Nova worktree (1/2)');
+    startPoint = await pickStartPoint(ctl, t('New worktree (1/2)'));
     if (!startPoint) return;
   }
   if (!branch) {
     const names = new Set((await repo.refs()).filter(r => r.kind === 'head').map(r => r.name));
     branch = await vscode.window.showInputBox({
-      title: `Nova worktree${opts.startPoint ? '' : ' (2/2)'} — a partir de ${startPoint ?? base}`,
-      prompt: 'Nome da branch (ex.: ai/refatorar-login)',
+      title: opts.startPoint ? t('New worktree from {0}', opts.startPoint) : t('New worktree (2/2) — from {0}', startPoint ?? base),
+      prompt: t('Branch name (e.g. ai/refactor-login)'),
       validateInput: v => {
-        if (!v.trim()) return 'Informe um nome.';
-        if (/[\s~^:?*[\\]|\.\.|@\{|\/$|^\/|\.lock$/.test(v)) return 'Nome de branch inválido.';
-        if (names.has(v)) return 'Essa branch já existe.';
+        if (!v.trim()) return t('Enter a name.');
+        if (/[\s~^:?*[\\]|\.\.|@\{|\/$|^\/|\.lock$/.test(v)) return t('Invalid branch name.');
+        if (names.has(v)) return t('That branch already exists.');
         return undefined;
       },
     });
@@ -256,95 +265,98 @@ export async function createWorktree(
   for (let i = 2; fs.existsSync(dir); i++) dir = path.join(root, `${branch.replace(/[\/\\]/g, '-')}-${i}`);
 
   const args = opts.existing ? ['worktree', 'add', dir, branch] : ['worktree', 'add', '-b', branch, dir, startPoint ?? base];
-  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Criando worktree ${branch}…` }, () => repo.exec(args, repo.root, 300_000));
-  ctl.log(`Worktree criada: ${dir} (${branch})`);
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating worktree {0}…', branch) }, () => repo.exec(args, repo.root, 300_000));
+  ctl.log(t('Worktree created: {0} ({1})', dir, branch));
   ctl.scheduleRefresh(100);
 
   const post = ctl.cfg().get<string>('postCreateCommand', '');
   if (post) {
-    const t = vscode.window.createTerminal({ name: `${branch}: setup`, cwd: dir });
-    t.show(true);
-    t.sendText(post);
+    const term = vscode.window.createTerminal({ name: `${branch}: setup`, cwd: dir });
+    term.show(true);
+    term.sendText(post);
   }
   for (const hook of worktreeCreatedHooks) {
     try {
       await hook(dir, branch, !!opts.quiet);
     } catch (e) {
-      ctl.log(`Depois de criar ${branch}: ${(e as Error).message}`);
+      ctl.log(t('After creating {0}: {1}', branch, (e as Error).message));
     }
   }
   if (opts.quiet) return dir;
-  const pick = await vscode.window.showInformationMessage(`Worktree ${branch} criada em ${dir}.`, 'Abrir em nova janela', 'Abrir terminal');
-  if (pick === 'Abrir em nova janela') await openWorktree(ctl, branch);
-  else if (pick === 'Abrir terminal') await openTerminal(ctl, branch);
+  const openWin = t('Open in new window');
+  const openTerm = t('Open terminal');
+  const pick = await vscode.window.showInformationMessage(t('Worktree {0} created at {1}.', branch, dir), openWin, openTerm);
+  if (pick === openWin) await openWorktree(ctl, branch);
+  else if (pick === openTerm) await openTerminal(ctl, branch);
   return dir;
 }
 
 export async function openWorktree(ctl: Controller, arg: BranchArg | { path?: string }) {
   const p = typeof arg === 'object' && arg && 'path' in arg && arg.path ? arg.path : undefined;
-  const target = p ?? (await worktreeOf(repoOf(ctl), (await pickBranch(ctl, arg as BranchArg, 'Abrir qual worktree?', true)) ?? ''))?.path;
+  const target = p ?? (await worktreeOf(repoOf(ctl), (await pickBranch(ctl, arg as BranchArg, t('Open which worktree?'), true)) ?? ''))?.path;
   if (target) await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(target), { forceNewWindow: true });
 }
 
 export async function openTerminal(ctl: Controller, arg: BranchArg | { path?: string }) {
   const p = typeof arg === 'object' && arg && 'path' in arg && arg.path ? arg.path : undefined;
-  const branch = p ? undefined : await pickBranch(ctl, arg as BranchArg, 'Terminal em qual worktree?', true);
+  const branch = p ? undefined : await pickBranch(ctl, arg as BranchArg, t('Open a terminal in which worktree?'), true);
   const cwd = p ?? (branch ? (await worktreeOf(repoOf(ctl), branch))?.path : undefined);
   if (!cwd) return;
-  const t = vscode.window.createTerminal({ name: branch ?? path.basename(cwd), cwd });
-  t.show();
+  const term = vscode.window.createTerminal({ name: branch ?? path.basename(cwd), cwd });
+  term.show();
 }
 
 export async function removeWorktree(ctl: Controller, arg: BranchArg, opts: { alsoBranch?: boolean } = {}) {
   const repo = repoOf(ctl);
-  const branch = await pickBranch(ctl, arg, 'Remover qual worktree?', true);
+  const branch = await pickBranch(ctl, arg, t('Remove which worktree?'), true);
   if (!branch) return;
   const wt = await worktreeOf(repo, branch);
   if (!wt) return;
   if (wt.isMain) {
-    vscode.window.showErrorMessage('A worktree principal não pode ser removida.');
+    vscode.window.showErrorMessage(t('The main worktree cannot be removed.'));
     return;
   }
   const open = (vscode.workspace.workspaceFolders ?? []).some(f => path.normalize(f.uri.fsPath).toLowerCase() === wt.path.toLowerCase());
   const st = await repo.status(wt.path);
   const detail = [
     wt.path,
-    st.changes ? `⚠ ${st.changes} alteração(ões) não commitada(s) serão PERDIDAS.` : 'Sem alterações pendentes.',
-    open ? '⚠ Esta janela está com essa worktree aberta.' : '',
+    st.changes ? t('⚠ {0} uncommitted change(s) will be LOST.', st.changes) : t('No pending changes.'),
+    open ? t('⚠ This window has that worktree open.') : '',
   ]
     .filter(Boolean)
     .join('\n');
-  const actions = opts.alsoBranch ? ['Remover worktree e branch'] : ['Remover worktree', 'Remover worktree e branch'];
-  const pick = await vscode.window.showWarningMessage(`Remover a worktree de ${branch}?`, { modal: true, detail }, ...actions);
+  const removeBoth = t('Remove worktree and branch');
+  const actions = opts.alsoBranch ? [removeBoth] : [t('Remove worktree'), removeBoth];
+  const pick = await vscode.window.showWarningMessage(t('Remove the {0} worktree?', branch), { modal: true, detail }, ...actions);
   if (!pick) return;
   const r = await repo.removeWorktree(wt.path, st.changes > 0);
   if (r.code !== 0) {
-    vscode.window.showErrorMessage(`Não consegui remover: ${r.stderr.trim()}`);
+    vscode.window.showErrorMessage(t('Could not remove: {0}', r.stderr.trim()));
     return;
   }
-  ctl.log(`Worktree removida: ${wt.path}`);
-  if (pick === 'Remover worktree e branch') await deleteBranch(ctl, branch, { skipConfirm: true });
+  ctl.log(t('Worktree removed: {0}', wt.path));
+  if (pick === removeBoth) await deleteBranch(ctl, branch, { skipConfirm: true });
   ctl.scheduleRefresh(100);
 }
 
 export async function deleteBranch(ctl: Controller, arg: BranchArg, opts: { skipConfirm?: boolean } = {}) {
   const repo = repoOf(ctl);
-  const branch = await pickBranch(ctl, arg, 'Excluir qual branch?');
+  const branch = await pickBranch(ctl, arg, t('Delete which branch?'));
   if (!branch) return;
   if (await worktreeOf(repo, branch)) {
-    vscode.window.showErrorMessage(`${branch} está aberta numa worktree. Remova a worktree primeiro.`);
+    vscode.window.showErrorMessage(t('{0} is open in a worktree. Remove the worktree first.', branch));
     return;
   }
   if (!opts.skipConfirm) {
-    const ok = await vscode.window.showWarningMessage(`Excluir a branch ${branch}?`, { modal: true }, 'Excluir');
+    const ok = await vscode.window.showWarningMessage(t('Delete branch {0}?', branch), { modal: true }, t('Delete'));
     if (!ok) return;
   }
   let r = await repo.run(['branch', '-d', branch]);
   if (r.code !== 0) {
     const force = await vscode.window.showWarningMessage(
-      `${branch} tem commits que não estão em nenhuma branch mesclada.`,
+      t('{0} has commits that are not in any merged branch.', branch),
       { modal: true, detail: r.stderr.trim() },
-      'Excluir mesmo assim (-D)',
+      t('Delete anyway (-D)'),
     );
     if (!force) return;
     r = await repo.run(['branch', '-D', branch]);
@@ -353,14 +365,14 @@ export async function deleteBranch(ctl: Controller, arg: BranchArg, opts: { skip
       return;
     }
   }
-  ctl.log(`Branch excluída: ${branch}`);
+  ctl.log(t('Branch deleted: {0}', branch));
   ctl.scheduleRefresh(100);
 }
 
 /** QuickPick com os arquivos alterados na branch desde que saiu da base; cada item abre um diff. */
 export async function diffWithBase(ctl: Controller, arg: BranchArg) {
   const repo = repoOf(ctl);
-  const branch = await pickBranch(ctl, arg, 'Revisar qual branch?');
+  const branch = await pickBranch(ctl, arg, t('Review which branch?'));
   if (!branch) return;
   const { baseRef } = await ctl.base();
   const mb = (await repo.exec(['merge-base', baseRef, branch])).trim();
@@ -380,13 +392,15 @@ export async function diffWithBase(ctl: Controller, arg: BranchArg) {
     files.push(...untracked.map(file => ({ status: '?', file })));
   }
   if (files.length === 0) {
-    vscode.window.showInformationMessage(`${branch} não tem alterações em relação a ${baseRef}.`);
+    vscode.window.showInformationMessage(t('{0} has no changes compared to {1}.', branch, baseRef));
     return;
   }
-  const label: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', '?': 'não rastreado', T: 'tipo alterado' };
+  const label: Record<string, string> = { A: t('added'), M: t('modified'), D: t('deleted'), '?': t('untracked'), T: t('type changed') };
   const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { file: string; status: string }>();
-  qp.title = `${branch} × ${baseRef} — ${files.length} arquivo(s)${wt ? ' (inclui o que não foi commitado)' : ''}`;
-  qp.placeholder = 'Enter abre o diff; a lista continua aberta para o próximo arquivo';
+  qp.title = wt
+    ? t('{0} × {1} — {2} file(s) (includes uncommitted changes)', branch, baseRef, files.length)
+    : t('{0} × {1} — {2} file(s)', branch, baseRef, files.length);
+  qp.placeholder = t('Enter opens the diff; the list stays open for the next file');
   qp.ignoreFocusOut = true;
   qp.items = files.map(f => ({ label: f.file, description: label[f.status] ?? f.status, file: f.file, status: f.status }));
   qp.onDidAccept(async () => {
@@ -418,7 +432,7 @@ export async function uncommittedFiles(repo: Repo, cwd: string): Promise<{ file:
 export function uncommittedDiffArgs(cwd: string, file: string, status: string, name: string, opts: { preserveFocus?: boolean; preview?: boolean } = {}): unknown[] {
   const left = status === 'A' || status === '?' ? gitUri(cwd, '__empty__', file) : gitUri(cwd, 'HEAD', file);
   const right = status === 'D' ? gitUri(cwd, '__empty__', file) : vscode.Uri.file(path.join(cwd, file));
-  return [left, right, `${path.basename(file)} (${name}: não commitado)`, { preview: opts.preview ?? true, preserveFocus: opts.preserveFocus }];
+  return [left, right, t('{0} ({1}: uncommitted)', path.basename(file), name), { preview: opts.preview ?? true, preserveFocus: opts.preserveFocus }];
 }
 
 function openUncommittedDiff(cwd: string, file: string, status: string, name: string, opts: { preserveFocus?: boolean; preview?: boolean } = {}) {
@@ -435,29 +449,29 @@ export async function showUncommitted(ctl: Controller, arg: BranchArg | { path?:
   if (!dir) {
     const withChanges = (ctl.state?.worktrees ?? []).filter(w => w.changes && !w.prunable);
     const list = withChanges.length ? withChanges.map(w => ({ label: w.name, description: `●${w.changes}  ${w.path}`, p: w.path })) : wts.map(w => ({ label: w.branch ?? path.basename(w.path), description: w.path, p: w.path }));
-    dir = (await vscode.window.showQuickPick(list, { placeHolder: 'Alterações não commitadas de qual worktree?' }))?.p;
+    dir = (await vscode.window.showQuickPick(list, { placeHolder: t('Uncommitted changes of which worktree?') }))?.p;
     if (!dir) return;
   }
   const cwd = dir;
   const name = wts.find(w => w.path.toLowerCase() === cwd.toLowerCase())?.branch ?? path.basename(cwd);
   const files = await uncommittedFiles(repo, cwd);
   if (!files.length) {
-    vscode.window.showInformationMessage(`${name} não tem alterações não commitadas.`);
+    vscode.window.showInformationMessage(t('{0} has no uncommitted changes.', name));
     return;
   }
-  const label: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', '?': 'novo, não rastreado', T: 'tipo alterado' };
+  const label: Record<string, string> = { A: t('added'), M: t('modified'), D: t('deleted'), '?': t('new, untracked'), T: t('type changed') };
   type Item = vscode.QuickPickItem & { file?: string; status?: string; all?: boolean; patch?: boolean; window?: boolean; terminal?: boolean };
   const qp = vscode.window.createQuickPick<Item>();
-  qp.title = `${name} — ${files.length} arquivo(s) não commitado(s)`;
-  qp.placeholder = 'Enter abre o diff; a lista continua aberta para o próximo arquivo';
+  qp.title = t('{0} — {1} uncommitted file(s)', name, files.length);
+  qp.placeholder = t('Enter opens the diff; the list stays open for the next file');
   qp.ignoreFocusOut = true;
   qp.matchOnDescription = true;
   qp.items = [
-    { label: '$(diff-multiple) Abrir todos os diffs', description: files.length > 30 ? 'os 30 primeiros' : undefined, all: true },
-    { label: '$(file-code) Ver patch completo', description: 'tudo num documento só', patch: true },
-    { label: '$(empty-window) Abrir a worktree em nova janela', window: true },
-    { label: '$(terminal) Abrir terminal na worktree', terminal: true },
-    { label: 'Arquivos', kind: vscode.QuickPickItemKind.Separator },
+    { label: `$(diff-multiple) ${t('Open all diffs')}`, description: files.length > 30 ? t('the first 30') : undefined, all: true },
+    { label: `$(file-code) ${t('View full patch')}`, description: t('all in a single document'), patch: true },
+    { label: `$(empty-window) ${t('Open the worktree in a new window')}`, window: true },
+    { label: `$(terminal) ${t('Open a terminal in the worktree')}`, terminal: true },
+    { label: t('Files'), kind: vscode.QuickPickItemKind.Separator },
     ...files.map(f => ({
       label: path.basename(f.file),
       description: `${path.dirname(f.file) === '.' ? '' : path.dirname(f.file)}  ${label[f.status] ?? f.status}`,
@@ -497,14 +511,14 @@ export async function newWorktreeWithTask(ctl: Controller, arg?: string | { bran
   const o = typeof arg === 'string' ? { branch: arg } : (arg ?? {});
   let from = o.startPoint ?? o.branch;
   if (!from) {
-    from = await pickStartPoint(ctl, 'Nova worktree com tarefa (1/3)');
+    from = await pickStartPoint(ctl, t('New worktree with task (1/3)'));
     if (!from) return;
   }
   const prompt =
     o.prompt ??
     (await vscode.window.showInputBox({
-      title: `Nova worktree com tarefa (2/3) — a partir de ${from}`,
-      prompt: 'O que o agente deve fazer na nova worktree?',
+      title: t('New worktree with task (2/3) — from {0}', from),
+      prompt: t('What should the agent do in the new worktree?'),
       ignoreFocusOut: true,
     }));
   if (!prompt?.trim()) return;
@@ -515,14 +529,14 @@ export async function newWorktreeWithTask(ctl: Controller, arg?: string | { bran
   const branch =
     o.name ??
     (await vscode.window.showInputBox({
-    title: `Nova worktree com tarefa (3/3) — a partir de ${from}`,
-    prompt: 'Nome da nova branch',
+    title: t('New worktree with task (3/3) — from {0}', from),
+    prompt: t('New branch name'),
     value: suggestion,
     ignoreFocusOut: true,
     validateInput: v => {
-      if (!v.trim()) return 'Informe um nome.';
-      if (/[\s~^:?*[\\]|\.\.|@\{|\/$|^\/|\.lock$/.test(v)) return 'Nome de branch inválido.';
-      if (names.has(v)) return 'Essa branch já existe.';
+      if (!v.trim()) return t('Enter a name.');
+      if (/[\s~^:?*[\\]|\.\.|@\{|\/$|^\/|\.lock$/.test(v)) return t('Invalid branch name.');
+      if (names.has(v)) return t('That branch already exists.');
       return undefined;
     },
   }));
@@ -534,7 +548,7 @@ export async function newWorktreeWithTask(ctl: Controller, arg?: string | { bran
 
 export async function copyText(text: string) {
   await vscode.env.clipboard.writeText(text);
-  vscode.window.setStatusBarMessage(`Copiado: ${text}`, 2500);
+  vscode.window.setStatusBarMessage(t('Copied: {0}', text), 2500);
 }
 
 /** Busca e abre qualquer arquivo de outra worktree sem trocar de janela. */
@@ -549,7 +563,7 @@ export async function openFileInWorktree(ctl: Controller, arg: BranchArg | { pat
       byArg ??
       (await vscode.window.showQuickPick(
         wts.map(w => ({ label: w.branch ?? path.basename(w.path), description: w.path, wt: w })),
-        { placeHolder: 'Arquivos de qual worktree?' },
+        { placeHolder: t('Files from which worktree?') },
       ))?.wt;
     if (!pick) return;
     dir = pick.path;
@@ -558,14 +572,14 @@ export async function openFileInWorktree(ctl: Controller, arg: BranchArg | { pat
   const files = (await repo.exec(['ls-files', '--cached', '--others', '--exclude-standard'], dir)).split(/\r?\n/).filter(Boolean);
   const chosen = await vscode.window.showQuickPick(
     files.map(f => ({ label: path.basename(f), description: path.dirname(f) === '.' ? '' : path.dirname(f), file: f })),
-    { placeHolder: `Abrir arquivo de ${label} (${files.length} arquivos)`, matchOnDescription: true },
+    { placeHolder: t('Open a file from {0} ({1} files)', label, files.length), matchOnDescription: true },
   );
   if (chosen) await vscode.window.showTextDocument(vscode.Uri.file(path.join(dir, chosen.file)), { preview: true });
 }
 
 export async function toggleFavorite(ctl: Controller, arg: BranchArg | { path?: string }) {
   const p = typeof arg === 'object' && arg && 'path' in arg && arg.path ? arg.path : undefined;
-  const wtPath = p ?? (await worktreeOf(repoOf(ctl), (await pickBranch(ctl, arg as BranchArg, 'Favoritar qual worktree?', true)) ?? ''))?.path;
+  const wtPath = p ?? (await worktreeOf(repoOf(ctl), (await pickBranch(ctl, arg as BranchArg, t('Favorite which worktree?'), true)) ?? ''))?.path;
   if (!wtPath) return;
   await ctl.setFavorite(wtPath, !ctl.isFavorite(wtPath));
   ctl.scheduleRefresh(20);
@@ -576,7 +590,7 @@ export async function pruneWorktrees(ctl: Controller) {
   const repo = repoOf(ctl);
   const orphans = (await repo.worktreesFast()).filter(w => w.prunable);
   if (orphans.length === 0) {
-    vscode.window.showInformationMessage('Nenhuma worktree órfã.');
+    vscode.window.showInformationMessage(t('No orphaned worktrees.'));
     return;
   }
   const list = orphans
@@ -584,19 +598,20 @@ export async function pruneWorktrees(ctl: Controller) {
     .map(o => `• ${o.branch ?? o.path}`)
     .join('\n');
   const ok = await vscode.window.showWarningMessage(
-    `Esquecer ${orphans.length} worktree(s) órfã(s)?`,
+    t('Forget {0} orphaned worktree(s)?', orphans.length),
     {
       modal: true,
-      detail: `A pasta delas não existe mais; só o registro no .git é apagado (git worktree prune). As branches continuam.\n\n${list}${
-        orphans.length > 12 ? `\n… e mais ${orphans.length - 12}` : ''
-      }`,
+      detail: t(
+        'Their folders no longer exist; only the record in .git is deleted (git worktree prune). The branches remain.\n\n{0}',
+        list + (orphans.length > 12 ? '\n' + t('… and {0} more', orphans.length - 12) : ''),
+      ),
     },
-    'Remover órfãs',
+    t('Remove orphans'),
   );
   if (!ok) return;
   await repo.exec(['worktree', 'prune']);
-  ctl.log(`git worktree prune: ${orphans.length} registro(s) removido(s).`);
-  vscode.window.showInformationMessage(`${orphans.length} worktree(s) órfã(s) removida(s).`);
+  ctl.log(t('git worktree prune: {0} record(s) removed.', orphans.length));
+  vscode.window.showInformationMessage(t('{0} orphaned worktree(s) removed.', orphans.length));
   ctl.scheduleRefresh(50);
 }
 
@@ -628,7 +643,7 @@ export function mergedWorktrees(ctl: Controller) {
 /** " Libera ~1,2 GB." quando o espaço já foi calculado (src/env). */
 function freed(paths: string[]): string {
   const b = bytesOf(paths);
-  return b ? ` Libera ~${formatBytes(b)}.` : '';
+  return b ? ' ' + t('Frees ~{0}.', formatBytes(b)) : '';
 }
 
 export async function removeMerged(ctl: Controller) {
@@ -636,8 +651,8 @@ export async function removeMerged(ctl: Controller) {
   if (!s) return;
   if (s.pending > 0) {
     const go = await vscode.window.showInformationMessage(
-      `Ainda estou comparando ${s.pending} worktree(s) com ${s.base}; algumas mescladas podem não aparecer agora.`,
-      'Continuar assim',
+      t('Still comparing {0} worktree(s) with {1}; some merged ones may not show up yet.', s.pending, s.base),
+      t('Continue anyway'),
     );
     if (!go) return;
   }
@@ -645,36 +660,38 @@ export async function removeMerged(ctl: Controller) {
   if (!removable.length) {
     vscode.window.showInformationMessage(
       dirty.length
-        ? `Nenhuma worktree mesclada e limpa. ${dirty.length} mesclada(s) têm alterações não commitadas e ficaram de fora.`
-        : `Nenhuma worktree com branch já mesclada em ${s.base}.`,
+        ? t('No merged, clean worktrees. {0} merged worktree(s) have uncommitted changes and were left out.', dirty.length)
+        : t('No worktrees with a branch already merged into {0}.', s.base),
     );
     return;
   }
-  const list = removable.slice(0, 15).map(w => `• ${w.name}`).join('\n') + (removable.length > 15 ? `\n… e mais ${removable.length - 15}` : '');
+  const list = removable.slice(0, 15).map(w => `• ${w.name}`).join('\n') + (removable.length > 15 ? '\n' + t('… and {0} more', removable.length - 15) : '');
+  const removeBoth = t('Remove worktrees and branches');
+  const chooseBtn = t('Choose from the list…');
   const pick = await vscode.window.showWarningMessage(
-    `Remover ${removable.length} worktree(s) já mesclada(s) em ${s.base}?`,
+    t('Remove {0} worktree(s) already merged into {1}?', removable.length, s.base),
     {
       modal: true,
       detail: [
-        `Todas estão limpas e com a branch inteira em ${s.base}; nada se perde.${freed(removable.map(w => w.path))}`,
+        t('All are clean and their branches are fully in {0}; nothing is lost.', s.base) + freed(removable.map(w => w.path)),
         list,
-        dirty.length ? `${dirty.length} mesclada(s) com alterações não commitadas ficaram de fora.` : '',
-        'Favoritas, com agente aberto e branches protegidas nunca entram.',
+        dirty.length ? t('{0} merged worktree(s) with uncommitted changes were left out.', dirty.length) : '',
+        t('Favorites, worktrees with an open agent and protected branches are never included.'),
       ]
         .filter(Boolean)
         .join('\n\n'),
     },
-    'Remover worktrees e branches',
-    'Remover só as worktrees',
-    'Escolher na lista…',
+    removeBoth,
+    t('Remove only the worktrees'),
+    chooseBtn,
   );
   if (!pick) return;
-  if (pick === 'Escolher na lista…') return cleanupWorktrees(ctl);
-  const alsoBranch = pick === 'Remover worktrees e branches';
+  if (pick === chooseBtn) return cleanupWorktrees(ctl);
+  const alsoBranch = pick === removeBoth;
   const repo = repoOf(ctl);
   let removed = 0;
   const failed: string[] = [];
-  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Removendo worktrees mescladas', cancellable: true }, async (progress, token) => {
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Removing merged worktrees'), cancellable: true }, async (progress, token) => {
     for (const w of removable) {
       if (token.isCancellationRequested) break;
       progress.report({ message: `${w.name} (${removed + failed.length + 1}/${removable.length})`, increment: 100 / removable.length });
@@ -688,12 +705,12 @@ export async function removeMerged(ctl: Controller) {
       if (alsoBranch && w.branch) await repo.run(['branch', '-d', w.branch]);
     }
   });
-  ctl.log(`Remover mescladas: ${removed} removida(s).${failed.length ? `\n${failed.join('\n')}` : ''}`);
+  ctl.log(t('Remove merged: {0} removed.', removed) + (failed.length ? `\n${failed.join('\n')}` : ''));
   if (failed.length) {
-    const see = await vscode.window.showWarningMessage(`${removed} removida(s); ${failed.length} não (veja o log).`, 'Ver log');
+    const see = await vscode.window.showWarningMessage(t('{0} removed; {1} not (see the log).', removed, failed.length), t('View log'));
     if (see) ctl.out.show();
   } else {
-    vscode.window.showInformationMessage(`${removed} worktree(s) mesclada(s) removida(s)${alsoBranch ? ', com as branches' : ''}.`);
+    vscode.window.showInformationMessage(alsoBranch ? t('{0} merged worktree(s) removed, along with their branches.', removed) : t('{0} merged worktree(s) removed.', removed));
   }
   ctl.scheduleRefresh(50);
 }
@@ -720,31 +737,32 @@ export async function removeMergedBranches(ctl: Controller) {
   if (!s) return;
   const branches = await mergedBranches(ctl);
   if (!branches.length) {
-    vscode.window.showInformationMessage(`Nenhuma branch sem worktree já mesclada em ${s.base}.`);
+    vscode.window.showInformationMessage(t('No branches without a worktree already merged into {0}.', s.base));
     return;
   }
-  const list = branches.slice(0, 15).map(b => `• ${b}`).join('\n') + (branches.length > 15 ? `\n… e mais ${branches.length - 15}` : '');
+  const list = branches.slice(0, 15).map(b => `• ${b}`).join('\n') + (branches.length > 15 ? '\n' + t('… and {0} more', branches.length - 15) : '');
+  const chooseBtn = t('Choose from the list…');
   const pick = await vscode.window.showWarningMessage(
-    `Excluir ${branches.length} branch(es) já mesclada(s) em ${s.base}?`,
+    t('Delete {0} branch(es) already merged into {1}?', branches.length, s.base),
     {
       modal: true,
       detail: [
-        `Nenhuma tem worktree e todos os commits delas já estão em ${s.base}; nada se perde. Só as branches locais são excluídas (as do remoto continuam).`,
+        t('None has a worktree and all their commits are already in {0}; nothing is lost. Only local branches are deleted (remote ones remain).', s.base),
         list,
-        `Uma branch recém-criada a partir de ${s.base}, ainda sem commits, também conta como mesclada.`,
-        'A base e as branches protegidas nunca entram.',
+        t('A branch just created from {0}, with no commits yet, also counts as merged.', s.base),
+        t('The base and protected branches are never included.'),
       ].join('\n\n'),
     },
-    'Excluir branches',
-    'Escolher na lista…',
+    t('Delete branches'),
+    chooseBtn,
   );
   if (!pick) return;
   let chosen = branches;
-  if (pick === 'Escolher na lista…') {
+  if (pick === chooseBtn) {
     const info = new Map(s.branches.map(b => [b.name, b]));
     const picked = await vscode.window.showQuickPick(
       branches.map(b => ({ label: b, description: info.get(b)?.subject ?? '', picked: true })),
-      { canPickMany: true, matchOnDescription: true, title: `Excluir branches mescladas em ${s.base}`, placeHolder: 'Desmarque as que quer manter' },
+      { canPickMany: true, matchOnDescription: true, title: t('Delete branches merged into {0}', s.base), placeHolder: t('Uncheck the ones you want to keep') },
     );
     if (!picked?.length) return;
     chosen = picked.map(p => p.label);
@@ -756,7 +774,7 @@ export async function removeMergedBranches(ctl: Controller) {
   let removed = 0;
   for (const b of chosen) {
     if (!still.has(b)) {
-      failed.push(`${b}: não está mais mesclada ou ganhou worktree`);
+      failed.push(t('{0}: no longer merged or now has a worktree', b));
       continue;
     }
     // -D: `-d` compara com o HEAD/upstream, não com a base; a checagem acima já garante que está na base.
@@ -764,12 +782,12 @@ export async function removeMergedBranches(ctl: Controller) {
     if (r.code !== 0) failed.push(`${b}: ${r.stderr.trim()}`);
     else removed++;
   }
-  ctl.log(`Excluir branches mescladas: ${removed} excluída(s).${failed.length ? `\n${failed.join('\n')}` : ''}`);
+  ctl.log(t('Delete merged branches: {0} deleted.', removed) + (failed.length ? `\n${failed.join('\n')}` : ''));
   if (failed.length) {
-    const see = await vscode.window.showWarningMessage(`${removed} excluída(s); ${failed.length} não (veja o log).`, 'Ver log');
+    const see = await vscode.window.showWarningMessage(t('{0} deleted; {1} not (see the log).', removed, failed.length), t('View log'));
     if (see) ctl.out.show();
   } else {
-    vscode.window.showInformationMessage(`${removed} branch(es) mesclada(s) excluída(s).`);
+    vscode.window.showInformationMessage(t('{0} merged branch(es) deleted.', removed));
   }
   ctl.scheduleRefresh(50);
 }
@@ -788,8 +806,8 @@ export async function cleanupWorktrees(ctl: Controller, preselected?: string[]) 
       const merged = w.compareKnown && w.ahead === 0;
       const clean = w.statusKnown && w.changes === 0;
       const tags = [
-        merged ? 'mesclada' : w.compareKnown ? `↑${w.ahead} fora de ${s.base}` : 'comparando…',
-        clean ? 'limpa' : w.statusKnown ? `● ${w.changes} alteração(ões)` : 'status…',
+        merged ? t('merged') : w.compareKnown ? t('↑{0} not in {1}', w.ahead, s.base) : t('comparing…'),
+        clean ? t('clean') : w.statusKnown ? t('● {0} change(s)', w.changes) : 'status…',
         w.favorite ? '★' : '',
         w.agents.length ? `✦ ${agentsLabel(w.agents)}` : '',
         age(w.date),
@@ -801,8 +819,8 @@ export async function cleanupWorktrees(ctl: Controller, preselected?: string[]) 
       canPickMany: true,
       matchOnDescription: true,
       matchOnDetail: true,
-      title: `Limpar worktrees: ${items.filter(i => i.picked).length} já marcadas (mescladas em ${s.base}, limpas, sem agente, não favoritas)`,
-      placeHolder: 'Marque as worktrees a remover; digite para filtrar',
+      title: t('Clean up worktrees: {0} already checked (merged into {1}, clean, no agent, not favorites)', items.filter(i => i.picked).length, s.base),
+      placeHolder: t('Check the worktrees to remove; type to filter'),
     });
     if (!picked?.length) return;
     chosen = picked.map(p => p.wt);
@@ -812,24 +830,20 @@ export async function cleanupWorktrees(ctl: Controller, preselected?: string[]) 
   const dirty = chosen.filter(w => w.changes > 0 || !w.statusKnown);
   const unmerged = chosen.filter(w => !(w.compareKnown && w.ahead === 0));
   const detail = [
-    dirty.length ? `⚠ ${dirty.length} com alterações não commitadas (ou ainda sem status): elas serão PERDIDAS.` : 'Todas limpas.',
-    unmerged.length ? `${unmerged.length} têm commits fora de ${s.base}: a branch delas é mantida mesmo pedindo para excluir.` : '',
+    dirty.length ? t('⚠ {0} with uncommitted changes (or no status yet): they will be LOST.', dirty.length) : t('All clean.'),
+    unmerged.length ? t('{0} have commits not in {1}: their branches are kept even if you ask to delete them.', unmerged.length, s.base) : '',
   ]
     .filter(Boolean)
     .join('\n');
-  const pick = await vscode.window.showWarningMessage(
-    `Remover ${chosen.length} worktree(s)?`,
-    { modal: true, detail },
-    'Remover worktrees',
-    'Remover worktrees e branches mescladas',
-  );
+  const removeBoth = t('Remove worktrees and merged branches');
+  const pick = await vscode.window.showWarningMessage(t('Remove {0} worktree(s)?', chosen.length), { modal: true, detail }, t('Remove worktrees'), removeBoth);
   if (!pick) return;
-  const alsoBranch = pick === 'Remover worktrees e branches mescladas';
+  const alsoBranch = pick === removeBoth;
 
   const failed: string[] = [];
   let removed = 0;
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Removendo worktrees', cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title: t('Removing worktrees'), cancellable: true },
     async (progress, token) => {
       for (const w of chosen) {
         if (token.isCancellationRequested) break;
@@ -844,12 +858,12 @@ export async function cleanupWorktrees(ctl: Controller, preselected?: string[]) 
       }
     },
   );
-  ctl.log(`Limpeza: ${removed} worktree(s) removida(s).${failed.length ? `\nFalhas:\n${failed.join('\n')}` : ''}`);
+  ctl.log(t('Cleanup: {0} worktree(s) removed.', removed) + (failed.length ? `\n${t('Failures:')}\n${failed.join('\n')}` : ''));
   if (failed.length) {
-    const see = await vscode.window.showWarningMessage(`${removed} removida(s), ${failed.length} falharam.`, 'Ver log');
+    const see = await vscode.window.showWarningMessage(t('{0} removed, {1} failed.', removed, failed.length), t('View log'));
     if (see) ctl.out.show();
   } else {
-    vscode.window.showInformationMessage(`${removed} worktree(s) removida(s).`);
+    vscode.window.showInformationMessage(t('{0} worktree(s) removed.', removed));
   }
   ctl.scheduleRefresh(50);
 }

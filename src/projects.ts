@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { Controller } from './controller';
 import { Repo } from './git';
+import { t } from './i18n';
 
 const STORE_KEY = 'projects';
 
@@ -125,45 +126,45 @@ export class Projects implements vscode.Disposable {
   async add() {
     const how = await vscode.window.showQuickPick(
       [
-        { label: '$(folder-opened) Escolher a pasta de um repositório…', v: 'one' },
-        { label: '$(search) Procurar repositórios numa pasta…', detail: 'Lista os repositórios logo abaixo da pasta escolhida (ex.: repositorios_git)', v: 'scan' },
+        { label: `$(folder-opened) ${t('Choose a repository folder…')}`, v: 'one' },
+        { label: `$(search) ${t('Find repositories in a folder…')}`, detail: t('Lists the repositories right below the chosen folder (e.g. git_repos)'), v: 'scan' },
       ],
-      { title: 'Adicionar projeto' },
+      { title: t('Add project') },
     );
     if (!how) return;
-    const dir = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: how.v === 'one' ? 'Adicionar' : 'Procurar aqui' });
+    const dir = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: how.v === 'one' ? t('Add') : t('Search here') });
     if (!dir?.[0]) return;
     let targets = [dir[0].fsPath];
     if (how.v === 'scan') {
       const known = new Set(this.list().map(p => key(p.path)));
       const found = scanRepos(dir[0].fsPath);
       if (!found.length) {
-        vscode.window.showInformationMessage(`Nenhum repositório git logo abaixo de ${dir[0].fsPath}.`);
+        vscode.window.showInformationMessage(t('No git repositories right below {0}.', dir[0].fsPath));
         return;
       }
       const picks = await vscode.window.showQuickPick(
-        found.map(f => ({ label: path.basename(f), description: known.has(key(f)) ? 'já está na lista' : '', detail: f, picked: false, f })),
-        { canPickMany: true, title: `${found.length} repositório(s) em ${dir[0].fsPath}`, matchOnDetail: true },
+        found.map(f => ({ label: path.basename(f), description: known.has(key(f)) ? t('already in the list') : '', detail: f, picked: false, f })),
+        { canPickMany: true, title: t('{0} repositories in {1}', found.length, dir[0].fsPath), matchOnDetail: true },
       );
       if (!picks?.length) return;
       targets = picks.map(p => p.f);
     }
     const added: string[] = [];
-    for (const t of targets) {
-      const main = await this.addPath(t);
+    for (const target of targets) {
+      const main = await this.addPath(target);
       if (main) added.push(path.basename(main));
-      else vscode.window.showWarningMessage(`${t} não é um repositório git.`);
+      else vscode.window.showWarningMessage(t('{0} is not a git repository.', target));
     }
     if (added.length === 1) {
-      const go = await vscode.window.showInformationMessage(`Projeto ${added[0]} adicionado.`, 'Tornar ativo');
+      const go = await vscode.window.showInformationMessage(t('Project {0} added.', added[0]), t('Make active'));
       if (go) await this.ctl.setActiveRepo(targets[0]);
     } else if (added.length) {
-      vscode.window.showInformationMessage(`${added.length} projetos adicionados.`);
+      vscode.window.showInformationMessage(t('{0} projects added.', added.length));
     }
   }
 
   async remove(p?: string) {
-    const target = p ?? (await this.pick('Remover qual projeto da lista?', true))?.path;
+    const target = p ?? (await this.pick(t('Remove which project from the list?'), true))?.path;
     if (!target) return;
     await this.ctl.ctx.globalState.update(
       STORE_KEY,
@@ -176,13 +177,15 @@ export class Projects implements vscode.Disposable {
     const stored = new Set(this.stored().map(key));
     const list = this.list().filter(p => !onlyStored || stored.has(key(p.path)));
     if (!list.length) {
-      vscode.window.showInformationMessage(onlyStored ? 'Nenhum projeto adicionado manualmente.' : 'Nenhum projeto. Use "Adicionar projeto…".');
+      vscode.window.showInformationMessage(onlyStored ? t('No projects added manually.') : t('No projects. Use "Add project…".'));
       return undefined;
     }
     const picked = await vscode.window.showQuickPick(
       list.map(p => ({
         label: `${p.active ? '$(check) ' : '$(repo) '}${p.name}`,
-        description: p.missing ? 'pasta não encontrada' : `${p.branch ?? ''} · ${p.worktrees} worktree(s)${p.inWorkspace ? ' · no workspace' : ''}`,
+        description: p.missing
+          ? t('folder not found')
+          : `${p.branch ?? ''} · ${t('{0} worktree(s)', p.worktrees)}${p.inWorkspace ? ` · ${t('in the workspace')}` : ''}`,
         detail: p.path,
         p,
       })),
@@ -193,10 +196,10 @@ export class Projects implements vscode.Disposable {
 
   async switch(p?: string) {
     if (p) return this.ctl.setActiveRepo(p);
-    const picked = await this.pick('Trocar projeto');
+    const picked = await this.pick(t('Switch project'));
     if (!picked) return;
     if (picked.missing) {
-      vscode.window.showWarningMessage(`A pasta ${picked.path} não existe mais.`);
+      vscode.window.showWarningMessage(t('The folder {0} no longer exists.', picked.path));
       return;
     }
     await this.ctl.setActiveRepo(picked.path);
@@ -212,12 +215,12 @@ class ProjectItem extends vscode.TreeItem {
     super(project.name, vscode.TreeItemCollapsibleState.None);
     this.id = `project:${key(project.path)}`;
     this.description = project.missing
-      ? 'pasta não encontrada'
-      : [project.active ? 'ativo' : '', project.branch, `${project.worktrees} worktree(s)`].filter(Boolean).join(' · ');
-    this.tooltip = `${project.path}${project.inWorkspace ? '\n(pasta do workspace)' : ''}`;
+      ? t('folder not found')
+      : [project.active ? t('active') : '', project.branch, t('{0} worktree(s)', project.worktrees)].filter(Boolean).join(' · ');
+    this.tooltip = `${project.path}${project.inWorkspace ? `\n${t('(workspace folder)')}` : ''}`;
     this.iconPath = new vscode.ThemeIcon(project.active ? 'pass-filled' : project.missing ? 'warning' : 'repo', project.active ? new vscode.ThemeColor('testing.iconPassed') : undefined);
     this.contextValue = project.inWorkspace ? 'project-ws' : 'project';
-    this.command = { command: 'worktreeGraph.switchProject', title: 'Tornar ativo', arguments: [project.path] };
+    this.command = { command: 'worktreeGraph.switchProject', title: t('Make active'), arguments: [project.path] };
   }
 
   get path() {

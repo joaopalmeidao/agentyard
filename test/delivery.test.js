@@ -21,8 +21,8 @@ check('prefixo convencional: tipo, escopo, incompatível', () => {
 
 check('agrupamento em seções pt-BR, na ordem certa', () => {
   const g = d.groupEntries(['docs: a', 'fix: b', 'feat: c', 'ci: d', 'build: e', 'qualquer'].map(s => d.parseConventional(s)));
-  assert.deepStrictEqual(g.map(x => x.title), ['Novidades', 'Correções', 'Documentação', 'Build e CI', 'Outras mudanças']);
-  assert.strictEqual(g.find(x => x.title === 'Build e CI').entries.length, 2);
+  assert.deepStrictEqual(g.map(x => x.title), ['Features', 'Bug fixes', 'Documentation', 'Build and CI', 'Other changes']);
+  assert.strictEqual(g.find(x => x.title === 'Build and CI').entries.length, 2);
 });
 
 check('sugestão de versão (semver)', () => {
@@ -46,7 +46,7 @@ check('mensagens de merge: GitHub, GitLab e local', () => {
 check('changelog: bloco e inserção no topo sem apagar nada', () => {
   const block = d.renderChangelog('1.2.0', new Date(2026, 8, 27), [d.parseConventional('feat(api): nova rota'), { ...d.parseConventional('fix: erro'), ref: '#7' }]);
   assert.ok(block.startsWith('## 1.2.0 (2026-09-27)'));
-  assert.ok(block.includes('### Novidades\n\n- **api:** nova rota'));
+  assert.ok(block.includes('### Features\n\n- **api:** nova rota'));
   assert.ok(block.includes('- erro (#7)'));
   const old = '# Changelog\n\nTexto de apresentação.\n\n## 1.1.0\n- antigo\n';
   const out = d.insertChangelog(old, block);
@@ -85,9 +85,9 @@ check('relatório: resumo e seção por branch', () => {
     totals: { commits: 1, files: 2, added: 10, deleted: 1, tokens: 12000, sessions: 1 },
   });
   assert.ok(md.startsWith('# Relatório de hoje — loja'));
-  assert.ok(md.includes('**1** commit(s) em **1** branch(es)'));
+  assert.ok(md.includes('**1** commit(s) in **1** branch(es)'));
   assert.ok(md.includes('#2 feat: z'));
-  assert.ok(md.includes('3 passaram, 1 falharam'));
+  assert.ok(md.includes('3 passed, 1 failed'));
   assert.ok(md.includes('### `ai/a`') && md.includes('feat: a (`1234567`)'));
   assert.ok(!md.includes('ai/parada'), 'branch sem atividade fica de fora');
   assert.ok(md.includes('AgentYard'));

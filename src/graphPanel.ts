@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import { commitDetails } from './commits';
 import { Controller } from './controller';
+import { bundle, locale, t } from './i18n';
 
 export type ActionHandler = (action: string, args: Record<string, string>) => Promise<void>;
 
@@ -78,8 +79,10 @@ export class GraphPanel implements vscode.Disposable {
     const w = this.panel.webview;
     const media = (f: string) => w.asWebviewUri(vscode.Uri.joinPath(this.ctl.ctx.extensionUri, 'media', f));
     const nonce = crypto.randomBytes(16).toString('base64');
+    // traduções do webview: o graph.js usa window.__L10N (sem nada, fica em inglês)
+    const l10n = JSON.stringify({ bundle: bundle(), locale: locale() }).replace(/</g, '\\u003c');
     return `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="${locale()}">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${w.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${w.cspSource} data:;">
@@ -88,7 +91,8 @@ export class GraphPanel implements vscode.Disposable {
 <title>AgentYard</title>
 </head>
 <body data-vscode-context='{"preventDefaultContextMenuItems": true}'>
-<div id="app"><div class="empty">Carregando…</div></div>
+<div id="app"><div class="empty">${t('Loading…')}</div></div>
+<script nonce="${nonce}">window.__L10N = ${l10n};</script>
 <script nonce="${nonce}" src="${media('graph.js')}"></script>
 </body>
 </html>`;

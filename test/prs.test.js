@@ -32,7 +32,7 @@ const iso = daysAgo => new Date(Date.now() - daysAgo * 86400000).toISOString();
     assert.strictEqual(checkStatus('success'), 'success');
     assert.strictEqual(checkStatus('manual'), 'pending');
     assert.deepStrictEqual(countDiff('--- a\n+++ b\n@@\n+x\n+y\n-z\n ctx'), { additions: 2, deletions: 1 });
-    assert.strictEqual(shortText('a\n\n```js\ncode\n```\n b'), 'a [código] b');
+    assert.strictEqual(shortText('a\n\n```js\ncode\n```\n b'), 'a [code] b');
     assert.deepStrictEqual(fetchSpecFor({ id: 7, source: 'feat/x', fork: true }, 'github'), { refspec: 'refs/pull/7/head:refs/heads/pr/7', localBranch: 'pr/7' });
     assert.strictEqual(fetchSpecFor({ id: 7, source: 'feat/x', fork: false }, 'github').localBranch, 'feat/x');
   });
@@ -150,7 +150,7 @@ const iso = daysAgo => new Date(Date.now() - daysAgo * 86400000).toISOString();
     const g = await b.groups('eu');
     assert.deepStrictEqual(g.open.map(p => p.ref), ['!3']);
     assert.strictEqual(b.can.merge, false);
-    await assert.rejects(b.files(g.open[0]), /navegador/);
+    await assert.rejects(b.files(g.open[0]), /browser/);
   });
 
   server.close();

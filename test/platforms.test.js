@@ -123,7 +123,7 @@ const check = async (name, fn) => {
     assert.strictEqual(last().headers.authorization, 'Bearer token-de-acesso');
     const off = new BitbucketCloudClient({ ...bbRemote, projectPath: 'equipe/sem-issues' }, 't', `${base}/bbc`);
     assert.deepStrictEqual(await off.listIssues('all'), []);
-    await assert.rejects(off.createIssue({ title: 'x', body: '' }), /issue tracker está desativado/);
+    await assert.rejects(off.createIssue({ title: 'x', body: '' }), /issue tracker is disabled/);
   });
 
   await check('Bitbucket Pipelines: lista, passos, log, disparar e parar', async () => {
@@ -164,7 +164,7 @@ const check = async (name, fn) => {
     const b = new BitbucketServerBuilds(bbsRemote, 'http-token');
     const [build] = await b.list('feat/s');
     assert.deepStrictEqual([build.name, build.status, build.sha, build.url], ['Jenkins', 'success', 'c0ffee', 'http://ci/1']);
-    await assert.rejects(b.retry(build), /servidor de CI/);
+    await assert.rejects(b.retry(build), /CI server/);
   });
 
   // Azure DevOps

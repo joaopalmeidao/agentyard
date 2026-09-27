@@ -4,6 +4,7 @@
  */
 import type { Repo } from './git';
 import type { SessionInfo, TokenUsage } from './claude/sessions';
+import { locale, t } from './i18n';
 
 export type RangeId = 'today' | 'yesterday' | 'week';
 
@@ -19,9 +20,9 @@ export interface Range {
 export function rangeOf(id: RangeId, now = Date.now()): Range {
   const d = new Date(now);
   const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  if (id === 'yesterday') return { id, from: midnight - 86_400_000, to: midnight, unit: 'hour', label: 'ontem' };
-  if (id === 'week') return { id, from: midnight - 6 * 86_400_000, to: now, unit: 'day', label: 'últimos 7 dias' };
-  return { id: 'today', from: midnight, to: now, unit: 'hour', label: 'hoje' };
+  if (id === 'yesterday') return { id, from: midnight - 86_400_000, to: midnight, unit: 'hour', label: t('yesterday') };
+  if (id === 'week') return { id, from: midnight - 6 * 86_400_000, to: now, unit: 'day', label: t('last 7 days') };
+  return { id: 'today', from: midnight, to: now, unit: 'hour', label: t('today') };
 }
 
 export interface CommitInfo {
@@ -111,19 +112,19 @@ function tokensInRange(s: SessionInfo, r: Range): { total: number; buckets: Map<
   let total = 0;
   const bucketOf = (ms: number) => (r.unit === 'hour' ? new Date(ms).getHours() : Math.floor((ms - r.from) / 86_400_000));
   if (s.events?.length) {
-    for (const [ms, t] of s.events) {
+    for (const [ms, tok] of s.events) {
       if (ms < r.from || ms >= r.to) continue;
-      total += t;
-      buckets.set(bucketOf(ms), (buckets.get(bucketOf(ms)) ?? 0) + t);
+      total += tok;
+      buckets.set(bucketOf(ms), (buckets.get(bucketOf(ms)) ?? 0) + tok);
     }
     return { total, buckets };
   }
-  for (const [day, t] of Object.entries(s.daily ?? {})) {
+  for (const [day, tok] of Object.entries(s.daily ?? {})) {
     const [y, m, d] = day.split('-').map(Number);
     const ms = new Date(y, m - 1, d).getTime();
     if (ms + 86_400_000 <= r.from || ms >= r.to) continue;
-    total += t;
-    if (r.unit === 'day') buckets.set(bucketOf(Math.max(ms, r.from)), (buckets.get(bucketOf(Math.max(ms, r.from))) ?? 0) + t);
+    total += tok;
+    if (r.unit === 'day') buckets.set(bucketOf(Math.max(ms, r.from)), (buckets.get(bucketOf(Math.max(ms, r.from))) ?? 0) + tok);
   }
   return { total, buckets };
 }
@@ -166,7 +167,7 @@ export function buildActivity(
   };
   const n = range.unit === 'hour' ? 24 : 7;
   const chart = Array.from({ length: n }, (_, i) => ({
-    label: range.unit === 'hour' ? `${String(i).padStart(2, '0')}h` : new Date(range.from + i * 86_400_000).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }),
+    label: range.unit === 'hour' ? `${String(i).padStart(2, '0')}h` : new Date(range.from + i * 86_400_000).toLocaleDateString(locale(), { weekday: 'short', day: '2-digit' }),
     commits: 0,
     tokens: 0,
   }));
@@ -189,17 +190,17 @@ export function buildActivity(
   for (const s of sessions) {
     const { total, buckets } = tokensInRange(s, range);
     if (!total) continue;
-    const r = row(branchOfSession(s, worktrees) ?? '(fora de worktree)');
+    const r = row(branchOfSession(s, worktrees) ?? t('(outside a worktree)'));
     r.sessions++;
     r.tokens += total;
-    for (const [b, t] of buckets) if (chart[b]) chart[b].tokens += t;
+    for (const [b, tok] of buckets) if (chart[b]) chart[b].tokens += tok;
   }
 
   const list = [...rows.values()]
     .map(({ fileSet, ...r }) => ({ ...r, files: fileSet.size }))
     .sort((a, b) => b.tokens - a.tokens || b.commits - a.commits);
   const totals = list.reduce(
-    (t, r) => ({ commits: t.commits + r.commits, files: t.files + r.files, added: t.added + r.added, deleted: t.deleted + r.deleted, sessions: t.sessions + r.sessions, tokens: t.tokens + r.tokens }),
+    (acc, r) => ({ commits: acc.commits + r.commits, files: acc.files + r.files, added: acc.added + r.added, deleted: acc.deleted + r.deleted, sessions: acc.sessions + r.sessions, tokens: acc.tokens + r.tokens }),
     { commits: 0, files: 0, added: 0, deleted: 0, sessions: 0, tokens: 0 },
   );
   return { range, rows: list, chart, totals };

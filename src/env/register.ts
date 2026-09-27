@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { Controller } from '../controller';
+import { t } from '../i18n';
 import { allocatePort, detectSetup, dirSize, PortsConfig, portVars, rewriteEnv } from './core';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
@@ -76,7 +77,7 @@ export class EnvService implements vscode.Disposable {
     }
     if (text.split(/\r?\n/).some(l => l.trim() === '.env')) return;
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}# AgentYard: .env por worktree\n.env\n`);
+    fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}# ${t('AgentYard: .env per worktree')}\n.env\n`);
   }
 
   /**
@@ -95,9 +96,9 @@ export class EnvService implements vscode.Disposable {
       if (!opts.overwrite) {
         if (opts.quiet || !Object.keys(vars).length) return port;
         const ok = await vscode.window.showWarningMessage(
-          `${path.basename(wtPath)} já tem um .env. Trocar só as variáveis de porta (${Object.keys(vars).join(', ')})?`,
+          t('{0} already has a .env. Replace only the port variables ({1})?', path.basename(wtPath), Object.keys(vars).join(', ')),
           { modal: true },
-          'Trocar portas',
+          t('Replace ports'),
         );
         if (!ok) return port;
       }
@@ -114,7 +115,7 @@ export class EnvService implements vscode.Disposable {
     if (text === undefined && !Object.keys(vars).length) return port;
     this.excludeEnv();
     fs.writeFileSync(target, rewriteEnv(text ?? '', vars));
-    this.ctl.log(`.env de ${branch}${port !== undefined ? ` com porta ${port}` : ''}`);
+    this.ctl.log(port !== undefined ? t('.env for {0} with port {1}', branch, port) : t('.env for {0}', branch));
     return port;
   }
 
@@ -149,31 +150,32 @@ export class EnvService implements vscode.Disposable {
       if (!choice && !quiet) {
         const pick = await vscode.window.showQuickPick(
           [
-            ...(canLink ? [{ label: 'Compartilhar node_modules da principal', detail: 'Junction/symlink: instantâneo e sem espaço extra; bom enquanto as dependências forem as mesmas.', v: 'link' }] : []),
-            { label: `Instalar (${plan.node.install})`, detail: 'Num terminal da worktree.', v: 'install' },
-            { label: 'Não fazer nada', v: 'skip' },
+            ...(canLink ? [{ label: t('Share node_modules from the main worktree'), detail: t('Junction/symlink: instant and no extra space; good while the dependencies are the same.'), v: 'link' }] : []),
+            { label: t('Install ({0})', plan.node.install), detail: t('In the worktree\'s terminal.'), v: 'install' },
+            { label: t('Do nothing'), v: 'skip' },
           ],
-          { title: `Dependências de ${branch}` },
+          { title: t('Dependencies for {0}', branch) },
         );
         choice = pick?.v;
       }
       if (choice === 'link' && canLink) {
         try {
           fs.symlinkSync(mainModules!, path.join(dir, 'node_modules'), 'junction');
-          this.ctl.log(`node_modules de ${branch} ligado à principal`);
+          this.ctl.log(t('node_modules for {0} linked to the main worktree', branch));
         } catch (e) {
-          vscode.window.showWarningMessage(`Não consegui ligar node_modules: ${(e as Error).message}`);
+          vscode.window.showWarningMessage(t('Couldn\'t link node_modules: {0}', (e as Error).message));
         }
       } else if (choice === 'install') cmds.push(plan.node.install);
     }
     if (plan.python && !quiet) {
-      const ok = await vscode.window.showInformationMessage(`${branch}: criar o ambiente Python (${plan.python.tool})?`, 'Instalar', 'Agora não');
-      if (ok === 'Instalar') cmds.push(plan.python.install);
+      const install = t('Install');
+      const ok = await vscode.window.showInformationMessage(t('{0}: create the Python environment ({1})?', branch, plan.python.tool), install, t('Not now'));
+      if (ok === install) cmds.push(plan.python.install);
     }
     if (cmds.length) {
-      const t = vscode.window.createTerminal({ name: `${branch}: setup`, cwd: dir });
-      t.show(true);
-      for (const c of cmds) t.sendText(c);
+      const term = vscode.window.createTerminal({ name: `${branch}: setup`, cwd: dir });
+      term.show(true);
+      for (const c of cmds) term.sendText(c);
     }
   }
 
@@ -185,21 +187,21 @@ export class EnvService implements vscode.Disposable {
     const port = wt.branch ? await this.portFor(wt.branch) : undefined;
     const cmd = this.ctl.cfg().get<string>('env.devCommand', '');
     if (!cmd) {
-      const go = await vscode.window.showInformationMessage('Defina o comando de desenvolvimento (ex.: npm run dev) em worktreeGraph.env.devCommand.', 'Abrir configuração');
+      const go = await vscode.window.showInformationMessage(t('Set the development command (e.g. npm run dev) in worktreeGraph.env.devCommand.'), t('Open settings'));
       if (go) vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.env.devCommand');
       return;
     }
     const env = port !== undefined ? portVars(port, this.portsConfig()!.vars) : {};
-    const t = vscode.window.createTerminal({ name: `${wt.branch ?? path.basename(wt.path)}: dev${port ? ` :${port}` : ''}`, cwd: wt.path, env });
-    t.show();
-    t.sendText(cmd);
+    const term = vscode.window.createTerminal({ name: `${wt.branch ?? path.basename(wt.path)}: dev${port ? ` :${port}` : ''}`, cwd: wt.path, env });
+    term.show();
+    term.sendText(cmd);
   }
 
   async openBrowser(arg: Arg) {
     const wt = await this.resolve(arg);
     const port = wt?.branch ? this.assigned()[wt.branch] : undefined;
     if (port === undefined) {
-      vscode.window.showInformationMessage('Esta worktree ainda não tem porta. Configure worktreeGraph.env.ports e rode "Configurar ambiente desta worktree".');
+      vscode.window.showInformationMessage(t('This worktree doesn\'t have a port yet. Configure worktreeGraph.env.ports and run "Configure This Worktree\'s Environment".'));
       return;
     }
     await vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${port}`));
@@ -210,7 +212,7 @@ export class EnvService implements vscode.Disposable {
     if (!wt?.branch) return;
     const port = this.portsConfig() ? await this.configureEnv(wt.path, wt.branch) : undefined;
     await this.setup(wt.path, wt.branch, false);
-    if (port !== undefined) vscode.window.showInformationMessage(`${wt.branch}: porta ${port}.`);
+    if (port !== undefined) vscode.window.showInformationMessage(t('{0}: port {1}.', wt.branch, port));
     this.ctl.scheduleRefresh(50);
   }
 
@@ -221,7 +223,7 @@ export class EnvService implements vscode.Disposable {
       const w = wts.find(x => x.branch === arg.branch);
       return w ? { path: w.path, branch: w.branch } : undefined;
     }
-    const pick = await vscode.window.showQuickPick(wts.map(w => ({ label: w.branch ?? path.basename(w.path), description: w.path, w })), { placeHolder: 'Qual worktree?' });
+    const pick = await vscode.window.showQuickPick(wts.map(w => ({ label: w.branch ?? path.basename(w.path), description: w.path, w })), { placeHolder: t('Which worktree?') });
     return pick ? { path: pick.w.path, branch: pick.w.branch } : undefined;
   }
 
