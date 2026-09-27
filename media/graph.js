@@ -4,7 +4,8 @@
   const ROW = 26;
   const COL = 16;
   const DOT = 4.5;
-  const COLORS = ['#4fc1ff', '#c586c0', '#e5c07b', '#89d185', '#f48771', '#56b6c2', '#d19a66', '#b180d7'];
+  // Cores das linhas: variáveis de graph.css tiradas da paleta do tema (claro, escuro e alto contraste).
+  const COLORS = [0, 1, 2, 3, 4, 5, 6, 7].map(i => `var(--lane-${i})`);
 
   /** @type {any} */
   let state = null;
@@ -171,8 +172,8 @@
       topHtml = paneAHtml = graphKey = '';
     }
     const tab = ui.layout === 'tabs' ? `<nav class="tabs">
-        <button data-local="tab" data-tab="a" class="${ui.tab === 'a' ? 'on' : ''}">Worktrees</button>
-        <button data-local="tab" data-tab="b" class="${ui.tab === 'b' ? 'on' : ''}">Histórico</button></nav>` : '';
+        <button data-local="tab" data-tab="a" class="${ui.tab === 'a' ? 'on' : ''}">Worktrees<span class="count">${state.worktrees.filter(w => !w.prunable).length}</span></button>
+        <button data-local="tab" data-tab="b" class="${ui.tab === 'b' ? 'on' : ''}">Histórico<span class="count">${state.commits.length}</span></button></nav>` : '';
     const top = toolbar() + tab;
     if (top !== topHtml) {
       /** @type {HTMLElement} */ (document.getElementById('top')).innerHTML = top;
@@ -207,29 +208,37 @@
 
   function toolbar() {
     const s = state.autoSync;
+    // Grupos: criar · sync · remoto · outras telas · layout e menu. Ações raras ficam no "⋯".
     return `<header class="toolbar">
       <div class="title"><button class="repo" data-action="switchProject" title="${esc(state.root)} · trocar de projeto">${esc(state.repoName)} ▾</button>
         <span class="muted">base</span> <span class="ref ref-base">${esc(state.baseRef)}</span></div>
       <div class="tools">
-        <button data-action="createWorktree" class="primary">＋ Nova worktree</button>
-        <button data-action="newWorktreeWithTask" title="Escolhe a branch de origem, cria a worktree e já manda a tarefa para o agente">✦ Nova worktree com tarefa</button>
-        <button data-action="toggleAutoSync" class="${s.enabled ? 'on' : ''}" title="${s.trigger === 'push' ? 'Mescla a base na branch antes de cada push (worktreeGraph.autoSync.trigger)' : 'Mescla a base automaticamente nas worktrees limpas'}">
-          ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : s.trigger === 'push' ? 'no push' : 'ligado') : 'desligado'}</button>
-        <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">onde: ${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'}</button>
-        <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
+        <span class="group">
+          <button data-action="createWorktree" class="primary">＋ Nova worktree</button>
+          <button data-action="newWorktreeWithTask" class="primary" title="Nova worktree com tarefa: escolhe a branch de origem, cria a worktree e já manda a tarefa para o agente">✦ com tarefa</button>
+        </span>
+        <span class="sep"></span>
+        <span class="group">
+          <button data-action="toggleAutoSync" class="${s.enabled ? 'on' : ''}" title="${s.trigger === 'push' ? 'Mescla a base na branch antes de cada push (worktreeGraph.autoSync.trigger)' : 'Mescla a base automaticamente nas worktrees limpas'}. Clique para ${s.enabled ? 'desligar' : 'ligar'}.">⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : s.trigger === 'push' ? 'no push' : 'ligado') : 'desligado'}</button>
+          <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'} ▾</button>
+          <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
+        </span>
+        ${toPull() || toPush() ? '<span class="sep"></span>' : ''}
         ${toPull() ? `<button data-action="pullMany" title="Trazer do remoto as branches com novidades (lista para escolher)">☁↓ Trazer ${toPull()}</button>` : ''}
         ${toPush() ? `<button data-action="pushMany" title="Enviar branches com commits não enviados (lista para escolher)">☁↑ Enviar ${toPush()}</button>` : ''}
-        <button data-action="activity" title="Commits, sessões e tokens do dia por worktree, e custo por tarefa">Atividade</button>
-        ${state.hosting ? `<button data-action="focusPrs" title="Lista de pull requests / merge requests do remoto">${state.hosting.label}s</button>` : ''}
-        <button data-action="timeline" title="Quando cada branch nasceu, virou PR/MR e foi mesclada">Linha do tempo</button>
-        <button data-action="generateCi" title="Gera o workflow de sync para o GitHub Actions ou o GitLab CI">Gerar CI</button>
         ${state.hosting && !state.hosting.connected ? `<button data-action="connectHosting" title="Para publicar e acompanhar ${state.hosting.label}s em ${esc(state.hosting.host)}">Conectar ${esc(state.hosting.name || state.hosting.kind)}</button>` : ''}
+        <span class="sep"></span>
+        <button class="ghost" data-action="activity" title="Commits, sessões e tokens do dia por worktree, e custo por tarefa">Atividade</button>
+        ${state.hosting ? `<button class="ghost" data-action="focusPrs" title="Lista de pull requests / merge requests do remoto">${state.hosting.label}s</button>` : ''}
+        <button class="ghost" data-action="timeline" title="Quando cada branch nasceu, virou PR/MR e foi mesclada">Linha do tempo</button>
+        <span class="sep"></span>
         <span class="layouts" title="Layout do painel">
           <button data-local="layout" data-layout="rows" class="${ui.layout === 'rows' ? 'on' : ''}" title="Empilhado: worktrees em cima, histórico embaixo">⬒</button>
           <button data-local="layout" data-layout="cols" class="${ui.layout === 'cols' ? 'on' : ''}" title="Lado a lado">◫</button>
           <button data-local="layout" data-layout="tabs" class="${ui.layout === 'tabs' ? 'on' : ''}" title="Abas">▭</button>
         </span>
-        <button data-action="refresh" title="Atualizar">↻</button>
+        <button class="ghost icon" data-action="refresh" title="Atualizar">↻</button>
+        <button class="ghost icon" data-local="toolsMenu" title="Mais ações">⋯</button>
       </div>
       ${progressBar()}
     </header>
@@ -426,12 +435,15 @@
   const starBtn = w =>
     `<button class="star ${w.favorite ? 'on' : ''}" data-action="toggleFavorite" data-path="${esc(w.path)}" title="${w.favorite ? 'Desfavoritar' : 'Favoritar: vira card e sobe na lista'}">${w.favorite ? '★' : '☆'}</button>`;
 
+  /** "⋯": abre o menu do botão direito do card ou da linha em que está. */
+  const moreBtn = () => '<button class="more" data-local="itemMenu" title="Mais ações (o mesmo menu do botão direito)">⋯</button>';
+
   function worktreesSection() {
     const all = state.worktrees.filter(w => !w.prunable);
     const cards = all.filter(featured).map(card).join('');
     return `<section>
       <h2>Em destaque <span class="count">${all.filter(featured).length}</span>
-        <span class="hint">principal, favoritas (☆), com agente aberto e com trabalho não commitado · arraste um sobre outro para mesclar</span></h2>
+        <span class="hint" title="Aparecem aqui: a principal, as favoritas (☆), as com agente aberto e as com trabalho não commitado">arraste um card sobre outro para mesclar · botão direito ou ⋯ para mais ações</span></h2>
       <div class="cards">${cards}</div>
     </section>${tableSection()}`;
   }
@@ -498,10 +510,9 @@
           ${w.remote.published && w.remote.behind ? pullButton(w.branch, w.remote.behind, true) : ''}
           <button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>
           <button data-action="diffWithBase" data-branch="${b}" title="Revisar alterações × ${esc(state.base)}">Revisar</button>
-          <button data-action="analyzeMerge" data-branch="${b}" title="Analisar o merge em ${esc(state.base)}">Analisar</button>
-          <button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="Trazer ${esc(state.baseRef)}">↓</button>
-          <button data-action="mergeIntoBase" data-branch="${b}" ${w.ahead ? '' : 'disabled'} title="Mesclar em ${esc(state.base)}">↑</button>
-          <button data-action="removeWorktree" data-branch="${b}" class="danger" title="Remover worktree">✕</button>
+          ${w.behind ? `<button data-action="mergeBaseInto" data-branch="${b}" title="Trazer ${esc(state.baseRef)}">↓</button>` : ''}
+          ${w.ahead ? `<button data-action="mergeIntoBase" data-branch="${b}" title="Mesclar em ${esc(state.base)}">↑</button>` : ''}
+          ${moreBtn()}
         </td></tr>`;
     });
     if (match.length > rowLimit) rows.push(`<tr><td colspan="5" class="more"><button data-local="more">Mostrar mais ${Math.min(60, match.length - rowLimit)} de ${match.length - rowLimit}</button></td></tr>`);
@@ -545,30 +556,31 @@
           w.branch && (w.remote.ahead || !w.remote.published) && !w.prunable ? pushButton(w.branch, w.remote) : '',
           w.branch && w.remote.published && w.remote.behind && !w.prunable ? pullButton(w.branch, w.remote.behind) : '',
           `<button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>`,
-          `<button data-action="openFile" data-path="${esc(w.path)}" title="Buscar e abrir um arquivo desta worktree aqui mesmo">Arquivos</button>`,
           `<button data-action="openTerminal" data-path="${esc(w.path)}" title="Terminal nesta pasta">Terminal</button>`,
         ].filter(Boolean);
+        // Só as ações do dia a dia ficam à mostra; Arquivos, Analisar, Pausar sync, Remover etc. estão no ⋯ (o mesmo menu do botão direito).
         if (w.branch && !w.isBase) {
           act.push(`<button data-action="diffWithBase" data-branch="${b}" title="Arquivos alterados desde que saiu da base">Revisar</button>`);
-          act.push(`<button data-action="analyzeMerge" data-branch="${b}" title="Simular o merge em ${esc(state.base)}: commits, arquivos e conflitos">Analisar</button>`);
           if (w.request && (w.request.state === 'open' || w.request.state === 'draft'))
             act.push(`<button class="agent" data-action="reviewWithAgent" data-branch="${b}" title="O agente revisa o ${esc(w.request.ref)} e você escolhe o que postar">✦ Revisar ${esc(w.request.ref)}</button>`);
           if (w.preview?.conflict && agent) act.unshift(`<button data-action="resolveConflict" data-branch="${b}" class="agent" title="Abre ${esc(agent)} nesta worktree com a tarefa de trazer ${esc(state.base)} e resolver os conflitos">✦ Resolver com ${esc(agent)}</button>`);
           if (state.hosting && !w.request && w.ahead) act.push(`<button data-action="publishRequest" data-branch="${b}" title="Push + ${state.hosting.label} para ${esc(state.base)}">Publicar ${state.hosting.label}</button>`);
-          act.push(`<button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="git merge ${esc(state.baseRef)}">↓ Trazer ${esc(state.base)}</button>`);
-          act.push(`<button data-action="mergeIntoBase" data-branch="${b}" class="primary" ${w.ahead ? '' : 'disabled'} title="Mesclar em ${esc(state.base)}">↑ Mesclar em ${esc(state.base)}</button>`);
-          act.push(`<button data-action="togglePause" data-branch="${b}" title="${w.paused ? 'Retomar' : 'Pausar'} o sync automático desta branch">${w.paused ? 'Retomar sync' : 'Pausar sync'}</button>`);
-          act.push(`<button data-action="removeWorktree" data-branch="${b}" class="danger" title="Remover worktree (pede confirmação)">Remover</button>`);
+          act.push('<span class="spacer"></span>');
+          if (w.behind) act.push(`<button data-action="mergeBaseInto" data-branch="${b}" title="git merge ${esc(state.baseRef)}">↓ Trazer ${esc(state.base)}</button>`);
+          if (w.ahead) act.push(`<button data-action="mergeIntoBase" data-branch="${b}" class="primary" title="Mesclar em ${esc(state.base)}">↑ Mesclar em ${esc(state.base)}</button>`);
         }
         const cls = ['card', w.isCurrent ? 'current' : '', w.isBase ? 'base' : '', w.preview?.conflict || w.operation ? 'conflict' : w.changes ? 'dirty' : ''].join(' ');
         return `<div class="${cls}" ${w.branch ? `draggable="true" data-drag="${b}" data-drop="${b}"` : ''} data-menu="${b}">
           <div class="card-head">
             ${w.isMain ? '' : starBtn(w)}
-            <span class="branch">${esc(w.name)}</span>
-            ${w.isBase ? '<span class="tag">base</span>' : ''}
-            ${w.branch && isProtected(w.branch) ? '<span class="tag" title="Branch protegida: merge e push direto pedem confirmação ou PR/MR">🔒 protegida</span>' : ''}
-            ${w.isMain ? '<span class="tag">principal</span>' : ''}
-            ${w.isCurrent ? '<span class="tag accent">esta janela</span>' : ''}
+            <span class="branch" title="${esc(w.name)}">${esc(w.name)}</span>
+            <span class="tags">
+              ${w.isBase ? '<span class="tag">base</span>' : ''}
+              ${w.branch && isProtected(w.branch) ? '<span class="tag" title="Branch protegida: merge e push direto pedem confirmação ou PR/MR">🔒 protegida</span>' : ''}
+              ${w.isMain ? '<span class="tag">principal</span>' : ''}
+              ${w.isCurrent ? '<span class="tag accent">esta janela</span>' : ''}
+            </span>
+            ${w.branch ? moreBtn() : ''}
           </div>
           <div class="path" title="${esc(w.path)}">${esc(w.path)}</div>
           <div class="chips">${chips.join('')}</div>
@@ -592,8 +604,8 @@
           <td class="row-actions">
             <button data-action="createWorktree" data-existing="${n}">Worktree</button>
             <button data-action="diffWithBase" data-branch="${n}">Revisar</button>
-            <button data-action="mergeIntoBase" data-branch="${n}" ${b.ahead ? '' : 'disabled'}>↑ ${esc(state.base)}</button>
-            <button data-action="deleteBranch" data-branch="${n}" class="danger">Excluir</button>
+            ${b.ahead ? `<button data-action="mergeIntoBase" data-branch="${n}" title="Mesclar em ${esc(state.base)}">↑ ${esc(state.base)}</button>` : ''}
+            ${moreBtn()}
           </td></tr>`;
       })
       .join('');
@@ -732,16 +744,16 @@
     const H = commits.length * ROW + (openAt >= 0 ? GAP : 0);
     const head = graphHeader(
       state.commits.length,
-      `<div class="gg-head" style="--gw:${W}px"><span class="gg-graph">Graph</span><span class="desc">Description</span><span class="date">Date</span><span class="author">Author</span><span class="sha">Commit</span></div>`,
+      `<div class="gg-head" style="--gw:${W}px"><span class="gg-graph">Grafo</span><span class="desc">Descrição</span><span class="date">Data</span><span class="author">Autor</span><span class="sha">Commit</span></div>`,
     );
-    const paths = edges.map(e => `<path d="${edgePath(e, Yg)}" stroke="${COLORS[(e.merge ? e.lane : e.x) % COLORS.length]}" />`).join('');
+    const paths = edges.map(e => `<path d="${edgePath(e, Yg)}" style="stroke:${COLORS[(e.merge ? e.lane : e.x) % COLORS.length]}" />`).join('');
     const dots = commits
       .map(c => {
         const color = COLORS[c.x % COLORS.length];
-        if (c.wip) return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${DOT}" fill="var(--bg)" stroke="var(--warn)" stroke-width="2" stroke-dasharray="2 2"/>`;
-        if (c.sha === state.headSha) return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${DOT + 1.5}" fill="var(--bg)" stroke="${color}" stroke-width="3"/>`;
+        if (c.wip) return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${DOT}" style="fill:var(--bg);stroke:var(--warn)" stroke-width="2" stroke-dasharray="2 2"/>`;
+        if (c.sha === state.headSha) return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${DOT + 1.5}" style="fill:var(--bg);stroke:${color}" stroke-width="3"/>`;
         const isMerge = c.parents.length > 1;
-        return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${isMerge ? DOT - 1 : DOT}" fill="${isMerge ? 'var(--bg)' : color}" stroke="${color}" stroke-width="2"/>`;
+        return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${isMerge ? DOT - 1 : DOT}" style="fill:${isMerge ? 'var(--bg)' : color};stroke:${color}" stroke-width="2"/>`;
       })
       .join('');
     const q = filter.toLowerCase();
@@ -830,8 +842,17 @@
   // ---------- interação ----------
   document.addEventListener('click', e => {
     const t = /** @type {HTMLElement} */ (e.target);
+    const openedBy = menu.style.display === 'block' ? menuAnchor : null;
+    const subEl = /** @type {HTMLElement|null} */ (t.closest('.menu-sub'));
+    if (subEl && menu.contains(subEl)) return openSub(subEl);
     hideMenu(t);
     const local = /** @type {HTMLElement|null} */ (t.closest('[data-local]'));
+    if (local && (local.dataset.local === 'itemMenu' || local.dataset.local === 'toolsMenu')) {
+      if (openedBy === local) return; // segundo clique no mesmo ⋯ fecha
+      const items = local.dataset.local === 'toolsMenu' ? toolsMenuItems() : menuItemsFor(local);
+      if (items.length) showMenuAt(local, items);
+      return;
+    }
     if (local && local.dataset.local === 'layout') {
       ui.layout = local.dataset.layout;
       saveUi();
@@ -913,6 +934,7 @@
     if (el.closest('summary')) e.preventDefault();
     const { action, ...args } = el.dataset;
     if (e.ctrlKey || e.altKey || e.metaKey) args.modifier = '1';
+    if (inMenu(el)) hideMenu(null);
     send(action, args);
   });
 
@@ -1028,19 +1050,93 @@
   const menu = document.createElement('div');
   menu.className = 'menu';
   document.body.appendChild(menu);
+  // submenu: painel fixo à parte, para não ser cortado pela rolagem do menu principal
+  const submenu = document.createElement('div');
+  submenu.className = 'menu submenu';
+  document.body.appendChild(submenu);
+  /** Itens de cada submenu do menu aberto, pelo índice em data-sub. */
+  let subs = [];
+  const inMenu = t => !!t && (menu.contains(t) || submenu.contains(t));
   function hideMenu(t) {
-    if (!t || !menu.contains(t)) menu.style.display = 'none';
+    if (!t || !inMenu(t)) {
+      menu.style.display = 'none';
+      submenu.style.display = 'none';
+    }
   }
+  /** Entrada que abre um submenu ao passar o mouse (ou clicar). */
+  function sub(label, list, cls = '') {
+    return `<div class="menu-item menu-sub ${cls}" data-sub="${subs.push(list) - 1}">${esc(label)}<span class="menu-arrow">›</span></div>`;
+  }
+  function openSub(el) {
+    menu.querySelectorAll('.menu-sub.on').forEach(x => x !== el && x.classList.remove('on'));
+    el.classList.add('on');
+    submenu.innerHTML = subs[Number(el.dataset.sub)].join('');
+    submenu.style.display = 'block';
+    const r = el.getBoundingClientRect();
+    const w = submenu.offsetWidth;
+    const x = r.right + w + 4 <= window.innerWidth ? r.right + 2 : r.left - w - 2; // à direita; sem espaço, à esquerda
+    submenu.style.left = `${Math.max(8, x)}px`;
+    submenu.style.top = `${Math.max(8, Math.min(r.top - 5, window.innerHeight - submenu.offsetHeight - 8))}px`;
+  }
+  menu.addEventListener('mouseover', e => {
+    const el = /** @type {HTMLElement} */ (e.target).closest?.('.menu-item');
+    if (!el) return;
+    if (el.classList.contains('menu-sub')) openSub(/** @type {HTMLElement} */ (el));
+    else {
+      submenu.style.display = 'none';
+      menu.querySelectorAll('.menu-sub.on').forEach(x => x.classList.remove('on'));
+    }
+  });
+  /** Botão ⋯ que abriu o menu (para o segundo clique fechar); null quando veio do botão direito. */
+  /** @type {HTMLElement|null} */
+  let menuAnchor = null;
+  function showMenu(items, x, y, anchor = null) {
+    menuAnchor = anchor;
+    submenu.style.display = 'none';
+    menu.innerHTML = items.join('');
+    menu.style.display = 'block';
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
+  }
+  /** Abre o menu logo abaixo do botão, alinhado pela direita (botões ⋯). */
+  function showMenuAt(btn, items) {
+    const r = btn.getBoundingClientRect();
+    showMenu(items, 0, 0);
+    showMenu(items, r.right - menu.offsetWidth, r.bottom + 4, btn);
+  }
+  /** "⋯" da barra: o que é raro demais para ter botão próprio. */
+  function toolsMenuItems() {
+    return [
+      item('switchProject', 'Trocar de projeto…', {}),
+      item('configureFlow', 'Configurar fluxo de ambientes…', {}),
+      (state.flow || []).length ? item('promotionMap', 'Mapa de promoção', {}) : '',
+      '<hr>',
+      item('generateCi', 'Gerar CI de sync (GitHub Actions / GitLab CI)…', {}),
+      item('openCiBranchesSettings', 'Branches de CI…', {}),
+      '<hr>',
+      item('cleanupWorktrees', 'Limpar worktrees em lote…', {}),
+    ].filter(Boolean);
+  }
+
   document.addEventListener('contextmenu', e => {
-    const t = /** @type {HTMLElement} */ (e.target);
+    const items = menuItemsFor(/** @type {HTMLElement} */ (e.target));
+    if (!items.length) return;
+    e.preventDefault();
+    showMenu(items, e.clientX, e.clientY);
+  });
+  /** Itens do menu de contexto para o que está sob o elemento: branch, branch remota ou commit. */
+  function menuItemsFor(t) {
+    subs = [];
     const local = /** @type {HTMLElement|null} */ (t.closest('[data-menu]'));
     const remote = /** @type {HTMLElement|null} */ (t.closest('[data-menu-remote]'));
     const row = /** @type {HTMLElement|null} */ (t.closest('.row'));
     const items = [];
     if (local && local.dataset.menu) {
+      // Topo: o que mais se usa. O resto fica em submenus (Agente, Git, Worktree) para o menu caber na tela.
       const b = local.dataset.menu;
       const wt = state.worktrees.find(w => w.branch === b);
       const isBase = b === state.base;
+      const req = (wt && wt.request) || (state.branches.find(x => x.name === b) || {}).request;
       items.push(`<div class="menu-title">${esc(b)}</div>`);
       if (!isBase) {
         items.push(item('mergeBaseInto', `↓ Trazer ${state.baseRef} para cá`, { branch: b }));
@@ -1049,41 +1145,57 @@
       items.push(item('mergeInto', 'Mesclar em…', { branch: b }));
       if (!isBase) items.push(item('mergeQueueAdd', `Pôr na fila de merge → ${state.base}`, { branch: b }));
       if (wt && wt.overlap) items.push(item('showOverlaps', `⚠ Ver sobreposição (${wt.overlap.files} arquivo(s))`, { path: wt.path }));
-      if (wt) items.push(item('addTask', '☰ Adicionar tarefa para o agente…', { path: wt.path, branch: b }));
-      items.push(item('newWorktreeWithTask', '✦ Nova worktree a partir daqui, com tarefa…', { startPoint: b }, 'agent'));
       if (wt && wt.changes) items.push(item('showUncommitted', `● Ver alterações não commitadas (${wt.changes})`, { path: wt.path }));
-      items.push(item('push', 'Push (enviar para o remoto)', { branch: b }));
-      items.push(item('pullBranch', 'Pull (trazer do remoto)', { branch: b }));
-      items.push(item('compareWith', 'Comparar com…', { branch: b }));
-      if (wt) {
-        items.push(item('stashCreate', 'Guardar alterações (stash)…', { path: wt.path }));
-        items.push(item('moveChanges', 'Mover alterações para outra worktree…', { path: wt.path }));
-        if (!isBase) items.push(item('reorganizeCommits', 'Reorganizar commits (juntar, reordenar, descartar)…', { path: wt.path }));
-      }
       items.push('<hr>');
+
+      const agent = [];
       if (wt) {
         for (const a of state.agentNames || []) {
-          items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
-          if ((wt.agents || []).includes(a)) items.push(item('launchAgentNew', `✦ Outro ${a} (novo terminal)`, { path: wt.path, branch: b, agent: a }, 'agent'));
+          agent.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
+          if ((wt.agents || []).includes(a)) agent.push(item('launchAgentNew', `✦ Outro ${a} (novo terminal)`, { path: wt.path, branch: b, agent: a }, 'agent'));
         }
-        if (wt.agents && wt.agents.length) items.push(item('agents.pick', `Agentes abertos aqui (${wt.agents.length})…`, { path: wt.path }, 'agent'));
-        if ((state.agentNames || []).length) items.push('<hr>');
-        items.push(item('toggleFavorite', wt.favorite ? '★ Desfavoritar' : '☆ Favoritar', { path: wt.path }));
-        items.push(item('templates.use', '✦ Usar modelo de tarefa…', { path: wt.path, branch: b }, 'agent'));
-        items.push(item('env.configure', 'Configurar ambiente (.env, portas, dependências)', { path: wt.path, branch: b }));
-        if (wt.port) items.push(item('env.runDev', `Rodar dev (:${wt.port})`, { path: wt.path, branch: b }));
-        items.push(item('openWorktree', 'Abrir worktree em nova janela', { path: wt.path }));
-        items.push(item('openFile', 'Buscar arquivo nesta worktree…', { path: wt.path }));
-        items.push(item('openTerminal', 'Abrir terminal', { path: wt.path }));
-      } else {
-        items.push(item('createWorktree', 'Criar worktree desta branch', { existing: b }));
+        if (wt.agents && wt.agents.length) agent.push(item('agents.pick', `Agentes abertos aqui (${wt.agents.length})…`, { path: wt.path }, 'agent'));
+        if (agent.length) agent.push('<hr>');
+        agent.push(item('addTask', '☰ Adicionar tarefa para o agente…', { path: wt.path, branch: b }));
+        agent.push(item('templates.use', '✦ Usar modelo de tarefa…', { path: wt.path, branch: b }, 'agent'));
       }
-      items.push(item('createWorktree', 'Nova branch + worktree a partir daqui', { startPoint: b }));
+      agent.push(item('newWorktreeWithTask', '✦ Nova worktree a partir daqui, com tarefa…', { startPoint: b }, 'agent'));
+      if (!isBase) agent.push(item('reviewWithAgent', '✦ Revisar PR/MR com o agente', { branch: b }, 'agent'));
+      items.push(sub('✦ Agente', agent, 'agent'));
+
+      const git = [
+        item('push', 'Push (enviar para o remoto)', { branch: b }),
+        item('pullBranch', 'Pull (trazer do remoto)', { branch: b }),
+        item('compareWith', 'Comparar com…', { branch: b }),
+      ];
+      if (wt) {
+        git.push('<hr>');
+        git.push(item('stashCreate', 'Guardar alterações (stash)…', { path: wt.path }));
+        git.push(item('moveChanges', 'Mover alterações para outra worktree…', { path: wt.path }));
+        if (!isBase) git.push(item('reorganizeCommits', 'Reorganizar commits (juntar, reordenar, descartar)…', { path: wt.path }));
+      }
+      items.push(sub('Git', git));
+
+      const tree = [];
+      if (wt) {
+        tree.push(item('openWorktree', 'Abrir worktree em nova janela', { path: wt.path }));
+        tree.push(item('openFile', 'Buscar arquivo nesta worktree…', { path: wt.path }));
+        tree.push(item('openTerminal', 'Abrir terminal', { path: wt.path }));
+        tree.push('<hr>');
+        tree.push(item('env.configure', 'Configurar ambiente (.env, portas, dependências)', { path: wt.path, branch: b }));
+        if (wt.port) tree.push(item('env.runDev', `Rodar dev (:${wt.port})`, { path: wt.path, branch: b }));
+        tree.push('<hr>');
+      } else {
+        tree.push(item('createWorktree', 'Criar worktree desta branch', { existing: b }));
+      }
+      tree.push(item('createWorktree', 'Nova branch + worktree a partir daqui', { startPoint: b }));
+      items.push(sub('Worktree', tree));
+
+      items.push('<hr>');
       if (!isBase) items.push(item('diffWithBase', `Revisar alterações × ${state.base}`, { branch: b }));
       if (!isBase) items.push(item('analyzeMerge', `Analisar merge em ${state.base}…`, { branch: b }));
-      if (!isBase) items.push(item('reviewWithAgent', '✦ Revisar PR/MR com o agente', { branch: b }, 'agent'));
-      const req = (wt && wt.request) || (state.branches.find(x => x.name === b) || {}).request;
       if (!isBase && state.hosting) items.push(req ? item('openUrl', `Abrir ${req.ref} no navegador`, { url: req.url }) : item('publishRequest', `Publicar ${state.hosting.label}…`, { branch: b }));
+      if (wt) items.push(item('toggleFavorite', wt.favorite ? '★ Desfavoritar' : '☆ Favoritar', { path: wt.path }));
       if (!isBase) {
         items.push('<hr>');
         if (wt) items.push(item('togglePause', wt.paused ? 'Retomar sync' : 'Pausar sync', { branch: b }));
@@ -1113,15 +1225,8 @@
       items.push(item('revertCommit', 'Reverter este commit em…', { sha }));
       items.push(item('resetTo', 'Voltar uma branch até aqui…', { sha }, 'danger'));
     }
-    if (!items.length) return;
-    e.preventDefault();
-    menu.innerHTML = items.join('');
-    menu.style.display = 'block';
-    const x = Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8);
-    const y = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8);
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
-  });
+    return items;
+  }
   function item(action, label, args, cls = '') {
     const data = Object.entries(args)
       .map(([k, v]) => `data-${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="${esc(v)}"`)
