@@ -1,6 +1,8 @@
 # Changelog
 
 ## Não lançado
+- "Nova worktree" pergunta de qual branch sair (a base vem primeiro: Enter mantém o padrão),
+  como já fazia o "✦ com tarefa".
 - Barra de status: **worktree e branch** desta janela (clique abre o painel), **✦ agente** para abrir
   o Claude Code (ou o primeiro de `worktreeGraph.agents`) na worktree atual, e **☁ Push** para enviar
   as branches escolhidas numa lista com a base e as branches de CI já marcadas (as em dia são

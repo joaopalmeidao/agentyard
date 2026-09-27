@@ -207,6 +207,24 @@ export async function mergeInto(ctl: Controller, arg: BranchArg) {
   if (target) await mergeBranches(ctl, source, target.label);
 }
 
+/** Escolhe a branch de origem de uma nova worktree; a base vem primeiro (Enter = base). */
+export async function pickStartPoint(ctl: Controller, title: string): Promise<string | undefined> {
+  const repo = repoOf(ctl);
+  const { base } = await ctl.base();
+  const refs = await repo.refs();
+  const wtBranches = new Set((await repo.worktreesFast()).map(w => w.branch).filter(Boolean));
+  type Item = vscode.QuickPickItem & { ref?: string };
+  const heads = refs.filter(r => r.kind === 'head' && r.name !== base);
+  const items: Item[] = [
+    { label: `$(home) ${base}`, description: 'base', detail: refs.find(r => r.kind === 'head' && r.name === base)?.subject, ref: base },
+    { label: t('Local branches'), kind: vscode.QuickPickItemKind.Separator },
+    ...heads.map(r => ({ label: `${wtBranches.has(r.name) ? '$(folder)' : '$(git-branch)'} ${r.name}`, description: wtBranches.has(r.name) ? t('has a worktree') : undefined, detail: r.subject, ref: r.name })),
+    { label: t('Remote'), kind: vscode.QuickPickItemKind.Separator },
+    ...refs.filter(r => r.kind === 'remote').map(r => ({ label: `$(cloud) ${r.name}`, detail: r.subject, ref: r.name })),
+  ];
+  return (await vscode.window.showQuickPick(items, { title, placeHolder: t('Create the worktree from which branch?'), matchOnDetail: true }))?.ref;
+}
+
 /**
  * `branch`: nome já decidido (sem perguntar); `quiet`: sem a notificação final.
  * Devolve a pasta criada.
@@ -221,10 +239,15 @@ export async function createWorktree(
   const repo = repoOf(ctl);
   const { base } = await ctl.base();
   let branch = opts.existing ?? opts.branch;
+  let startPoint = opts.startPoint;
+  if (!branch && !startPoint) {
+    startPoint = await pickStartPoint(ctl, t('New worktree (1/2)'));
+    if (!startPoint) return;
+  }
   if (!branch) {
     const names = new Set((await repo.refs()).filter(r => r.kind === 'head').map(r => r.name));
     branch = await vscode.window.showInputBox({
-      title: t('New worktree from {0}', opts.startPoint ?? base),
+      title: opts.startPoint ? t('New worktree from {0}', opts.startPoint) : t('New worktree (2/2) — from {0}', startPoint ?? base),
       prompt: t('Branch name (e.g. ai/refactor-login)'),
       validateInput: v => {
         if (!v.trim()) return t('Enter a name.');
@@ -241,7 +264,7 @@ export async function createWorktree(
   let dir = path.join(root, branch.replace(/[\/\\]/g, '-'));
   for (let i = 2; fs.existsSync(dir); i++) dir = path.join(root, `${branch.replace(/[\/\\]/g, '-')}-${i}`);
 
-  const args = opts.existing ? ['worktree', 'add', dir, branch] : ['worktree', 'add', '-b', branch, dir, opts.startPoint ?? base];
+  const args = opts.existing ? ['worktree', 'add', dir, branch] : ['worktree', 'add', '-b', branch, dir, startPoint ?? base];
   await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating worktree {0}…', branch) }, () => repo.exec(args, repo.root, 300_000));
   ctl.log(t('Worktree created: {0} ({1})', dir, branch));
   ctl.scheduleRefresh(100);
@@ -485,22 +508,10 @@ export async function showUncommitted(ctl: Controller, arg: BranchArg | { path?:
  */
 export async function newWorktreeWithTask(ctl: Controller, arg?: string | { branch?: string; startPoint?: string; prompt?: string; name?: string; agent?: string }) {
   const repo = repoOf(ctl);
-  const { base } = await ctl.base();
   const o = typeof arg === 'string' ? { branch: arg } : (arg ?? {});
   let from = o.startPoint ?? o.branch;
   if (!from) {
-    const refs = await repo.refs();
-    const wtBranches = new Set((await repo.worktreesFast()).map(w => w.branch).filter(Boolean));
-    type Item = vscode.QuickPickItem & { ref?: string };
-    const heads = refs.filter(r => r.kind === 'head' && r.name !== base);
-    const items: Item[] = [
-      { label: `$(home) ${base}`, description: 'base', detail: refs.find(r => r.kind === 'head' && r.name === base)?.subject, ref: base },
-      { label: t('Local branches'), kind: vscode.QuickPickItemKind.Separator },
-      ...heads.map(r => ({ label: `${wtBranches.has(r.name) ? '$(folder)' : '$(git-branch)'} ${r.name}`, description: wtBranches.has(r.name) ? t('has a worktree') : undefined, detail: r.subject, ref: r.name })),
-      { label: t('Remote'), kind: vscode.QuickPickItemKind.Separator },
-      ...refs.filter(r => r.kind === 'remote').map(r => ({ label: `$(cloud) ${r.name}`, detail: r.subject, ref: r.name })),
-    ];
-    from = (await vscode.window.showQuickPick(items, { title: t('New worktree with task (1/3)'), placeHolder: t('Create the worktree from which branch?'), matchOnDetail: true }))?.ref;
+    from = await pickStartPoint(ctl, t('New worktree with task (1/3)'));
     if (!from) return;
   }
   const prompt =
