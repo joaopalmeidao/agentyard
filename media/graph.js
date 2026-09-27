@@ -584,7 +584,8 @@
       })
       .join('');
     return `<section><details ${list.length <= 8 ? 'open' : ''}>
-      <summary><h2>Branches sem worktree <span class="count">${list.length}</span></h2></summary>
+      <summary><h2>Branches sem worktree <span class="count">${list.length}</span>
+        ${mergedBranchCount() ? `<button class="link" data-action="removeMergedBranches" title="Branches locais sem worktree cujos commits já estão todos em ${esc(state.base)} (a base e as protegidas ficam de fora)">excluir mescladas (${mergedBranchCount()})</button>` : ''}</h2></summary>
       <table class="branches">${rows}</table></details></section>`;
   }
 
@@ -602,6 +603,13 @@
         w.compareKnown && w.ahead === 0 && !w.favorite && !(w.agents && w.agents.length) &&
         w.statusKnown && w.changes === 0 && !w.operation,
     ).length;
+  }
+
+  /** Mesma regra de actions.mergedBranches (que confere de novo com o git antes de excluir). */
+  function mergedBranchCount() {
+    if (!state.baseSha) return 0;
+    const unmerged = new Set(state.unmerged || []);
+    return state.branches.filter(b => !b.isBase && b.name !== state.base && !isProtected(b.name) && !unmerged.has(b.name)).length;
   }
 
   function badge(r) {
@@ -886,6 +894,8 @@
       if (pane) pane.classList.add('loading');
     }
     if (!el || /** @type {HTMLButtonElement} */ (el).disabled) return;
+    // botão dentro do <summary> não abre/fecha a seção
+    if (el.closest('summary')) e.preventDefault();
     const { action, ...args } = el.dataset;
     if (e.ctrlKey || e.altKey || e.metaKey) args.modifier = '1';
     send(action, args);
