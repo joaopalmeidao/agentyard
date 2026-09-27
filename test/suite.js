@@ -31,6 +31,7 @@ exports.run = async () => {
     const s = await until(() => ctl.state);
     assert.strictEqual(s.base, 'master');
     assert.strictEqual(s.worktrees.length, 4);
+    assert.strictEqual(s.graphFilter, 'unmerged', 'histórico abre em "Não mescladas" por padrão');
     assert.ok(s.agentNames.includes('Claude Code'));
   });
 

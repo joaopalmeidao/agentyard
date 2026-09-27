@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.1
+- O histórico abre em "Não mescladas" por padrão; a escolha entre "Tudo" e "Não mescladas" fica salva.
+
 ## 0.9.0
 **Histórico e commits**
 - Painel abre no layout de abas, na aba Histórico; layout, aba e divisor ficam salvos no VS Code.
