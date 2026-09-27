@@ -494,6 +494,9 @@ exports.run = async () => {
     const root = ctl.repo.root;
     const bare = path.join(root, '..', 'origin-push.git');
     const clone = path.join(root, '..', 'clone-pull');
+    // outros testes podem ter feito commits em ai/login-oauth: o remoto parte do estado atual dela
+    execSync(`git push -q -f "${bare}" ai/login-oauth`, { cwd: root });
+    execSync('git fetch -q origin', { cwd: root });
     execSync(`git clone -q "${bare}" "${clone}"`);
     execSync('git checkout -q ai/login-oauth', { cwd: clone });
     execSync('git -c user.name=o -c user.email=o@o commit -q --allow-empty -m "do remoto"', { cwd: clone });
