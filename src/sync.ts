@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { mergeBranches, openWorktree } from './actions';
+import { resolveButton, runResolve } from './conflicts';
 import { Controller } from './controller';
 import { branchMatches, Repo, Worktree } from './git';
 import { SyncKind, SyncWhere } from './model';
@@ -165,7 +166,7 @@ export class AutoSync implements vscode.Disposable {
     const preview = await repo.mergePreview(branch, baseRef);
     if (preview?.conflict) {
       this.set(branch, 'conflict', `Mesclar ${baseRef} vai dar conflito em: ${preview.files.join(', ')}`);
-      this.notifyOnce(`${branch}@${baseSha}@conflict`, `${branch}: a base avançou e vai conflitar em ${preview.files.length} arquivo(s).`, branch, true);
+      this.notifyOnce(`${branch}@${baseSha}@conflict`, `${branch}: a base avançou e vai conflitar em ${preview.files.length} arquivo(s).`, branch, true, true);
       return;
     }
     if (c.get<string>('autoSync.mode', 'merge') === 'notify' && !manual) {
@@ -209,12 +210,14 @@ export class AutoSync implements vscode.Disposable {
     this.ctl.statuses.set(branch, { kind, message, at: Date.now() });
   }
 
-  private async notifyOnce(key: string, message: string, branch: string, warn: boolean) {
+  private async notifyOnce(key: string, message: string, branch: string, warn: boolean, conflict = false) {
     if (this.notified.has(key)) return;
     this.notified.add(key);
-    const buttons = warn ? ['Abrir worktree', 'Ver grafo', 'Log'] : ['Mesclar agora', 'Ver grafo'];
+    const resolve = resolveButton(this.ctl);
+    const buttons = warn ? [...(conflict ? [resolve] : []), 'Abrir worktree', 'Ver grafo', 'Log'] : ['Mesclar agora', 'Ver grafo'];
     const pick = await (warn ? vscode.window.showWarningMessage : vscode.window.showInformationMessage)(message, ...buttons);
-    if (pick === 'Abrir worktree') await openWorktree(this.ctl, branch);
+    if (pick === resolve) await runResolve(branch);
+    else if (pick === 'Abrir worktree') await openWorktree(this.ctl, branch);
     else if (pick === 'Ver grafo') await vscode.commands.executeCommand('worktreeGraph.openGraph');
     else if (pick === 'Log') this.ctl.out.show();
     else if (pick === 'Mesclar agora') {

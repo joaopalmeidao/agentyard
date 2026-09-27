@@ -281,7 +281,10 @@
         : w.behind || w.ahead
           ? chip(arrows(w.behind, w.ahead), w.behind ? 'info' : 'muted', `${w.behind} atrás · ${w.ahead} à frente de ${state.baseRef}`)
           : chip('=', 'muted', `igual a ${state.baseRef}`);
-      const conf = w.preview?.conflict ? chip('⚠', 'bad', `conflita com ${state.base}: ${w.preview.files.join(', ')}`) : '';
+      const conf = w.preview?.conflict
+        ? chip('⚠', 'bad', `conflita com ${state.base}: ${w.preview.files.join(', ')}`) +
+          (agent ? `<button class="agent mini" data-action="resolveConflict" data-branch="${b}" title="Resolver com ${esc(agent)}: traz ${esc(state.base)} e resolve os conflitos">✦ resolver</button>` : '')
+        : '';
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
@@ -334,6 +337,7 @@
         if (w.branch && !w.isBase) {
           act.push(`<button data-action="diffWithBase" data-branch="${b}" title="Arquivos alterados desde que saiu da base">Revisar</button>`);
           act.push(`<button data-action="analyzeMerge" data-branch="${b}" title="Simular o merge em ${esc(state.base)}: commits, arquivos e conflitos">Analisar</button>`);
+          if (w.preview?.conflict && agent) act.unshift(`<button data-action="resolveConflict" data-branch="${b}" class="agent" title="Abre ${esc(agent)} nesta worktree com a tarefa de trazer ${esc(state.base)} e resolver os conflitos">✦ Resolver com ${esc(agent)}</button>`);
           if (state.hosting && !w.request && w.ahead) act.push(`<button data-action="publishRequest" data-branch="${b}" title="Push + ${state.hosting.label} para ${esc(state.base)}">Publicar ${state.hosting.label}</button>`);
           act.push(`<button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="git merge ${esc(state.baseRef)}">↓ Trazer ${esc(state.base)}</button>`);
           act.push(`<button data-action="mergeIntoBase" data-branch="${b}" class="primary" ${w.ahead ? '' : 'disabled'} title="Mesclar em ${esc(state.base)}">↑ Mesclar em ${esc(state.base)}</button>`);

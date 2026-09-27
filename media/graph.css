@@ -214,3 +214,5 @@ table.wts tr.dirty td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 table.wts tr.dirty .branch { color: var(--warn); }
 .row.wip { color: var(--warn); font-style: italic; }
 .row.wip .link { font-style: normal; font-size: 11px; }
+
+button.agent.mini { font-size: 11px; padding: 0 6px; margin-left: 2px; }
