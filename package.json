@@ -243,6 +243,17 @@
         "command": "worktreeGraph.compareWithBase",
         "title": "Comparar com a base",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.resolveConflict",
+        "title": "Resolver conflito com o agente (traz a base e resolve)",
+        "category": "Worktree Graph",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.launchAgentWithPrompt",
+        "title": "Abrir agente com uma tarefa",
+        "category": "Worktree Graph"
       }
     ],
     "menus": {
@@ -428,6 +439,11 @@
           "command": "worktreeGraph.copyPath",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^wt(File|Folder)$/",
           "group": "2_path@2"
+        },
+        {
+          "command": "worktreeGraph.resolveConflict",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@5"
         }
       ],
       "commandPalette": [
@@ -454,6 +470,10 @@
         {
           "command": "worktreeGraph.addToExplorer",
           "when": "false"
+        },
+        {
+          "command": "worktreeGraph.launchAgentWithPrompt",
+          "when": "false"
         }
       ]
     },
@@ -477,7 +497,7 @@
         },
         "worktreeGraph.agents": {
           "type": "array",
-          "markdownDescription": "CLIs de agente oferecidos no botão **Agente**. O primeiro é o padrão. Use `{prompt}` no comando para digitar a tarefa antes de abrir (ex.: `claude {prompt}`). O terminal recebe `WTGRAPH_BRANCH`, `WTGRAPH_BASE` e `WTGRAPH_WORKTREE`.",
+          "markdownDescription": "CLIs de agente oferecidos no botão **Agente**. O primeiro é o padrão. Use `{prompt}` no comando para digitar a tarefa antes de abrir (ex.: `claude {prompt}`). O terminal recebe `WTGRAPH_BRANCH`, `WTGRAPH_BASE` e `WTGRAPH_WORKTREE`. `promptCommand` (opcional) é usado quando a extensão manda uma tarefa pronta (ex.: resolver conflito): `{prompt}` vira o texto.",
           "items": {
             "type": "object",
             "required": [
@@ -490,13 +510,17 @@
               },
               "command": {
                 "type": "string"
+              },
+              "promptCommand": {
+                "type": "string"
               }
             }
           },
           "default": [
             {
               "name": "Claude Code",
-              "command": "claude"
+              "command": "claude",
+              "promptCommand": "claude {prompt}"
             },
             {
               "name": "Claude Code (com tarefa)",
@@ -504,11 +528,13 @@
             },
             {
               "name": "Codex CLI",
-              "command": "codex"
+              "command": "codex",
+              "promptCommand": "codex {prompt}"
             },
             {
               "name": "Gemini CLI",
-              "command": "gemini"
+              "command": "gemini",
+              "promptCommand": "gemini -i {prompt}"
             }
           ]
         },
@@ -694,6 +720,18 @@
           "type": "string",
           "default": "",
           "markdownDescription": "URL da API do GitHub Enterprise, se não for `<host>/api/v3`."
+        },
+        "worktreeGraph.prompts.resolveConflict": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "Na branch ${branch}, traga a ${base} (git merge ${base}) e resolva os conflitos em: ${files}. Preserve a intenção das duas mudanças, rode os testes do projeto e faça o commit do merge. Se algo for ambíguo, pergunte antes de decidir.",
+          "markdownDescription": "Tarefa enviada ao agente pelo botão *Resolver com …*. Placeholders: `${branch}`, `${base}`, `${files}`."
+        },
+        "worktreeGraph.prompts.mergeIntoBase": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "A branch ${branch} conflita com ${base} e não pode ser mesclada nela ainda. Nesta worktree, traga a ${base} (git merge ${base}) e resolva os conflitos em: ${files}, preservando a intenção das duas mudanças. Rode os testes do projeto e faça o commit do merge, para que o merge de ${branch} em ${base} fique limpo. Não faça o merge em ${base} sem me perguntar. Se algo for ambíguo, pergunte antes de decidir.",
+          "markdownDescription": "Tarefa enviada ao agente quando o conflito aparece ao mesclar a branch na base. Placeholders: `${branch}`, `${base}`, `${files}`."
         }
       }
     }

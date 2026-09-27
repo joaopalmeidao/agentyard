@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { AgentTerminals } from './agents';
+import { resolveConflict, ResolveOptions } from './conflicts';
 import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
 import { GitShowProvider, SCHEME } from './diff';
@@ -93,6 +94,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return launchAgent({ path: a.path, branch: a.branch }, a.agent);
       case 'openFile':
         return actions.openFileInWorktree(ctl, a.path ? { path: a.path } : a.branch);
+      case 'resolveConflict':
+        return resolveConflict(ctl, agentTerms, a.branch);
       case 'openTerminal':
         return actions.openTerminal(ctl, a.path ? { path: a.path } : a.branch);
       case 'mergeBaseInto':
@@ -169,6 +172,23 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('openWorktree', item => actions.openWorktree(ctl, item));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
+  reg('resolveConflict', (branch?: string | { branch?: string }, opts?: ResolveOptions) => {
+    const b = typeof branch === 'string' ? branch : branch?.branch;
+    return b && resolveConflict(ctl, agentTerms, b, opts ?? {});
+  });
+  reg('launchAgentWithPrompt', async (a: { path?: string; branch?: string; prompt: string; agent?: string }) => {
+    if (!a?.prompt) return;
+    let p = a.path;
+    let branch = a.branch;
+    const wts = ctl.repo ? await ctl.repo.worktreesFast() : [];
+    if (!p && branch) p = wts.find(w => w.branch === branch && !w.prunable)?.path;
+    if (p && !branch) branch = wts.find(w => w.path.toLowerCase() === p!.toLowerCase())?.branch;
+    if (!p) {
+      vscode.window.showWarningMessage(`Nenhuma worktree para ${branch ?? 'a tarefa'}.`);
+      return;
+    }
+    await agentTerms.launchWithPrompt(p, branch, a.prompt, a.agent);
+  });
   reg('openFileInWorktree', item => actions.openFileInWorktree(ctl, item));
   reg('mergeBaseInto', item => actions.mergeBaseInto(ctl, item));
   reg('mergeIntoBase', item => actions.mergeIntoBase(ctl, item));

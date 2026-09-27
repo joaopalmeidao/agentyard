@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import { analyzeMerge, MergeAnalysis } from './analysis';
+import { resolverName, runResolve } from './conflicts';
 import { Controller } from './controller';
 import { gitUri } from './diff';
 
@@ -69,6 +70,9 @@ export class MergePanel {
         return this.load();
       case 'publish':
         return this.onPublish(a.source);
+      case 'resolve':
+        // Mesclando na base: a branch traz a base e resolve. Outro destino: o destino traz a origem.
+        return a.target === this.ctl.state?.base ? runResolve(a.source, { intoBase: true }) : runResolve(a.target, { base: a.source });
     }
   }
 
@@ -118,6 +122,7 @@ export class MergePanel {
         <span class="ref ref-head">${esc(a.source)}</span> <span class="muted">→</span> <span class="ref ref-base">${esc(a.target)}</span></div>
       <div class="tools">
         ${canPublish ? `<button data-action="publish">Publicar ${this.ctl.requests?.label ?? 'PR'}</button>` : ''}
+        ${a.conflicts.length ? `<button data-action="resolve" class="agent" title="Abre o agente na worktree com a tarefa de trazer ${esc(a.target === this.ctl.state?.base ? a.target : a.source)} e resolver os conflitos">✦ Pedir ao ${esc(resolverName(this.ctl))} para mesclar e resolver</button>` : ''}
         <button data-action="merge" class="primary" ${a.incoming.length ? '' : 'disabled'}>Mesclar ${esc(a.source)} em ${esc(a.target)}</button>
         <button data-action="refresh" title="Refazer a simulação">↻</button></div></header>
       <div class="verdict ${verdict.cls}">${esc(verdict.text)}</div>

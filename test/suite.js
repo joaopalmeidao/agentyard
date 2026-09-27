@@ -136,6 +136,41 @@ exports.run = async () => {
     assert.strictEqual(ctl.state.base, 'master');
   });
 
+  await check('prompt vira UM argumento em pwsh, bash e cmd', async () => {
+    const { promptArgument, promptCommandOf } = require('../out/agents');
+    const fs = require('fs');
+    const ps = promptArgument('a\nb "c"', 'C:/Program Files/PowerShell/7/pwsh.exe');
+    assert.ok(ps.arg.startsWith("(Get-Content -Raw -LiteralPath '") && fs.readFileSync(ps.file, 'utf8') === 'a\nb "c"');
+    assert.ok(promptArgument('x', '/bin/bash').arg.startsWith('"$(cat \''));
+    assert.strictEqual(promptArgument('a\nb "c"', 'C:/Windows/System32/cmd.exe').arg, `"a b 'c'"`);
+    assert.strictEqual(promptCommandOf({ name: 'G', command: 'gemini' }), 'gemini -i {prompt}');
+    assert.strictEqual(promptCommandOf({ name: 'X', command: 'aider' }), 'aider {prompt}');
+  });
+
+  await check('conflito: "Resolver com agente" abre terminal na worktree com a tarefa', async () => {
+    const fs = require('fs');
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const before = vscode.window.terminals.length;
+    await vscode.commands.executeCommand('worktreeGraph.resolveConflict', 'ai/precos-promo');
+    await until(() => vscode.window.terminals.length === before + 1);
+    const t = vscode.window.terminals.find(x => x.name === 'Eco · ai/precos-promo · tarefa');
+    assert.ok(t, 'terminal da tarefa');
+    assert.strictEqual(t.creationOptions.cwd, wt.path);
+    const text = fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8');
+    assert.ok(text.includes('src/precos.ts'), text);
+    assert.ok(text.includes('git merge master'), text);
+  });
+
+  await check('contrato worktreeGraph.launchAgentWithPrompt (por branch, prompt multilinha)', async () => {
+    const fs = require('fs');
+    const before = vscode.window.terminals.length;
+    await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { branch: 'ai/login-oauth', prompt: 'linha 1\nlinha 2' });
+    await until(() => vscode.window.terminals.length === before + 1);
+    assert.ok(vscode.window.terminals.some(x => x.name === 'Eco · ai/login-oauth · tarefa'));
+    assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'linha 1\nlinha 2');
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
