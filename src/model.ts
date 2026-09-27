@@ -51,7 +51,7 @@ export interface WorktreeView extends Worktree {
   agents: string[];
   favorite: boolean;
   /** Sessões do Claude Code cujo cwd está nesta worktree (preenchido em segundo plano). */
-  claude?: { sessions: number; tokens: number; last: number; lastId: string };
+  claude?: { sessions: number; tokens: number; last: number; lastId: string; /** custo estimado em US$ (preços configurados) */ usd?: number };
   /** PR/MR aberto desta branch. */
   request?: ChangeRequest;
 }

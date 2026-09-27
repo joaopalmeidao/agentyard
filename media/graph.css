@@ -181,7 +181,7 @@ body.resizing { user-select: none; }
 .chip.link:hover { text-decoration: underline; }
 
 /* painel de análise de merge */
-body:has(.verdict) { overflow: auto; padding: 0 16px 24px; }
+body:has(.verdict), body.activity-page, body.review-page { overflow: auto; padding: 0 16px 24px; }
 .verdict { margin-top: 12px; padding: 10px 14px; border-radius: 4px; border-left: 4px solid; font-size: 14px; font-weight: 600; background: var(--card); }
 .verdict.ok { border-color: var(--ok); }
 .verdict.bad { border-color: var(--bad); }
@@ -220,3 +220,9 @@ button.agent.mini { font-size: 11px; padding: 0 6px; margin-left: 2px; }
 /* seletor de projeto na barra */
 button.repo { background: transparent; border: 0; padding: 0 2px; font-size: 15px; font-weight: 600; color: var(--fg); }
 button.repo:hover:not(:disabled) { background: var(--btn-bg); }
+
+/* atividade e revisão */
+ul.plain { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+section.cols2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.review-list td { vertical-align: top; }
+.review-list td.p div { font-family: var(--font); font-size: 13px; margin-top: 2px; white-space: pre-wrap; }

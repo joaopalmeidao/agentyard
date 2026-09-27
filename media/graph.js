@@ -192,6 +192,7 @@
         <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">onde: ${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'}</button>
         <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
         ${toPush() ? `<button data-action="pushMany" title="Enviar branches com commits não enviados (lista para escolher)">☁↑ Enviar ${toPush()}</button>` : ''}
+        <button data-action="activity" title="Commits, sessões e tokens do dia por worktree, e custo por tarefa">Atividade</button>
         <button data-action="generateCi" title="Gera o workflow de sync para o GitHub Actions ou o GitLab CI">Gerar CI</button>
         ${state.hosting && !state.hosting.connected ? `<button data-action="connectHosting" title="Para publicar e acompanhar ${state.hosting.label}s em ${esc(state.hosting.host)}">Conectar ${state.hosting.kind === 'gitlab' ? 'GitLab' : 'GitHub'}</button>` : ''}
         <span class="layouts" title="Layout do painel">
@@ -253,7 +254,7 @@
 
   function claudeChip(w) {
     const c = w.claude;
-    return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}</span>`;
+    return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}${c.usd !== undefined ? ` · ≈US$ ${c.usd.toFixed(2).replace('.', ',')}` : ''}</span>`;
   }
   const fmtTokens = n => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} mi` : n >= 1e3 ? `${Math.round(n / 1e3)} mil` : String(n));
 
@@ -431,6 +432,8 @@
         if (w.branch && !w.isBase) {
           act.push(`<button data-action="diffWithBase" data-branch="${b}" title="Arquivos alterados desde que saiu da base">Revisar</button>`);
           act.push(`<button data-action="analyzeMerge" data-branch="${b}" title="Simular o merge em ${esc(state.base)}: commits, arquivos e conflitos">Analisar</button>`);
+          if (w.request && (w.request.state === 'open' || w.request.state === 'draft'))
+            act.push(`<button class="agent" data-action="reviewWithAgent" data-branch="${b}" title="O agente revisa o ${esc(w.request.ref)} e você escolhe o que postar">✦ Revisar ${esc(w.request.ref)}</button>`);
           if (w.preview?.conflict && agent) act.unshift(`<button data-action="resolveConflict" data-branch="${b}" class="agent" title="Abre ${esc(agent)} nesta worktree com a tarefa de trazer ${esc(state.base)} e resolver os conflitos">✦ Resolver com ${esc(agent)}</button>`);
           if (state.hosting && !w.request && w.ahead) act.push(`<button data-action="publishRequest" data-branch="${b}" title="Push + ${state.hosting.label} para ${esc(state.base)}">Publicar ${state.hosting.label}</button>`);
           act.push(`<button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="git merge ${esc(state.baseRef)}">↓ Trazer ${esc(state.base)}</button>`);
@@ -704,6 +707,7 @@
       items.push(item('createWorktree', 'Nova branch + worktree a partir daqui', { startPoint: b }));
       if (!isBase) items.push(item('diffWithBase', `Revisar alterações × ${state.base}`, { branch: b }));
       if (!isBase) items.push(item('analyzeMerge', `Analisar merge em ${state.base}…`, { branch: b }));
+      if (!isBase) items.push(item('reviewWithAgent', '✦ Revisar PR/MR com o agente', { branch: b }, 'agent'));
       const req = (wt && wt.request) || (state.branches.find(x => x.name === b) || {}).request;
       if (!isBase && state.hosting) items.push(req ? item('openUrl', `Abrir ${req.ref} no navegador`, { url: req.url }) : item('publishRequest', `Publicar ${state.hosting.label}…`, { branch: b }));
       if (!isBase) {
