@@ -58,7 +58,7 @@ exports.run = async () => {
 
   await check('comandos registrados', async () => {
     const all = await vscode.commands.getCommands(true);
-    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
+    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
     // o painel foca views pelos comandos <view>.focus que o VS Code cria para cada view declarada
     for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules', 'mergeQueue']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
   });
@@ -74,12 +74,32 @@ exports.run = async () => {
     const root = await tree.getChildren();
     const wt = root.find(n => n.branch === 'ai/refatorar-api');
     const kids = await tree.getChildren(wt);
-    assert.strictEqual(kids[0].kind, 'changes');
-    const changes = await tree.getChildren(kids[0]);
+    assert.strictEqual(kids[0].kind, 'commits');
+    assert.strictEqual(kids[1].kind, 'changes');
+    const changes = await tree.getChildren(kids[1]);
     const names = changes.map(c => c.label).sort();
     assert.deepStrictEqual(names, ['api.ts', 'novo.ts']);
     assert.strictEqual(changes[0].command.command, 'vscode.diff');
     assert.ok(kids.some(k => k.kind === 'dir'), 'lista pastas da worktree');
+  });
+
+  await check('árvore: commits × base na worktree e na branch sem worktree; resumo copiado', async () => {
+    const root = await tree.getChildren();
+    const wt = root.find(n => n.branch === 'ai/login-oauth');
+    const group = (await tree.getChildren(wt)).find(k => k.kind === 'commits');
+    const commits = await tree.getChildren(group);
+    assert.ok(commits.length >= 1, 'lista commits');
+    assert.strictEqual(String(commits.length), group.description);
+    assert.strictEqual(commits[0].command.command, 'worktreeGraph.showCommitSha');
+    const branches = await tree.getChildren(root.find(n => n.kind === 'branches'));
+    const fix = branches.find(b => b.branch === 'fix/typo-readme');
+    const fixKids = await tree.getChildren(fix);
+    if (fix.b.ahead) assert.strictEqual(fixKids[0].kind, 'commits');
+    await vscode.commands.executeCommand('worktreeGraph.copyBranchContext', wt);
+    const text = await vscode.env.clipboard.readText();
+    assert.match(text, /^# ai\/login-oauth/);
+    assert.ok(text.includes(commits[0].label), 'resumo traz o commit mais recente');
+    assert.match(text, /## Não commitado/);
   });
 
   await check('árvore: navegar pasta da worktree e abrir arquivo', async () => {
