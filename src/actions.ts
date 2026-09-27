@@ -375,6 +375,145 @@ export async function diffWithBase(ctl: Controller, arg: BranchArg) {
   qp.show();
 }
 
+/** Arquivos não commitados (staged, não staged e não rastreados), com status A, M, D ou ?. */
+export async function uncommittedFiles(repo: Repo, cwd: string): Promise<{ file: string; status: string }[]> {
+  const out = await repo.exec(['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all'], cwd);
+  return out
+    .split('\0')
+    .filter(Boolean)
+    .map(e => {
+      const xy = e.slice(0, 2);
+      const status = xy === '??' ? '?' : xy.includes('D') ? 'D' : xy.includes('A') ? 'A' : xy.includes('T') ? 'T' : 'M';
+      return { file: e.slice(3), status };
+    });
+}
+
+/** Diff de um arquivo não commitado: HEAD ↔ o que está no disco. */
+export function uncommittedDiffArgs(cwd: string, file: string, status: string, name: string, opts: { preserveFocus?: boolean; preview?: boolean } = {}): unknown[] {
+  const left = status === 'A' || status === '?' ? gitUri(cwd, '__empty__', file) : gitUri(cwd, 'HEAD', file);
+  const right = status === 'D' ? gitUri(cwd, '__empty__', file) : vscode.Uri.file(path.join(cwd, file));
+  return [left, right, `${path.basename(file)} (${name}: não commitado)`, { preview: opts.preview ?? true, preserveFocus: opts.preserveFocus }];
+}
+
+function openUncommittedDiff(cwd: string, file: string, status: string, name: string, opts: { preserveFocus?: boolean; preview?: boolean } = {}) {
+  return vscode.commands.executeCommand('vscode.diff', ...uncommittedDiffArgs(cwd, file, status, name, opts));
+}
+
+/** Lista o que não foi commitado numa worktree (inclusive a da base) e abre o diff de cada arquivo. */
+export async function showUncommitted(ctl: Controller, arg: BranchArg | { path?: string }) {
+  const repo = repoOf(ctl);
+  const wts = (await repo.worktreesFast()).filter(w => !w.bare && !w.prunable);
+  let dir = typeof arg === 'object' && arg && 'path' in arg && arg.path ? arg.path : undefined;
+  const b = typeof arg === 'string' ? arg : (arg as { branch?: string } | undefined)?.branch;
+  if (!dir && b) dir = wts.find(w => w.branch === b)?.path;
+  if (!dir) {
+    const withChanges = (ctl.state?.worktrees ?? []).filter(w => w.changes && !w.prunable);
+    const list = withChanges.length ? withChanges.map(w => ({ label: w.name, description: `●${w.changes}  ${w.path}`, p: w.path })) : wts.map(w => ({ label: w.branch ?? path.basename(w.path), description: w.path, p: w.path }));
+    dir = (await vscode.window.showQuickPick(list, { placeHolder: 'Alterações não commitadas de qual worktree?' }))?.p;
+    if (!dir) return;
+  }
+  const cwd = dir;
+  const name = wts.find(w => w.path.toLowerCase() === cwd.toLowerCase())?.branch ?? path.basename(cwd);
+  const files = await uncommittedFiles(repo, cwd);
+  if (!files.length) {
+    vscode.window.showInformationMessage(`${name} não tem alterações não commitadas.`);
+    return;
+  }
+  const label: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', '?': 'novo, não rastreado', T: 'tipo alterado' };
+  type Item = vscode.QuickPickItem & { file?: string; status?: string; all?: boolean; window?: boolean; terminal?: boolean };
+  const qp = vscode.window.createQuickPick<Item>();
+  qp.title = `${name} — ${files.length} arquivo(s) não commitado(s)`;
+  qp.placeholder = 'Enter abre o diff; a lista continua aberta para o próximo arquivo';
+  qp.ignoreFocusOut = true;
+  qp.matchOnDescription = true;
+  qp.items = [
+    { label: '$(diff-multiple) Abrir todos os diffs', description: files.length > 30 ? 'os 30 primeiros' : undefined, all: true },
+    { label: '$(empty-window) Abrir a worktree em nova janela', window: true },
+    { label: '$(terminal) Abrir terminal na worktree', terminal: true },
+    { label: 'Arquivos', kind: vscode.QuickPickItemKind.Separator },
+    ...files.map(f => ({
+      label: path.basename(f.file),
+      description: `${path.dirname(f.file) === '.' ? '' : path.dirname(f.file)}  ${label[f.status] ?? f.status}`,
+      file: f.file,
+      status: f.status,
+    })),
+  ];
+  qp.onDidAccept(async () => {
+    const it = qp.selectedItems[0];
+    if (!it) return;
+    if (it.all) {
+      qp.hide();
+      for (const f of files.slice(0, 30)) await openUncommittedDiff(cwd, f.file, f.status, name, { preview: false });
+    } else if (it.window) {
+      qp.hide();
+      await openWorktree(ctl, { path: cwd });
+    } else if (it.terminal) {
+      qp.hide();
+      await openTerminal(ctl, { path: cwd });
+    } else if (it.file) {
+      await openUncommittedDiff(cwd, it.file, it.status!, name, { preserveFocus: true });
+    }
+  });
+  qp.onDidHide(() => qp.dispose());
+  qp.show();
+}
+
+/**
+ * Nova worktree a partir de uma branch escolhida (a base por padrão) e já com uma tarefa para o agente.
+ * `arg` com branch (item da árvore, card do grafo) ou `startPoint` pula a escolha da origem.
+ */
+export async function newWorktreeWithTask(ctl: Controller, arg?: string | { branch?: string; startPoint?: string; prompt?: string; name?: string; agent?: string }) {
+  const repo = repoOf(ctl);
+  const { base } = await ctl.base();
+  const o = typeof arg === 'string' ? { branch: arg } : (arg ?? {});
+  let from = o.startPoint ?? o.branch;
+  if (!from) {
+    const refs = await repo.refs();
+    const wtBranches = new Set((await repo.worktreesFast()).map(w => w.branch).filter(Boolean));
+    type Item = vscode.QuickPickItem & { ref?: string };
+    const heads = refs.filter(r => r.kind === 'head' && r.name !== base);
+    const items: Item[] = [
+      { label: `$(home) ${base}`, description: 'base', detail: refs.find(r => r.kind === 'head' && r.name === base)?.subject, ref: base },
+      { label: 'Branches locais', kind: vscode.QuickPickItemKind.Separator },
+      ...heads.map(r => ({ label: `${wtBranches.has(r.name) ? '$(folder)' : '$(git-branch)'} ${r.name}`, description: wtBranches.has(r.name) ? 'com worktree' : undefined, detail: r.subject, ref: r.name })),
+      { label: 'Remotas', kind: vscode.QuickPickItemKind.Separator },
+      ...refs.filter(r => r.kind === 'remote').map(r => ({ label: `$(cloud) ${r.name}`, detail: r.subject, ref: r.name })),
+    ];
+    from = (await vscode.window.showQuickPick(items, { title: 'Nova worktree com tarefa (1/3)', placeHolder: 'Criar a worktree a partir de qual branch?', matchOnDetail: true }))?.ref;
+    if (!from) return;
+  }
+  const prompt =
+    o.prompt ??
+    (await vscode.window.showInputBox({
+      title: `Nova worktree com tarefa (2/3) — a partir de ${from}`,
+      prompt: 'O que o agente deve fazer na nova worktree?',
+      ignoreFocusOut: true,
+    }));
+  if (!prompt?.trim()) return;
+  const names = new Set((await repo.refs()).filter(r => r.kind === 'head').map(r => r.name));
+  const { slugify } = await import('./agentFlow/attempts');
+  let suggestion = `ai/${slugify(prompt) || 'tarefa'}`;
+  for (let i = 2; names.has(suggestion); i++) suggestion = `ai/${slugify(prompt) || 'tarefa'}-${i}`;
+  const branch =
+    o.name ??
+    (await vscode.window.showInputBox({
+    title: `Nova worktree com tarefa (3/3) — a partir de ${from}`,
+    prompt: 'Nome da nova branch',
+    value: suggestion,
+    ignoreFocusOut: true,
+    validateInput: v => {
+      if (!v.trim()) return 'Informe um nome.';
+      if (/[\s~^:?*[\\]|\.\.|@\{|\/$|^\/|\.lock$/.test(v)) return 'Nome de branch inválido.';
+      if (names.has(v)) return 'Essa branch já existe.';
+      return undefined;
+    },
+  }));
+  if (!branch) return;
+  const dir = await createWorktree(ctl, { branch, startPoint: from, quiet: true });
+  if (!dir) return;
+  await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: dir, branch, prompt: prompt.trim(), agent: o.agent });
+}
+
 export async function copyText(text: string) {
   await vscode.env.clipboard.writeText(text);
   vscode.window.setStatusBarMessage(`Copiado: ${text}`, 2500);

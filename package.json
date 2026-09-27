@@ -145,6 +145,24 @@
         "icon": "$(add)"
       },
       {
+        "command": "worktreeGraph.newWorktreeWithTask",
+        "title": "Nova worktree com tarefa para o agente…",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.newWorktreeWithTaskFrom",
+        "title": "Nova worktree a partir desta, com tarefa para o agente…",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.showUncommitted",
+        "title": "Ver alterações não commitadas",
+        "category": "AgentYard",
+        "icon": "$(diff)"
+      },
+      {
         "command": "worktreeGraph.openWorktree",
         "title": "Abrir worktree em nova janela",
         "category": "AgentYard",
@@ -1127,6 +1145,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "worktreeGraph.newWorktreeWithTask",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "navigation@2"
+        },
+        {
           "command": "worktreeGraph.openFileInWorktree",
           "when": "view == worktreeGraph.worktrees",
           "group": "navigation@2"
@@ -1413,6 +1436,21 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@3a"
+        },
+        {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.newWorktreeWithTaskFrom",
+          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch)",
+          "group": "1_open@0c"
+        },
         {
           "command": "worktreeGraph.launchAgentNew",
           "when": "view == worktreeGraph.agents && viewItem == agentGroup",
@@ -2085,6 +2123,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "worktreeGraph.newWorktreeWithTaskFrom",
+          "when": "false"
+        },
         {
           "command": "worktreeGraph.agents.show",
           "when": "false"

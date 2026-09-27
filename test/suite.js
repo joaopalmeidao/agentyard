@@ -74,12 +74,24 @@ exports.run = async () => {
     const root = await tree.getChildren();
     const wt = root.find(n => n.branch === 'ai/refatorar-api');
     const kids = await tree.getChildren(wt);
-    assert.strictEqual(kids[0].kind, 'changes');
-    const changes = await tree.getChildren(kids[0]);
+    const changes = await tree.getChildren(kids.find(k => k.kind === 'changes'));
     const names = changes.map(c => c.label).sort();
     assert.deepStrictEqual(names, ['api.ts', 'novo.ts']);
     assert.strictEqual(changes[0].command.command, 'vscode.diff');
     assert.ok(kids.some(k => k.kind === 'dir'), 'lista pastas da worktree');
+  });
+
+  await check('árvore: "Não commitadas" lista só o que não entrou em commit (HEAD ↔ disco)', async () => {
+    const root = await tree.getChildren();
+    const wt = root.find(n => n.branch === 'ai/refatorar-api');
+    const kids = await tree.getChildren(wt);
+    assert.strictEqual(kids[0].kind, 'uncommitted');
+    const files = await tree.getChildren(kids[0]);
+    assert.ok(files.length > 0);
+    assert.strictEqual(files[0].command.command, 'vscode.diff');
+    const { uncommittedFiles } = require('../out/actions');
+    const direct = await uncommittedFiles(ctl.repo, wt.path);
+    assert.deepStrictEqual(files.map(f => f.resourceUri.fsPath).sort(), direct.map(f => require('path').join(wt.path, f.file)).sort());
   });
 
   await check('árvore: navegar pasta da worktree e abrir arquivo', async () => {
@@ -207,6 +219,19 @@ exports.run = async () => {
     await until(() => vscode.window.terminals.length === before + 1);
     assert.ok(vscode.window.terminals.some(x => x.name === 'Eco · ai/login-oauth · tarefa'));
     assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'linha 1\nlinha 2');
+  });
+
+  await check('nova worktree com tarefa: cria a partir da branch escolhida e entrega o prompt', async () => {
+    const fs = require('fs');
+    await vscode.commands.executeCommand('worktreeGraph.newWorktreeWithTask', { startPoint: 'ai/login-oauth', prompt: 'tarefa nova', name: 'ai/tarefa-teste' });
+    const wt = (await ctl.repo.worktreesFast()).find(w => w.branch === 'ai/tarefa-teste');
+    assert.ok(wt, 'worktree criada');
+    const oauth = (await ctl.repo.exec(['rev-parse', 'ai/login-oauth'])).trim();
+    assert.strictEqual((await ctl.repo.exec(['rev-parse', 'HEAD'], wt.path)).trim(), oauth);
+    await until(() => fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8') === 'tarefa nova');
+    await ctl.repo.removeWorktree(wt.path, true);
+    await ctl.repo.exec(['branch', '-D', 'ai/tarefa-teste']);
+    ctl.scheduleRefresh(10);
   });
 
   await check('issues: a view abre sem rede nem credenciais', async () => {
