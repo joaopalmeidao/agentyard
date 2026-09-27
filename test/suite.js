@@ -211,6 +211,29 @@ exports.run = async () => {
     assert.ok(doc.getText().includes('Feito: cliente OAuth criado.'));
   });
 
+  await check('Claude: configuração lista skill, comando, settings e memória sintéticos; nova memória entra no índice', async () => {
+    const svc = api.claudeConfig;
+    await vscode.commands.executeCommand('worktreeGraph.claudeConfig.focus');
+    const scopes = svc.getChildren();
+    assert.deepStrictEqual(scopes.map(n => n.scope), ['user', 'project']);
+    const userGroups = svc.getChildren(scopes[0]);
+    const skills = svc.getChildren(userGroups.find(g => g.group === 'skills'));
+    assert.ok(skills.some(n => n.entry && n.entry.name === 'revisar-pr'), 'skill sintética');
+    const cmds = svc.getChildren(userGroups.find(g => g.group === 'commands'));
+    assert.ok(cmds.some(n => n.entry && n.entry.name === 'ola'), 'comando sintético');
+    const cfgs = svc.getChildren(userGroups.find(g => g.group === 'config'));
+    assert.ok(String(cfgs.find(n => n.cfg && n.cfg.kind === 'settings').description).includes('1 allow'));
+    const memGroup = svc.getChildren(scopes[1]).find(g => g.group === 'memory');
+    assert.ok(memGroup, 'grupo de memória do projeto');
+    const mems = svc.getChildren(memGroup);
+    assert.ok(mems.some(n => n.entry && n.entry.name === 'preferencia-teste'), 'memória sintética');
+    const { createMemory, checkIndex } = require('../out/claude/config');
+    createMemory(memGroup.memDir, { type: 'project', title: 'Nova via API', description: 'teste', body: 'x' });
+    assert.ok(require('fs').readFileSync(require('path').join(memGroup.memDir, 'MEMORY.md'), 'utf8').includes('(nova-via-api.md)'));
+    assert.deepStrictEqual(checkIndex(memGroup.memDir), { missingInIndex: [], dangling: [] });
+    assert.ok(svc.getChildren(memGroup).some(n => n.entry && n.entry.name === 'nova-via-api'));
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
