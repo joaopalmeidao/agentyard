@@ -107,7 +107,7 @@ export interface GraphState {
   worktrees: WorktreeView[];
   branches: BranchView[];
   commits: GraphCommit[];
-  autoSync: { enabled: boolean; mode: string; testCommand: string; owner: boolean; where: SyncWhere };
+  autoSync: { enabled: boolean; mode: string; trigger: string; testCommand: string; owner: boolean; where: SyncWhere };
   /** Agentes configurados, na ordem das configurações (o primeiro é o do botão). */
   agentNames: string[];
   /** Quantas worktrees ainda faltam detalhar (status/comparação). 0 = tudo em dia. */

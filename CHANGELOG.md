@@ -1,6 +1,10 @@
 # Changelog
 
 ## Não lançado
+- Sync local da base agora acontece no push, por padrão: antes de enviar uma branch pela extensão, a
+  base é mesclada nela (mesmas regras: worktree limpa, sem conflito previsto, testes). A verificação
+  periódica só mostra quem está atrás. Para voltar ao comportamento anterior (mesclar a cada
+  verificação), use `worktreeGraph.autoSync.trigger: "interval"`.
 - Migrations nos merges: quando a branch e o destino criaram migrations novas, o git mescla sem
   conflito, mas a cadeia quebra (duas `0005` no Django, duas heads no Alembic, `V5__` repetida no
   Flyway). Antes do merge o AgentYard avisa e oferece "Reencadear e mesclar": renumera as da branch
