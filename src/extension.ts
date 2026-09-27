@@ -8,6 +8,7 @@ import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
 import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
+import { registerGuards } from './guards';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { WorktreeDecorations } from './decorations';
@@ -336,7 +337,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Usado pelos testes de integração (test/).
   const claudeConfig = registerClaudeConfig(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines };
+  const guards = registerGuards(ctx, ctl);
+
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards };
 }
 
 export function deactivate() {}

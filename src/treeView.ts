@@ -13,6 +13,12 @@ const STATUS_LABEL: Record<string, string> = { A: 'adicionado', M: 'modificado',
 /** Último pipeline de uma branch (preenchido pelo provider a partir do estado). */
 let pipelineOf: ((branch: string) => { status: string } | undefined) | undefined;
 
+/** Preenchido a cada leitura com as branches protegidas (src/guards.ts), para o cadeado na árvore. */
+let protectedNames = new Set<string>();
+export function setProtectedNames(list: string[] | undefined) {
+  protectedNames = new Set(list ?? []);
+}
+
 export class WorktreeItem extends vscode.TreeItem {
   readonly kind = 'worktree';
   readonly branch?: string;
@@ -27,6 +33,7 @@ export class WorktreeItem extends vscode.TreeItem {
 
     const parts: string[] = [];
     if (wt.favorite) parts.push('★');
+    if (wt.branch && protectedNames.has(wt.branch)) parts.push('🔒');
     if (!wt.statusKnown || !wt.compareKnown) parts.push('…');
     if (!wt.isBase && wt.behind) parts.push(`↓${wt.behind}`);
     if (!wt.isBase && wt.ahead) parts.push(`↑${wt.ahead}`);

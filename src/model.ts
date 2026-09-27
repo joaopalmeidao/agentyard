@@ -103,6 +103,8 @@ export interface GraphState {
   graphFilter: 'all' | 'unmerged';
   /** Branches locais com commits fora da base. */
   unmerged: string[];
+  /** Branches protegidas (src/guards.ts): merge e push direto pedem confirmação ou PR/MR. */
+  protectedBranches?: string[];
   /** Remoto reconhecido (GitHub/GitLab) e se há credencial. */
   hosting?: { kind: 'github' | 'gitlab'; label: 'PR' | 'MR'; host: string; connected: boolean; error?: string };
   /** Último pipeline (GitHub Actions/GitLab CI) de cada branch, se houver dados. */

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { guardChecks } from '../guards';
 import { pushBranch } from '../push';
 import type { Controller } from '../controller';
 import { ChangeRequest, GitHubClient, GitLabClient, HostClient, HostError, parseRemote, RemoteInfo, suggestBody, suggestTitle } from './core';
@@ -299,6 +300,8 @@ export class RequestService {
     );
     if (!kind) return;
 
+    // checagens antes do PR/MR mesmo se a branch já estiver enviada (o push reaproveita o resultado)
+    if (!(await guardChecks('push', branch))) return;
     if (!(await this.push(branch))) return;
     try {
       const created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Criando ${L}…` }, () =>
