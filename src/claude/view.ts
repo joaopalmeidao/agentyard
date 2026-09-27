@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { AgentTerminals, claudeAgentName, OpenAgent, promptArgument, stateText } from '../agents';
 import type { Controller } from '../controller';
 import type { GraphState } from '../model';
 import { locale, t } from '../i18n';
@@ -60,18 +61,21 @@ export class ClaudeService implements vscode.Disposable {
   readonly onDidChange = this.changed.event;
   private readonly status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 49);
   private readonly disposables: vscode.Disposable[] = [this.changed, this.status];
-  /** Terminais abertos por esta extensão para o Claude, por worktree (para mandar comandos). */
-  private readonly terminals = new Map<string, vscode.Terminal>();
+  private rescan?: NodeJS.Timeout;
   loaded = false;
 
-  constructor(readonly ctl: Controller) {
+  /** Os terminais do Claude são os mesmos dos agentes (AgentTerminals): estado, hooks e "pronto para revisar". */
+  constructor(readonly ctl: Controller, readonly agentTerms: AgentTerminals) {
     this.status.command = 'worktreeGraph.claude.usage';
     this.status.name = t('Claude Code usage');
     this.loadCache();
     ctl.stateHooks.push(s => this.applyToState(s));
     this.disposables.push(
-      vscode.window.onDidCloseTerminal(term => {
-        for (const [k, v] of this.terminals) if (v === term) this.terminals.delete(k);
+      // fim de turno: tokens e título novos no log; relê logo em vez de esperar o minuto
+      agentTerms.onDidChangeState(({ open }) => {
+        if (open.state !== 'idle' && open.state !== 'ended') return;
+        if (this.rescan) clearTimeout(this.rescan);
+        this.rescan = setTimeout(() => this.scan(), 1500);
       }),
       vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph.claude') && this.updateStatus()),
     );
@@ -197,31 +201,53 @@ export class ClaudeService implements vscode.Disposable {
 
   // ---------- ações ----------
 
-  private terminalFor(cwd: string, name: string): vscode.Terminal {
-    const term = vscode.window.createTerminal({ name, cwd, iconPath: new vscode.ThemeIcon('sparkle') });
-    this.terminals.set(norm(cwd), term);
-    return term;
+  private agentName(): string {
+    return claudeAgentName(this.ctl);
+  }
+
+  private branchOf(cwd: string): string | undefined {
+    return this.ctl.state?.worktrees.find(w => norm(w.path) === norm(cwd))?.branch;
+  }
+
+  private start(cwd: string, command: string, name?: string) {
+    return this.agentTerms.start(cwd, this.branchOf(cwd), this.agentName(), command, { name });
   }
 
   private existingDir(...candidates: (string | undefined)[]): string | undefined {
     return candidates.find(c => c && fs.existsSync(c));
   }
 
+  /** Terminal aberto com esta sessão, se houver. */
+  openFor(s: SessionInfo): OpenAgent | undefined {
+    return this.agentTerms.findBySession(s.id);
+  }
+
+  /** Se a sessão já está aberta num terminal, traz ele para frente; senão abre com --resume. */
   resume(s: SessionInfo) {
+    const open = this.openFor(s);
+    if (open) {
+      open.terminal.show();
+      return;
+    }
     const cwd = this.existingDir(s.cwd, this.ctl.repo?.root);
     if (!cwd) {
       vscode.window.showWarningMessage(t('The session folder no longer exists: {0}', s.cwd ?? ''));
       return;
     }
-    const term = this.terminalFor(cwd, `Claude · ${sessionTitle(s).slice(0, 30)}`);
-    term.show();
-    term.sendText(`claude --resume ${s.id}`);
+    void this.start(cwd, `claude --resume ${s.id}`, `${this.agentName()} · ${sessionTitle(s).slice(0, 30)}`);
   }
 
-  newSession(cwd: string, label?: string) {
-    const term = this.terminalFor(cwd, `Claude · ${label ?? path.basename(cwd)}`);
-    term.show();
-    term.sendText('claude');
+  newSession(cwd: string) {
+    void this.start(cwd, 'claude');
+  }
+
+  async transcriptById(id: string) {
+    const s = this.sessions.find(x => x.id === id);
+    if (s) return this.transcript(s);
+    await this.scan();
+    const again = this.sessions.find(x => x.id === id);
+    if (again) return this.transcript(again);
+    vscode.window.showInformationMessage(t('Session {0} not found.', id));
   }
 
   async transcript(s: SessionInfo) {
@@ -275,36 +301,33 @@ export class ClaudeService implements vscode.Disposable {
   /** Comandos de barra/skills e atalhos de sessão para uma worktree. */
   async commands(cwd: string, label: string) {
     const list = listClaudeCommands(cwd, this.claudeDir());
-    const open = this.terminals.get(norm(cwd));
-    const alive = open && open.exitStatus === undefined;
+    const alive = this.agentTerms.claudeIn(cwd).length > 0;
     const items: (vscode.QuickPickItem & { run?: () => void })[] = [
       { label: t('Session'), kind: vscode.QuickPickItemKind.Separator },
-      { label: '$(debug-continue) ' + t('Continue the last session here'), description: 'claude -c', run: () => this.send(cwd, label, 'claude -c', false) },
-      { label: '$(history) ' + t('Pick a session to resume'), description: 'claude --resume', run: () => this.send(cwd, label, 'claude --resume', false) },
-      { label: '$(add) ' + t('New session'), description: 'claude', run: () => this.send(cwd, label, 'claude', false) },
+      { label: '$(debug-continue) ' + t('Continue the last session here'), description: 'claude -c', run: () => this.send(cwd, 'claude -c', false) },
+      { label: '$(history) ' + t('Pick a session to resume'), description: 'claude --resume', run: () => this.send(cwd, 'claude --resume', false) },
+      { label: '$(add) ' + t('New session'), description: 'claude', run: () => this.send(cwd, 'claude', false) },
       { label: alive ? t('Commands (sent to the Claude open in this worktree)') : t('Commands (open a new session)'), kind: vscode.QuickPickItemKind.Separator },
-      ...list.map(c => ({ label: c.name, description: sourceLabel(c.source), detail: c.description || undefined, run: () => this.send(cwd, label, c.name, true) })),
+      ...list.map(c => ({ label: c.name, description: sourceLabel(c.source), detail: c.description || undefined, run: () => this.send(cwd, c.name, true) })),
     ];
     const pick = await vscode.window.showQuickPick(items, { title: t('Claude Code in {0}', label), matchOnDescription: true, matchOnDetail: true });
     pick?.run?.();
   }
 
-  /** `slash`: se já há um Claude aberto nesta worktree, digita o comando nele; senão abre com o comando. */
-  private send(cwd: string, label: string, text: string, slash: boolean) {
-    const term = this.terminals.get(norm(cwd));
-    if (slash && term && term.exitStatus === undefined) {
-      term.show();
-      term.sendText(text);
-      return;
-    }
-    const nt = this.terminalFor(cwd, `Claude · ${label}`);
-    nt.show();
-    nt.sendText(slash ? `claude "${text}"` : text);
+  /**
+   * `slash`: se já há um Claude aberto nesta worktree, digita o comando nele (o mais recente);
+   * senão abre um com o comando como primeira mensagem.
+   */
+  private send(cwd: string, text: string, slash: boolean) {
+    const open = slash ? this.agentTerms.claudeIn(cwd)[0] : undefined;
+    if (open) return void this.agentTerms.type(open, text, true);
+    void this.start(cwd, slash ? `claude ${promptArgument(text).arg}` : text);
   }
 
   dispose() {
     if (this.timer) clearInterval(this.timer);
     if (this.saveTimer) clearTimeout(this.saveTimer);
+    if (this.rescan) clearTimeout(this.rescan);
     this.disposables.forEach(d => d.dispose());
   }
 }
@@ -326,17 +349,21 @@ class WorktreeGroup extends vscode.TreeItem {
 
 export class SessionItem extends vscode.TreeItem {
   readonly kind = 'claudeSession';
-  constructor(readonly session: SessionInfo) {
+  constructor(readonly session: SessionInfo, open?: OpenAgent) {
     super(sessionTitle(session), vscode.TreeItemCollapsibleState.None);
     this.id = `claude-session:${session.id}`;
-    this.description = `${ago(session.end)} · ${formatTokens(weighted(session.usage))}`;
-    this.iconPath = new vscode.ThemeIcon('comment-discussion');
+    const live = open ? `${stateText(open.state) || t('open')} · ` : '';
+    this.description = `${live}${ago(session.end)} · ${formatTokens(weighted(session.usage))}`;
+    this.iconPath = open
+      ? new vscode.ThemeIcon(open.state === 'waiting' ? 'bell-dot' : 'terminal', new vscode.ThemeColor(open.state === 'waiting' ? 'list.warningForeground' : 'terminal.ansiGreen'))
+      : new vscode.ThemeIcon('comment-discussion');
     this.contextValue = 'claudeSession';
     const u = session.usage;
     const md = new vscode.MarkdownString(undefined, true);
     md.appendMarkdown(`**${sessionTitle(session)}**\n\n`);
     if (session.firstPrompt && session.firstPrompt !== sessionTitle(session)) md.appendMarkdown(`> ${session.firstPrompt}\n\n`);
     md.appendMarkdown(`\`${session.id}\`\n\n${session.cwd ?? ''}${session.gitBranch ? ` · ${session.gitBranch}` : ''}\n\n`);
+    if (open) md.appendMarkdown(t('Open in the terminal **{0}**: "Resume" brings it to the front.', open.terminal.name) + '\n\n');
     md.appendMarkdown(`${new Date(session.start).toLocaleString(locale())} → ${new Date(session.end).toLocaleString(locale())}\n\n`);
     md.appendMarkdown(t('{0} messages from you · {1} responses · {2}', session.userMessages, session.assistantMessages, session.models.join(', ')) + '\n\n');
     md.appendMarkdown(
@@ -356,6 +383,7 @@ export class ClaudeSessionsProvider implements vscode.TreeDataProvider<ClaudeNod
   constructor(private readonly svc: ClaudeService, ctl: Controller) {
     svc.onDidChange(() => this.emitter.fire());
     ctl.onDidChange(() => this.emitter.fire());
+    svc.agentTerms.onDidChange(() => this.emitter.fire());
   }
 
   getTreeItem(el: ClaudeNode) {
@@ -386,7 +414,7 @@ export class ClaudeSessionsProvider implements vscode.TreeDataProvider<ClaudeNod
     }
     if (el instanceof WorktreeGroup) {
       const max = this.svc.cfg().get<number>('maxSessionsPerGroup', 50);
-      return el.sessions.slice(0, max).map(s => new SessionItem(s));
+      return el.sessions.slice(0, max).map(s => new SessionItem(s, this.svc.openFor(s)));
     }
     return [];
   }

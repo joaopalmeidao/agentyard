@@ -50,6 +50,8 @@ export interface WorktreeView extends Worktree {
   sync?: SyncStatus;
   /** Agentes com terminal aberto nesta worktree. */
   agents: string[];
+  /** Claude Code abertos aqui, pelo estado dos hooks (src/claude/hooks.ts). */
+  agentStates?: { waiting: number; working: number; idle: number; message?: string };
   favorite: boolean;
   /** Sessões do Claude Code cujo cwd está nesta worktree (preenchido em segundo plano). */
   claude?: { sessions: number; tokens: number; last: number; lastId: string; /** custo estimado em US$ (preços configurados) */ usd?: number };

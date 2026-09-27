@@ -47,7 +47,7 @@ export class WorktreeItem extends vscode.TreeItem {
     else if (wt.remote.ahead) parts.push(`☁↑${wt.remote.ahead}`);
     if (wt.operation) parts.push(wt.operation);
     if (wt.preview?.conflict) parts.push(t('⚠ conflict'));
-    if (wt.agents.length) parts.push(`✦ ${agentsLabel(wt.agents)}`);
+    if (wt.agents.length) parts.push(`✦ ${agentsLabel(wt.agents)}${wt.agentStates?.waiting ? ` · ${t('waiting for you')}` : ''}`);
     if (wt.review) parts.push(t('✓ review'));
     if (wt.tasks) parts.push(`☰${wt.tasks.waiting + (wt.tasks.running ? 1 : 0)}`);
     if (wt.overlap) parts.push(t('⚠ overlaps {0}', wt.overlap.with.length));
@@ -92,6 +92,7 @@ export class WorktreeItem extends vscode.TreeItem {
       );
     if (wt.preview?.conflict) md.appendMarkdown(t('⚠ Merging {0} conflicts in: {1}', `\`${base}\``, wt.preview.files.join(', ')) + '\n\n');
     if (wt.agents.length) md.appendMarkdown(t('Open agents: {0}', agentsLabel(wt.agents)) + '\n\n');
+    if (wt.agentStates?.waiting) md.appendMarkdown(`🔔 ${t('waiting for you')}${wt.agentStates.message ? `: ${wt.agentStates.message}` : ''}\n\n`);
     if (wt.sync) md.appendMarkdown(`Sync: ${wt.sync.message}\n\n`);
     if (wt.request) md.appendMarkdown(`[${wt.request.ref} ${wt.request.title}](${wt.request.url})\n\n`);
     this.tooltip = md;

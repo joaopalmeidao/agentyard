@@ -542,8 +542,14 @@
         }
         if (w.branch) chips.push(remoteChip(w));
         if (w.branch) chips.push(syncChip(w));
-        if (w.agents && w.agents.length)
-          chips.push(`<span class="chip agent link" data-action="agents.pick" data-path="${esc(w.path)}" title="${t('{0} agent terminal(s) open in this worktree. Click to choose which one to bring to the front.', w.agents.length)}">✦ ${esc(agentsLabel(w.agents))}</span>`);
+        if (w.agents && w.agents.length) {
+          // estado pelos hooks do Claude: esperando você (pedido de permissão) ou trabalhando
+          const st = w.agentStates;
+          const waiting = st && st.waiting;
+          const status = waiting ? ` · ${t('waiting for you')}` : st && st.working ? ` · ${t('working')}` : '';
+          const tip = (waiting && st.message ? st.message + '\n' : '') + t('{0} agent terminal(s) open in this worktree. Click to choose which one to bring to the front.', w.agents.length);
+          chips.push(`<span class="chip ${waiting ? 'warn' : 'agent'} link" data-action="agents.pick" data-path="${esc(w.path)}" title="${esc(tip)}">${waiting ? '●' : '✦'} ${esc(agentsLabel(w.agents))}${status}</span>`);
+        }
         if (w.review) chips.push(reviewChip(w));
         if (w.tasks) chips.push(tasksChip(w));
         if (w.request) chips.push(requestChip(w.request));

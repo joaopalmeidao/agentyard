@@ -319,5 +319,13 @@
   "config.diskUsage.enabled.description": "Calcular em segundo plano o espaço em disco de cada worktree.",
   "config.diskUsage.secondsPerWorktree.description": "Tempo máximo para contar o espaço de uma worktree (passando disso, o valor é um mínimo).",
   "config.report.agentSummary.description": "No Relatório do dia, oferecer \"✦ Redigir resumo com o agente\".",
-  "config.pullRequests.mergeMethod.description": "Método ao mesclar um PR/MR pela view Pull requests (o GitLab não faz rebase por aqui: usa merge)."
+  "config.pullRequests.mergeMethod.description": "Método ao mesclar um PR/MR pela view Pull requests (o GitLab não faz rebase por aqui: usa merge).",
+  "command.agents.pickWaiting.title": "Ir para um Claude esperando você",
+  "command.agents.transcript.title": "Ver transcrição da sessão",
+  "command.claude.sendSelection.title": "Enviar ao Claude (@menção)",
+  "config.claude.trackState.markdownDescription": "Abre o Claude Code com hooks (via `--settings`, sem mexer no seu `settings.json`) para o AgentYard saber quando cada um está trabalhando, esperando sua permissão ou terminou o turno. Os hooks rodam no shell do Claude (Git Bash no Windows).",
+  "config.claude.notify.description": "Notificações dos Claude Code abertos pelo AgentYard.",
+  "config.claude.notify.enumDescriptions.0": "Quando um precisa de você (pedido de permissão ou pergunta).",
+  "config.claude.notify.enumDescriptions.1": "Também quando um termina o turno.",
+  "config.claude.notify.enumDescriptions.2": "Sem notificações (a barra de status e o painel continuam mostrando o estado)."
 }

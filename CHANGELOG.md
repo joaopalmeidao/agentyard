@@ -1,6 +1,22 @@
 # Changelog
 
 ## Não lançado
+- Estado real de cada Claude Code aberto pela extensão, pelos hooks do próprio Claude (passados com
+  `--settings`, sem mexer no seu `settings.json`): **trabalhando**, **esperando você** (pedido de
+  permissão) ou **sua vez**. Aparece no chip do card, na árvore, na view de agentes abertos e na
+  barra de status ("🔔 2 esperando você", clique vai ao terminal). Uma notificação avisa quando um
+  Claude precisa de você (`worktreeGraph.claude.notify`: `waiting`, `all`, `off`). O "pronto para
+  revisar" passa a usar o fim do turno em vez de esperar minutos sem atividade. Desligue com
+  `worktreeGraph.claude.trackState`.
+- Cada terminal fica ligado à sua sessão: na view de sessões, a sessão aberta mostra o estado, e
+  "Retomar" traz o terminal para frente em vez de abrir outro `--resume`. Na view de agentes, "Ver
+  transcrição da sessão".
+- Retomar/nova sessão/comandos da view de sessões abrem pelo mesmo caminho dos agentes: respeitam
+  `agentTerminalLocation`, aparecem no card e entram no "pronto para revisar". Comando com aspas ou
+  `$` não quebra mais no PowerShell. Digitar num Claude que está pedindo permissão pede confirmação.
+- **Enviar ao Claude (@menção)** no menu do editor e do Explorer: digita `@arquivo#L10-20` no Claude
+  da worktree do arquivo, sem Enter, para você completar a mensagem.
+- Terminais de agente com a mesma cor por worktree, e reencontrados depois de recarregar a janela.
 - "Nova worktree" pergunta de qual branch sair (a base vem primeiro: Enter mantém o padrão),
   como já fazia o "✦ com tarefa".
 - Barra de status: **worktree e branch** desta janela (clique abre o painel), **✦ agente** para abrir

@@ -37,8 +37,9 @@ const TICK_MS = 30_000;
 /**
  * Acompanha os agentes abertos pela extensão e decide quando cada um "terminou":
  *  - o comando do agente acabou (shell integration, quando o VS Code oferece),
- *  - o terminal foi fechado, ou
- *  - ninguém mexeu no HEAD nem no índice da worktree por `agents.idleMinutes`.
+ *  - o terminal foi fechado,
+ *  - o Claude Code terminou o turno (hook Stop, ver src/claude/hooks.ts), ou
+ *  - sem hooks: ninguém mexeu no HEAD nem no índice da worktree por `agents.idleMinutes`.
  * Só vira "pronto para revisar" se o HEAD andou desde a abertura e a worktree ficou limpa.
  * A checagem lê arquivos do .git; o único processo git é o status final, e só das worktrees com agente.
  */
@@ -50,9 +51,14 @@ export class AgentWatch implements vscode.Disposable {
   private timer?: NodeJS.Timeout;
   private checking = new Set<string>();
 
-  constructor(private readonly ctl: Controller, agentTerms: AgentTerminals, private readonly onReady: (r: ReadyInfo) => void) {
+  constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals, private readonly onReady: (r: ReadyInfo) => void) {
     this.disposables.push(
       agentTerms.onDidLaunch(l => this.track(l)),
+      // Claude com hooks: o fim do turno (Stop) é o sinal certo de que parou
+      agentTerms.onDidChangeState(({ open }) => {
+        if (open.state !== 'idle' && open.state !== 'ended') return;
+        for (const s of this.sessions.values()) if (s.terminal === open.terminal) void this.check(s.key);
+      }),
       vscode.window.onDidCloseTerminal(t => {
         for (const s of this.sessions.values()) {
           if (s.terminal === t) {
@@ -142,8 +148,11 @@ export class AgentWatch implements vscode.Disposable {
     this.checking.add(key);
     try {
       this.poll(s);
-      const idle = Date.now() - s.lastActivity >= this.idleMs();
-      if (!(force || s.closed || s.execEnded || idle)) return false;
+      // Com os hooks, o estado do Claude decide; sem eles (ou se nunca responderam), vale a ociosidade.
+      const agentState = this.agentTerms.stateOf(s.terminal);
+      const known = agentState !== undefined && agentState !== 'starting';
+      const done = known ? agentState === 'idle' || agentState === 'ended' : Date.now() - s.lastActivity >= this.idleMs();
+      if (!(force || s.closed || s.execEnded || done)) return false;
       const moved = !!s.lastHead && s.lastHead !== s.headAtStart;
       if (!moved) {
         if (s.closed) {

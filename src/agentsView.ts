@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AgentTerminals, OpenAgent, groupByWorktree, sinceText } from './agents';
+import { AgentTerminals, OpenAgent, groupByWorktree, sinceText, stateText } from './agents';
 import { t } from './i18n';
 
 /** Grupo da view: uma worktree com agentes abertos. */
@@ -41,7 +41,8 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<Node>, vscode
   getTreeItem(node: Node): vscode.TreeItem {
     if (node.kind === 'group') {
       const item = new vscode.TreeItem(node.branch ?? path.basename(node.path), vscode.TreeItemCollapsibleState.Expanded);
-      item.description = t('{0} terminal(s)', node.terminals.length);
+      const waiting = node.terminals.filter(o => o.state === 'waiting').length;
+      item.description = t('{0} terminal(s)', node.terminals.length) + (waiting ? ` · ${t('{0} waiting for you', waiting)}` : '');
       item.tooltip = node.path;
       item.iconPath = new vscode.ThemeIcon('git-branch');
       item.contextValue = 'agentGroup';
@@ -50,12 +51,14 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<Node>, vscode
     const o = node.open;
     const active = vscode.window.activeTerminal === o.terminal;
     const item = new vscode.TreeItem(o.terminal.name, vscode.TreeItemCollapsibleState.None);
-    item.description = `${active ? '● ' : ''}${sinceText(o.started)}${o.task ? ` · ${t('task')}` : ''}`;
-    item.tooltip = o.task
+    const state = stateText(o.state);
+    item.description = `${active ? '● ' : ''}${state ? `${state} · ` : ''}${sinceText(o.started)}${o.task ? ` · ${t('task')}` : ''}`;
+    const base = o.task
       ? t('{0} in {1}\nOpened {2}, with a task.\nClick to bring the terminal to the front.', o.agent, o.path, sinceText(o.started))
       : t('{0} in {1}\nOpened {2}.\nClick to bring the terminal to the front.', o.agent, o.path, sinceText(o.started));
-    item.iconPath = new vscode.ThemeIcon('sparkle');
-    item.contextValue = 'agentTerminal';
+    item.tooltip = [base, o.message && `⚠ ${o.message}`, o.sessionId && t('Session {0}', o.sessionId)].filter(Boolean).join('\n');
+    item.iconPath = stateIcon(o);
+    item.contextValue = o.sessionId ? 'agentTerminalSession' : 'agentTerminal';
     item.command = { command: 'worktreeGraph.agents.show', title: t('Show terminal'), arguments: [node] };
     return item;
   }
@@ -63,6 +66,27 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<Node>, vscode
   dispose() {
     this.disposables.forEach(d => d.dispose());
   }
+}
+
+/** Ícone pelo estado do Claude (hooks); sem estado, o do agente. */
+function stateIcon(o: OpenAgent): vscode.ThemeIcon {
+  switch (o.state) {
+    case 'waiting':
+      return new vscode.ThemeIcon('bell-dot', new vscode.ThemeColor('list.warningForeground'));
+    case 'working':
+      return new vscode.ThemeIcon('loading~spin');
+    case 'idle':
+      return new vscode.ThemeIcon('check', new vscode.ThemeColor('terminal.ansiGreen'));
+    case 'ended':
+      return new vscode.ThemeIcon('circle-slash');
+  }
+  return new vscode.ThemeIcon('sparkle');
+}
+
+/** Agente de um nó da view (ou undefined). */
+export function openAgentOf(node: unknown): OpenAgent | undefined {
+  const n = node as Node | undefined;
+  return n && n.kind === 'terminal' ? n.open : undefined;
 }
 
 /** Terminal de um nó da view (ou undefined). */

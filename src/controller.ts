@@ -142,6 +142,13 @@ export class Controller implements vscode.Disposable {
     this.poll = setInterval(() => vscode.window.state.focused && this.refresh(), secs * 1000);
   }
 
+  /** Reaplica os ganchos de estado e redesenha, sem reler o repositório (mudanças só de memória). */
+  repaint() {
+    if (!this.state) return;
+    for (const hook of this.stateHooks) hook(this.state);
+    this.changed.fire(this.state);
+  }
+
   scheduleRefresh(ms = 400) {
     if (this.debounce) clearTimeout(this.debounce);
     this.debounce = setTimeout(() => this.refresh(), ms);
