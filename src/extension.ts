@@ -12,6 +12,7 @@ import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
 import { Projects, ProjectsTreeProvider } from './projects';
 import { AutoSync } from './sync';
+import { registerClaudeConfig } from './claude/configView';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
 
@@ -299,7 +300,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   });
 
   // Usado pelos testes de integração (test/).
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude };
+  const claudeConfig = registerClaudeConfig(ctx, ctl);
+
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig };
 }
 
 export function deactivate() {}

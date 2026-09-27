@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "Worktree Graph",
   "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "worktree-graph",
   "license": "MIT",
   "engines": {
@@ -59,6 +59,10 @@
         {
           "id": "worktreeGraph.claudeSessions",
           "name": "Sessões Claude"
+        },
+        {
+          "id": "worktreeGraph.claudeConfig",
+          "name": "Claude: configuração"
         }
       ]
     },
@@ -406,6 +410,85 @@
         "title": "Uso do Claude Code (janela de 5 h e semana)",
         "category": "Worktree Graph",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.refresh",
+        "title": "Claude: atualizar configuração",
+        "category": "Worktree Graph",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.newSkill",
+        "title": "Claude: nova skill…",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.copySkill",
+        "title": "Copiar para o outro escopo (usuário ↔ projeto)",
+        "category": "Worktree Graph",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.renameSkill",
+        "title": "Renomear…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.deleteSkill",
+        "title": "Excluir…",
+        "category": "Worktree Graph",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.revealSkill",
+        "title": "Revelar no sistema de arquivos",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.openFile",
+        "title": "Abrir",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.editPermissions",
+        "title": "Permissões (allow/ask/deny)…",
+        "category": "Worktree Graph",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.setModel",
+        "title": "Modelo padrão…",
+        "category": "Worktree Graph",
+        "icon": "$(symbol-enum)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.showHooks",
+        "title": "Ver hooks",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.newMemory",
+        "title": "Claude: nova memória…",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.deleteMemory",
+        "title": "Excluir memória…",
+        "category": "Worktree Graph",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.checkMemoryIndex",
+        "title": "Verificar índice MEMORY.md",
+        "category": "Worktree Graph",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.revealMemory",
+        "title": "Revelar pasta de memória",
+        "category": "Worktree Graph"
       }
     ],
     "menus": {
@@ -528,6 +611,21 @@
         {
           "command": "worktreeGraph.claude.refreshSessions",
           "when": "view == worktreeGraph.claudeSessions",
+          "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.newSkill",
+          "when": "view == worktreeGraph.claudeConfig",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.newMemory",
+          "when": "view == worktreeGraph.claudeConfig",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.refresh",
+          "when": "view == worktreeGraph.claudeConfig",
           "group": "navigation@3"
         }
       ],
@@ -751,6 +849,76 @@
           "command": "worktreeGraph.claude.commands",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "1_open@6"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.newSkill",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeGroup-skills|claudeScope-user|claudeScope-project)$/",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.copySkill",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSkill|claudeSkillRo|claudeCommand)$/",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.copySkill",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSkill|claudeSkillRo|claudeCommand)$/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.renameSkill",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSkill|claudeCommand)$/",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.revealSkill",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSkill|claudeSkillRo|claudeCommand)$/",
+          "group": "2_path@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.deleteSkill",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSkill|claudeCommand)$/",
+          "group": "9_danger"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.editPermissions",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSettings)$/",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.editPermissions",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSettings)$/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.setModel",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSettings)$/",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.showHooks",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSettings)$/",
+          "group": "1_edit@3"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.newMemory",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeGroup-memory)$/",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.checkMemoryIndex",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeGroup-memory)$/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.revealMemory",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeGroup-memory)$/",
+          "group": "2_path@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.deleteMemory",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeMemory)$/",
+          "group": "9_danger"
         }
       ],
       "commandPalette": [
@@ -820,6 +988,46 @@
         },
         {
           "command": "worktreeGraph.claude.copySessionId",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.copySkill",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.renameSkill",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.deleteSkill",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.revealSkill",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.openFile",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.editPermissions",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.setModel",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.showHooks",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.deleteMemory",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.revealMemory",
           "when": "false"
         }
       ]
@@ -1152,7 +1360,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/sessions.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

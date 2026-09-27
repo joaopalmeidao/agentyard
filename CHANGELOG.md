@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1
+- View "Claude: configuração": skills, comandos, configurações e memória do Claude Code, do usuário
+  e do projeto ativo, num lugar só.
+- Skills e comandos: criar com esqueleto, copiar entre usuário e projeto, renomear e excluir; skills
+  sincronizadas da conta aparecem só para leitura.
+- Configurações: editor de permissões (allow/ask/deny), modelo padrão e hooks; a gravação preserva
+  chaves desconhecidas, aceita comentários e guarda um `.bak`.
+- Memória por projeto e por worktree: criar no formato do Claude (com a linha no MEMORY.md),
+  excluir junto com a linha do índice e verificar o índice.
+- Redmine: o projeto escolhido fica por repositório, fora do `.vscode/settings.json`.
+
 ## 0.6.0
 - Logo novo: monograma "W" feito de arestas do grafo, com o ✦ do agente; prévia social do GitHub.
 - "✦ Resolver com Claude" em conflitos (card, tabela, árvore, análise de merge e notificações): o
