@@ -3064,6 +3064,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "tsc -p ./ && node scripts/package-dist.js",
+    "dist": "node scripts/dist-main.js",
     "publish": "vsce publish",
     "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/run.js"
   },
