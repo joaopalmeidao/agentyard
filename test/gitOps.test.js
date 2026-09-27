@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { buildTodo, validatePlan, movePlan, parseStashList, stashTitle, parseNameStatus, parseStatusPaths } = require('../out/gitops/core');
+const { buildTodo, validatePlan, movePlan, parseStashList, stashTitle, parseNameStatus, parseStatusPaths, parseUncommitted, parseNumstat, discardEffect, discardSummary } = require('../out/gitops/core');
 
 let failures = 0;
 const check = (name, fn) => {
@@ -95,6 +95,69 @@ check('rebase sem editor (git real): reordena, junta com fixup e troca mensagem'
   // o conteúdo final continua com os três arquivos
   for (const n of ['um', 'dois', 'tres']) assert.ok(fs.existsSync(path.join(dir, `${n}.txt`)), n);
   assert.strictEqual(git('show', '--name-only', '--format=', 'HEAD').split('\n').sort().join(','), 'dois.txt,um.txt');
+});
+
+check('não commitadas: tipo, letra e efeito do descarte', () => {
+  const list = parseUncommitted(' M src/a.ts\0M  b.ts\0MM c.ts\0A  novo.ts\0 D velho.ts\0?? tmp/x.txt\0UU conf.ts\0?? pasta/\0');
+  assert.deepStrictEqual(
+    list.map(u => [u.path, u.letter, u.kind]),
+    [
+      ['b.ts', 'M', 'staged'],
+      ['c.ts', 'M', 'mixed'],
+      ['conf.ts', '!', 'conflict'],
+      ['novo.ts', 'A', 'staged'],
+      ['src/a.ts', 'M', 'unstaged'],
+      ['tmp/x.txt', '?', 'untracked'],
+      ['velho.ts', 'D', 'unstaged'],
+    ],
+  );
+  const num = parseNumstat('3\t1\tsrc/a.ts\0-\t-\timg.png\0');
+  assert.deepStrictEqual(num.get('src/a.ts'), { added: 3, deleted: 1, binary: false });
+  assert.strictEqual(num.get('img.png').binary, true);
+  assert.strictEqual(discardEffect({ path: 'a', letter: 'M', kind: 'unstaged', added: 3, deleted: 1 }), 'volta ao último commit (+3 −1)');
+  assert.match(discardEffect({ path: 'a', letter: '?', kind: 'untracked', added: 20 }), /apagado \(arquivo novo, 20 linha/);
+  assert.match(discardEffect({ path: 'a', letter: 'D', kind: 'unstaged' }), /volta a existir/);
+  const many = Array.from({ length: 20 }, (_, i) => ({ path: `f${i}`, letter: 'M', kind: 'unstaged' }));
+  assert.match(discardSummary(many, 5), /… e mais 15 arquivo/);
+});
+
+check('descarte parcial (git real): stash push -u -- <arquivos> tira só os escolhidos e o apply devolve', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wtgraph-discard-'));
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+  const w = (f, t) => fs.writeFileSync(path.join(dir, f), t);
+  const r = f => fs.readFileSync(path.join(dir, f), 'utf8');
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.name', 't');
+  git('config', 'user.email', 't@t');
+  git('config', 'core.autocrlf', 'false');
+  w('a.txt', 'a\n');
+  w('b.txt', 'b\n');
+  w('c.txt', 'c\n');
+  git('add', '.');
+  git('commit', '-qm', 'base');
+  w('a.txt', 'a mudado\n'); // descartar
+  w('b.txt', 'b mudado\n'); // manter
+  fs.unlinkSync(path.join(dir, 'c.txt')); // descartar (volta a existir)
+  w('novo.txt', 'novo\n'); // descartar (não rastreado)
+  w('fica.txt', 'fica\n'); // manter (não rastreado)
+  w('add.txt', 'add\n');
+  git('add', 'add.txt'); // descartar (adicionado no stage)
+  const before = parseUncommitted(execFileSync('git', ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all'], { cwd: dir, encoding: 'utf8' }));
+  assert.strictEqual(before.length, 6);
+  git('stash', 'push', '--include-untracked', '-m', 'worktree-graph: descartado', '--', 'a.txt', 'c.txt', 'novo.txt', 'add.txt');
+  assert.strictEqual(r('a.txt'), 'a\n');
+  assert.strictEqual(r('c.txt'), 'c\n');
+  assert.ok(!fs.existsSync(path.join(dir, 'novo.txt')));
+  assert.ok(!fs.existsSync(path.join(dir, 'add.txt')));
+  assert.strictEqual(r('b.txt'), 'b mudado\n');
+  assert.strictEqual(r('fica.txt'), 'fica\n');
+  assert.match(git('stash', 'list', '--format=%gs'), /descartado$/);
+  // desfazer
+  git('stash', 'apply', git('rev-parse', 'stash@{0}'));
+  assert.strictEqual(r('a.txt'), 'a mudado\n');
+  assert.ok(!fs.existsSync(path.join(dir, 'c.txt')));
+  assert.strictEqual(r('novo.txt'), 'novo\n');
+  assert.strictEqual(r('add.txt'), 'add\n');
 });
 
 if (failures) process.exit(1);

@@ -98,3 +98,77 @@ export function parseStatusPaths(out: string): string[] {
     .map(e => e.slice(3))
     .filter(p => p && !p.endsWith('/'));
 }
+
+// ---------------------------------------------------------------- alterações não commitadas
+
+export type UncommittedKind = 'untracked' | 'conflict' | 'staged' | 'unstaged' | 'mixed';
+
+export interface Uncommitted {
+  path: string;
+  /** Letra que resume a alteração: M, A, D, T ou ? (não rastreado). */
+  letter: string;
+  kind: UncommittedKind;
+  added?: number;
+  deleted?: number;
+  binary?: boolean;
+}
+
+const CONFLICT = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
+
+/** `git status --porcelain=v1 -z --no-renames --untracked-files=all` → uma entrada por arquivo. */
+export function parseUncommitted(out: string): Uncommitted[] {
+  const list: Uncommitted[] = [];
+  for (const e of out.split('\0')) {
+    if (e.length < 4) continue;
+    const xy = e.slice(0, 2);
+    const p = e.slice(3);
+    if (!p || p.endsWith('/')) continue;
+    const [x, y] = xy;
+    let kind: UncommittedKind;
+    if (xy === '??') kind = 'untracked';
+    else if (CONFLICT.has(xy)) kind = 'conflict';
+    else if (x !== ' ' && y !== ' ') kind = 'mixed';
+    else if (x !== ' ') kind = 'staged';
+    else kind = 'unstaged';
+    const letter = kind === 'untracked' ? '?' : kind === 'conflict' ? '!' : x === 'A' ? 'A' : x === 'D' || y === 'D' ? 'D' : x !== ' ' ? x : y;
+    list.push({ path: p, letter, kind });
+  }
+  return list.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/** `git diff HEAD --numstat -z --no-renames` → caminho → linhas (+/−); binário vem como "-". */
+export function parseNumstat(out: string): Map<string, { added: number; deleted: number; binary: boolean }> {
+  const m = new Map<string, { added: number; deleted: number; binary: boolean }>();
+  for (const e of out.split('\0')) {
+    const [a, d, ...rest] = e.split('\t');
+    const p = rest.join('\t').replace(/^\n+/, '');
+    if (!p) continue;
+    const binary = a === '-' || d === '-';
+    m.set(p, { added: binary ? 0 : Number(a) || 0, deleted: binary ? 0 : Number(d) || 0, binary });
+  }
+  return m;
+}
+
+export const KIND_LABEL: Record<UncommittedKind, string> = {
+  untracked: 'novo, não rastreado',
+  conflict: 'em conflito',
+  staged: 'no stage',
+  unstaged: '',
+  mixed: 'parte no stage',
+};
+
+/** O que o descarte faz com o arquivo, em linguagem clara: "volta ao último commit (+3 −1)". */
+export function discardEffect(u: Uncommitted): string {
+  const lines = (n?: number) => (u.binary ? 'binário' : `${n ?? 0} linha(s)`);
+  if (u.letter === '?') return `apagado (arquivo novo, ${lines(u.added)})`;
+  if (u.letter === 'A') return `apagado (adicionado no stage, ${lines(u.added)})`;
+  if (u.letter === 'D') return 'volta a existir (tinha sido removido)';
+  return `volta ao último commit (${u.binary ? 'binário' : `+${u.added ?? 0} −${u.deleted ?? 0}`})`;
+}
+
+/** Lista para a confirmação do descarte, cortada em `max` linhas. */
+export function discardSummary(items: Uncommitted[], max = 15): string {
+  const shown = items.slice(0, max).map(u => `${u.letter}  ${u.path} — ${discardEffect(u)}`);
+  if (items.length > max) shown.push(`… e mais ${items.length - max} arquivo(s)`);
+  return shown.join('\n');
+}

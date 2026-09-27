@@ -7,7 +7,23 @@ import type { Controller } from '../controller';
 import { gitUri } from '../diff';
 import { Worktree } from '../git';
 import { extraTree } from '../treeView';
-import { buildTodo, movePlan, parseNameStatus, parseStashList, parseStatusPaths, PlanStep, RebaseAction, StashEntry, stashTitle, validatePlan } from './core';
+import {
+  buildTodo,
+  discardEffect,
+  discardSummary,
+  movePlan,
+  parseNameStatus,
+  parseNumstat,
+  parseStashList,
+  parseStatusPaths,
+  parseUncommitted,
+  PlanStep,
+  RebaseAction,
+  StashEntry,
+  stashTitle,
+  Uncommitted,
+  validatePlan,
+} from './core';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
 type Arg = string | { branch?: string; path?: string; sha?: string; target?: string } | undefined;
@@ -388,6 +404,123 @@ export class GitOps implements vscode.Disposable {
     return ok;
   }
 
+  // ---------------------------------------------------------------- alterações não commitadas
+
+  /** Arquivos alterados na worktree (inclusive não rastreados), com as linhas de cada um. */
+  async uncommitted(wtPath: string): Promise<Uncommitted[]> {
+    const repo = this.repo;
+    const [st, num] = await Promise.all([
+      repo.run(['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all'], wtPath),
+      repo.run(['diff', 'HEAD', '--numstat', '-z', '--no-renames'], wtPath),
+    ]);
+    const list = st.code === 0 ? parseUncommitted(st.stdout) : [];
+    const stats = num.code === 0 ? parseNumstat(num.stdout) : new Map<string, { added: number; deleted: number; binary: boolean }>();
+    for (const u of list) {
+      const s = stats.get(u.path);
+      if (s) Object.assign(u, s);
+      else if (u.letter === '?') Object.assign(u, untrackedStats(path.join(wtPath, u.path)));
+    }
+    return list;
+  }
+
+  /** Patch dos arquivos, com os não rastreados como arquivos novos. */
+  async uncommittedPatch(wtPath: string, items: Uncommitted[]): Promise<string> {
+    const tracked = items.filter(u => u.letter !== '?').map(u => u.path);
+    const parts: string[] = [];
+    if (tracked.length) {
+      const r = await this.repo.run(['diff', 'HEAD', '--no-renames', '--no-color', '--', ...tracked], wtPath, 60_000);
+      if (r.stdout) parts.push(r.stdout.trimEnd());
+    }
+    for (const u of items.filter(x => x.letter === '?')) parts.push(newFilePatch(wtPath, u.path));
+    return parts.join('\n') || '(nada)';
+  }
+
+  async showUncommitted(wtPath: string, items?: Uncommitted[], title?: string) {
+    items ??= await this.uncommitted(wtPath);
+    if (!items.length) {
+      vscode.window.showInformationMessage('A worktree está limpa: nada não commitado.');
+      return;
+    }
+    const head = title ? `# ${title}\n# ${items.length} arquivo(s)\n\n` : '';
+    const doc = await vscode.workspace.openTextDocument({ language: 'diff', content: head + (await this.uncommittedPatch(wtPath, items)) });
+    await vscode.window.showTextDocument(doc, { preview: true });
+  }
+
+  /**
+   * Descarta alterações não commitadas (todas, ou só `paths`) de forma transparente: mostra o patch
+   * do que vai sair, confirma com a lista arquivo a arquivo e, antes de apagar, guarda tudo num stash
+   * (git stash push -u -- <arquivos>), então dá para desfazer.
+   */
+  async discard(wtPath: string, paths?: string[]): Promise<boolean> {
+    const repo = this.repo;
+    const st = await repo.status(wtPath);
+    if (st.operation) {
+      vscode.window.showWarningMessage(`Há um ${st.operation} em andamento nesta worktree; termine ou aborte antes de descartar.`);
+      return false;
+    }
+    const wts = await repo.worktreesFast();
+    const name = wts.find(w => w.path.toLowerCase() === wtPath.toLowerCase())?.branch ?? path.basename(wtPath);
+    const all = await this.uncommitted(wtPath);
+    let items = paths ? all.filter(u => paths.includes(u.path)) : all;
+    if (!items.length) {
+      vscode.window.showInformationMessage(paths ? 'Esses arquivos não têm alterações não commitadas.' : `${name} está limpa: nada para descartar.`);
+      return false;
+    }
+    if (!paths) {
+      // tudo: escolhe na lista (todos marcados), com o efeito de cada um à vista
+      const picked = await vscode.window.showQuickPick(
+        items.map(u => ({
+          label: `${u.letter}  ${path.basename(u.path)}`,
+          description: path.dirname(u.path) === '.' ? '' : path.dirname(u.path),
+          detail: discardEffect(u),
+          picked: true,
+          u,
+        })),
+        { canPickMany: true, title: `Descartar alterações de ${name}: desmarque o que quer manter`, matchOnDescription: true, ignoreFocusOut: true },
+      );
+      if (!picked?.length) return false;
+      items = picked.map(p => p.u);
+    }
+    const partial = items.length < all.length;
+    await this.showUncommitted(wtPath, items, `O que será descartado de ${name}`);
+    const ok = await vscode.window.showWarningMessage(
+      `Descartar ${items.length} arquivo(s) não commitado(s) de ${name}?`,
+      {
+        modal: true,
+        detail:
+          `${discardSummary(items)}\n\nO patch completo está aberto no editor. Antes de descartar, uma cópia vai para um stash ` +
+          `(view Worktrees → Stashes), então dá para desfazer.` +
+          (partial ? `\n\nOs outros ${all.length - items.length} arquivo(s) alterado(s) não são tocados.` : ''),
+      },
+      'Descartar',
+    );
+    if (ok !== 'Descartar') return false;
+
+    const message = `worktree-graph: descartado de ${name} (${items.length} arquivo(s)) ${new Date().toLocaleString()}`;
+    const args = ['stash', 'push', '--include-untracked', '-m', message];
+    const r = await repo.run(partial ? [...args, '--', ...items.map(u => u.path)] : args, wtPath, 120_000);
+    this.ctl.scheduleRefresh(50);
+    if (r.code !== 0) {
+      vscode.window.showErrorMessage(`Não consegui descartar (nada foi apagado): ${(r.stderr || r.stdout).trim()}`);
+      return false;
+    }
+    const entry = (await this.stashes()).find(e => e.message.endsWith(message));
+    this.ctl.log(`descartado em ${wtPath}: ${items.map(u => u.path).join(', ')}${entry ? ` (cópia no stash ${short(entry.sha)})` : ''}`);
+    if (!entry) {
+      vscode.window.showInformationMessage(`${items.length} arquivo(s) descartado(s) de ${name}.`);
+      return true;
+    }
+    vscode.window.showInformationMessage(`${items.length} arquivo(s) descartado(s) de ${name}. Cópia no stash ${short(entry.sha)}.`, 'Desfazer', 'Ver o que saiu').then(async pick => {
+      if (pick === 'Desfazer') {
+        if (await this.stashApply(entry.sha, wtPath, true, { quiet: true })) vscode.window.setStatusBarMessage(`$(discard) Descarte desfeito em ${name}`, 4000);
+        else vscode.window.showWarningMessage(`Não deu para devolver sem conflito; a cópia continua no stash ${short(entry.sha)}.`);
+      } else if (pick) {
+        await this.stashShow(entry.sha);
+      }
+    });
+    return true;
+  }
+
   // ---------------------------------------------------------------- cherry-pick
 
   async cherryPick(sha: string, target: string, opts: { confirm?: boolean } = {}): Promise<boolean> {
@@ -713,6 +846,20 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
     if (to) await ops.moveChanges(from.path, to.path);
   });
 
+  // alterações não commitadas: arg é a worktree ({ path }) ou arquivos do grupo "Não commitadas" ({ path, file })
+  const filesOf = (a: any, sel?: any[]): string[] | undefined => {
+    const list = (sel?.length ? sel : [a]).filter(x => x?.file && x.path === a?.path).map(x => x.file as string);
+    return list.length ? list : undefined;
+  };
+  reg('showUncommitted', async (a: Arg) => {
+    const w = await ops.pathOf(a);
+    if (w) await ops.showUncommitted(w.path, undefined, `Não commitado em ${w.branch ?? path.basename(w.path)}`);
+  });
+  reg('discardChanges', async (a: any, sel?: any[]) => {
+    const w = await ops.pathOf(a);
+    if (w) await ops.discard(w.path, filesOf(a, sel));
+  });
+
   reg('cherryPick', async (a: any) => {
     const sha = shaOf(a);
     if (!sha) return;
@@ -743,4 +890,33 @@ async function pickStash(ops: GitOps): Promise<string | undefined> {
     { placeHolder: 'Qual stash?' },
   );
   return pick?.sha;
+}
+
+/** Linhas de um arquivo não rastreado (até 2 MB; acima disso ou com byte nulo, conta como binário). */
+function untrackedStats(file: string): { added: number; deleted: number; binary: boolean } {
+  try {
+    const st = fs.statSync(file);
+    if (st.size > 2_000_000) return { added: 0, deleted: 0, binary: true };
+    const buf = fs.readFileSync(file);
+    if (buf.includes(0)) return { added: 0, deleted: 0, binary: true };
+    const text = buf.toString('utf8');
+    return { added: text ? text.split('\n').length - (text.endsWith('\n') ? 1 : 0) : 0, deleted: 0, binary: false };
+  } catch {
+    return { added: 0, deleted: 0, binary: false };
+  }
+}
+
+/** Patch de "arquivo novo" para um não rastreado, no formato do git diff. */
+function newFilePatch(cwd: string, rel: string): string {
+  const head = `diff --git a/${rel} b/${rel}\nnew file (não rastreado)\n--- /dev/null\n+++ b/${rel}`;
+  if (untrackedStats(path.join(cwd, rel)).binary) return `${head}\n(binário ou grande demais para mostrar)`;
+  let text: string;
+  try {
+    text = fs.readFileSync(path.join(cwd, rel), 'utf8');
+  } catch {
+    return `${head}\n(não consegui ler o arquivo)`;
+  }
+  const lines = text.split('\n');
+  if (text.endsWith('\n')) lines.pop();
+  return `${head}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(l => '+' + l.replace(/\r$/, '')).join('\n')}`;
 }
