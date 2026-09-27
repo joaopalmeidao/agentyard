@@ -328,6 +328,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('openProjectWindow', (p?: { path?: string }) => p?.path && vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(p.path), { forceNewWindow: true }));
   reg('createWorktree', () => actions.createWorktree(ctl));
   reg('openWorktree', item => actions.openWorktree(ctl, item));
+  reg('showUncommitted', item => actions.showUncommitted(ctl, item));
+  reg('newWorktreeWithTask', item => actions.newWorktreeWithTask(ctl, item));
+  reg('newWorktreeWithTaskFrom', item => actions.newWorktreeWithTask(ctl, item));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
   reg('launchAgentNew', (item?: AgentGroupItem | { path?: string; branch?: string }, agent?: string) => launchAgent(item, agent, 'new'));

@@ -212,6 +212,7 @@
         <span class="muted">base</span> <span class="ref ref-base">${esc(state.baseRef)}</span></div>
       <div class="tools">
         <button data-action="createWorktree" class="primary">＋ Nova worktree</button>
+        <button data-action="newWorktreeWithTask" title="Escolhe a branch de origem, cria a worktree e já manda a tarefa para o agente">✦ Nova worktree com tarefa</button>
         <button data-action="toggleAutoSync" class="${s.enabled ? 'on' : ''}" title="${s.trigger === 'push' ? 'Mescla a base na branch antes de cada push (worktreeGraph.autoSync.trigger)' : 'Mescla a base automaticamente nas worktrees limpas'}">
           ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : s.trigger === 'push' ? 'no push' : 'ligado') : 'desligado'}</button>
         <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">onde: ${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'}</button>
@@ -394,6 +395,11 @@
     return `<span class="chip ${cls}" ${title ? `title="${esc(title)}"` : ''}>${text}</span>`;
   }
 
+  /** "● N": clicar lista os arquivos não commitados da worktree e abre o diff de cada um. */
+  function uncommittedChip(w, text) {
+    return `<span class="chip warn" style="cursor:pointer" data-action="showUncommitted" data-path="${esc(w.path)}" title="Alterações não commitadas: clique para ver os arquivos">${text}</span>`;
+  }
+
   function syncChip(w) {
     if (w.isBase || !state.autoSync.enabled) return w.paused ? chip('‖ sync pausado', 'muted') : '';
     if (w.paused) return chip('‖ sync pausado', 'muted');
@@ -471,7 +477,7 @@
     const agent = state.agentNames && state.agentNames[0];
     const rows = match.slice(0, rowLimit).map(w => {
       const b = esc(w.branch || '');
-      const st = !w.statusKnown ? chip('…', 'muted', 'lendo status') : w.operation ? chip(esc(w.operation), 'bad') : w.changes ? chip(`● ${w.changes}`, 'warn', 'alterações não commitadas') : chip('✓', 'ok', 'limpa');
+      const st = !w.statusKnown ? chip('…', 'muted', 'lendo status') : w.operation ? chip(esc(w.operation), 'bad') : w.changes ? uncommittedChip(w, `● ${w.changes}`) : chip('✓', 'ok', 'limpa');
       const cmp = !w.compareKnown
         ? chip('…', 'muted', 'comparando com a base')
         : w.behind || w.ahead
@@ -508,7 +514,7 @@
         const chips = [];
         if (w.bare) chips.push(chip('bare', 'muted'));
         if (w.operation) chips.push(chip(`${esc(w.operation)} em andamento`, 'bad'));
-        chips.push(!w.statusKnown ? chip('… lendo status', 'muted') : w.changes ? chip(`● ${w.changes} não commitada(s)`, 'warn') : chip('✓ limpa', 'ok'));
+        chips.push(!w.statusKnown ? chip('… lendo status', 'muted') : w.changes ? uncommittedChip(w, `● ${w.changes} não commitada(s)`) : chip('✓ limpa', 'ok'));
         if (!w.compareKnown) chips.push(chip('… comparando', 'muted'));
         else if (!w.isBase && w.branch) {
           if (w.behind === 0 && w.ahead === 0) chips.push(chip(`= ${esc(state.baseRef)}`, 'muted'));
@@ -745,6 +751,7 @@
         if (c.wip)
           return `<div class="row gg-row wip ${hide ? 'dim' : ''}" data-menu="${esc(c.branch || '')}">
             <span class="gg-graph"></span><span class="desc"><span class="subject">● ${esc(c.subject)}</span>
+            <button class="link" data-action="showUncommitted" data-path="${esc(c.path || '')}">ver arquivos</button>
             <button class="link" data-action="diffWithBase" data-branch="${esc(c.branch || '')}">revisar</button></span>
             <span class="date">agora</span><span class="author"></span><span class="sha">*</span></div>`;
         const isHead = c.sha === state.headSha;
@@ -1018,6 +1025,8 @@
       if (!isBase) items.push(item('mergeQueueAdd', `Pôr na fila de merge → ${state.base}`, { branch: b }));
       if (wt && wt.overlap) items.push(item('showOverlaps', `⚠ Ver sobreposição (${wt.overlap.files} arquivo(s))`, { path: wt.path }));
       if (wt) items.push(item('addTask', '☰ Adicionar tarefa para o agente…', { path: wt.path, branch: b }));
+      items.push(item('newWorktreeWithTask', '✦ Nova worktree a partir daqui, com tarefa…', { startPoint: b }, 'agent'));
+      if (wt && wt.changes) items.push(item('showUncommitted', `● Ver alterações não commitadas (${wt.changes})`, { path: wt.path }));
       items.push(item('push', 'Push (enviar para o remoto)', { branch: b }));
       items.push(item('pullBranch', 'Pull (trazer do remoto)', { branch: b }));
       items.push(item('compareWith', 'Comparar com…', { branch: b }));
@@ -1060,6 +1069,7 @@
       items.push(`<div class="menu-title">${esc(r)}</div>`);
       items.push(item('mergeInto', 'Mesclar em…', { branch: r }));
       items.push(item('createWorktree', 'Nova branch + worktree a partir daqui', { startPoint: r }));
+      items.push(item('newWorktreeWithTask', '✦ Nova worktree a partir daqui, com tarefa…', { startPoint: r }, 'agent'));
     } else if (row && row.dataset.sha) {
       const sha = row.dataset.sha;
       items.push(`<div class="menu-title">${sha.slice(0, 10)}</div>`);

@@ -168,6 +168,24 @@
         "icon": "$(add)"
       },
       {
+        "command": "worktreeGraph.newWorktreeWithTask",
+        "title": "Nova worktree com tarefa para o agente…",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.newWorktreeWithTaskFrom",
+        "title": "Nova worktree a partir desta, com tarefa para o agente…",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.showUncommitted",
+        "title": "Ver alterações não commitadas",
+        "category": "AgentYard",
+        "icon": "$(diff)"
+      },
+      {
         "command": "worktreeGraph.openWorktree",
         "title": "Abrir worktree em nova janela",
         "category": "AgentYard",
@@ -846,8 +864,8 @@
         "category": "AgentYard"
       },
       {
-        "command": "worktreeGraph.showUncommitted",
-        "title": "Ver alterações não commitadas (diff)",
+        "command": "worktreeGraph.showUncommittedPatch",
+        "title": "Ver patch das alterações não commitadas",
         "category": "AgentYard",
         "icon": "$(diff)"
       },
@@ -1180,6 +1198,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "worktreeGraph.newWorktreeWithTask",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "navigation@2"
+        },
+        {
           "command": "worktreeGraph.openFileInWorktree",
           "when": "view == worktreeGraph.worktrees",
           "group": "navigation@2"
@@ -1476,6 +1499,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "worktreeGraph.newWorktreeWithTaskFrom",
+          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch)",
+          "group": "1_open@0c"
+        },
         {
           "command": "worktreeGraph.askAgentAboutBranch",
           "when": "view == worktreeGraph.worktrees && (viewItem == branch || viewItem == commits)",
@@ -2233,6 +2261,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "worktreeGraph.newWorktreeWithTaskFrom",
+          "when": "false"
+        },
         {
           "command": "worktreeGraph.showCommitSha",
           "when": "false"

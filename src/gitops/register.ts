@@ -851,7 +851,7 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
     const list = (sel?.length ? sel : [a]).filter(x => x?.file && x.path === a?.path).map(x => x.file as string);
     return list.length ? list : undefined;
   };
-  reg('showUncommitted', async (a: Arg) => {
+  reg('showUncommittedPatch', async (a: Arg) => {
     const w = await ops.pathOf(a);
     if (w) await ops.showUncommitted(w.path, undefined, `Não commitado em ${w.branch ?? path.basename(w.path)}`);
   });
