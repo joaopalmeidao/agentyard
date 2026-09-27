@@ -168,7 +168,8 @@
     const stage = (s, date) => `<div class="stage" data-menu="${esc(s.branch)}" data-drop="${esc(s.branch)}">
         <span class="stage-label">${esc(s.label)}</span>
         <span class="ref ref-head ${s.branch === state.base ? 'ref-base' : ''}">${esc(s.branch)}</span>
-        <span class="muted">${date ? ago(date) : ''}</span></div>`;
+        <span class="muted">${date ? ago(date) : ''}</span>
+        ${pipelineFor(s.branch) ? pipelineChip(pipelineFor(s.branch)) : ''}</div>`;
     const reqFor = (from, to) => {
       const r = (state.worktrees.find(w => w.branch === from) || state.branches.find(b => b.name === from) || {}).request;
       return r && r.target === to ? r : undefined;
@@ -207,6 +208,22 @@
     return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}</span>`;
   }
   const fmtTokens = n => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} mi` : n >= 1e3 ? `${Math.round(n / 1e3)} mil` : String(n));
+
+  const pipelineFor = b => (state.pipelines || {})[b];
+
+  /** Último pipeline da branch: ✓/✗/⟳ com cor; clique abre no navegador; falha oferece o agente. */
+  function pipelineChip(p, compact) {
+    const map = {
+      success: ['✓', 'ok', 'passou'], failed: ['✗', 'bad', 'falhou'], running: ['⟳', 'info', 'rodando'], queued: ['…', 'muted', 'na fila'],
+      canceled: ['⊘', 'muted', 'cancelado'], skipped: ['↷', 'muted', 'pulado'], manual: ['▶', 'warn', 'aguardando ação manual'],
+    };
+    const [sym, cls, txt] = map[p.status] || ['?', 'muted', p.status];
+    const main = `<span class="chip ${cls} link" data-action="openUrl" data-url="${esc(p.url)}" title="${esc(p.name)}: ${txt} — abrir no navegador">${sym} CI${compact ? '' : ` ${txt}`}</span>`;
+    const fix = p.status === 'failed' && !compact
+      ? `<span class="chip agent link" data-action="fixPipeline" data-id="${p.id}" title="Abrir o agente na worktree com o log da falha">✦ corrigir</span>`
+      : '';
+    return main + fix;
+  }
 
   function requestChip(r) {
     const st = { open: ['aberto', 'info'], draft: ['rascunho', 'muted'], merged: ['mesclado', 'ok'], closed: ['fechado', 'muted'] }[r.state] || [r.state, ''];
@@ -294,7 +311,7 @@
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
-        <td class="c-chips">${st}${cmp}${conf}${w.request ? requestChip(w.request) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="c-chips">${st}${cmp}${conf}${w.request ? requestChip(w.request) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
@@ -330,6 +347,7 @@
         if (w.branch) chips.push(syncChip(w));
         if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
         if (w.request) chips.push(requestChip(w.request));
+        if (w.branch && pipelineFor(w.branch)) chips.push(pipelineChip(pipelineFor(w.branch)));
         if (w.claude) chips.push(claudeChip(w));
 
         const agent = state.agentNames && state.agentNames[0];

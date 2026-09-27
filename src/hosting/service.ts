@@ -81,6 +81,24 @@ export class RequestService {
     return t ? this.makeClient(r, t) : undefined;
   }
 
+  /** Cliente sem perguntar nada (para atualizações em segundo plano). */
+  clientSilent(): Promise<HostClient | undefined> {
+    return this.client(false);
+  }
+
+  /** Cliente pedindo login/token se faltar (para ações do usuário). */
+  clientInteractive(): Promise<HostClient | undefined> {
+    return this.client(true);
+  }
+
+  /** Remoto, token e URL da API, para outros clientes REST (ex.: pipelines). */
+  async credentials(interactive: boolean): Promise<{ remote: RemoteInfo; token: string; apiBase?: string } | undefined> {
+    const r = await this.detectRemote();
+    if (!r) return undefined;
+    const token = await this.token(r, interactive);
+    return token ? { remote: r, token, apiBase: this.apiBase(r) } : undefined;
+  }
+
   /** Pede um token de acesso pessoal, valida e guarda no cofre do VS Code. */
   async askToken(r: RemoteInfo): Promise<string | undefined> {
     const where =

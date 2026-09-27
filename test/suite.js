@@ -234,6 +234,28 @@ exports.run = async () => {
     assert.ok(svc.getChildren(memGroup).some(n => n.entry && n.entry.name === 'nova-via-api'));
   });
 
+  await check('pipelines: a view abre sem rede e o último pipeline de cada branch chega ao estado', async () => {
+    await vscode.commands.executeCommand('worktreeGraph.pipelines.focus');
+    await api.pipelines.refresh(true);
+    assert.strictEqual(api.pipelines.unavailable, 'noRemote', 'demo sem remoto');
+    const { PipelineTreeProvider } = require('../out/hosting/pipelinesView');
+    const kids = await new PipelineTreeProvider(api.pipelines).getChildren();
+    assert.strictEqual(kids.length, 1);
+    assert.ok(String(kids[0].label).includes('Remoto'), String(kids[0].label));
+    // dados injetados: o gancho do estado escolhe o mais recente por branch
+    const now = Math.floor(Date.now() / 1000);
+    api.pipelines.pipelines = [
+      { id: 2, provider: 'github', name: 'CI', branch: 'ai/login-oauth', sha: 'b', status: 'failed', event: 'push', url: 'https://x/2', createdAt: now, updatedAt: now },
+      { id: 1, provider: 'github', name: 'CI', branch: 'ai/login-oauth', sha: 'a', status: 'success', event: 'push', url: 'https://x/1', createdAt: now - 100, updatedAt: now - 90 },
+    ];
+    await ctl.refresh();
+    assert.deepStrictEqual(ctl.state.pipelines['ai/login-oauth'], { id: 2, status: 'failed', name: 'CI', url: 'https://x/2', updatedAt: now });
+    api.pipelines.scope = 'worktrees';
+    assert.strictEqual(api.pipelines.visible().length, 2, 'branch com worktree entra no filtro');
+    api.pipelines.pipelines = [];
+    await ctl.refresh();
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
