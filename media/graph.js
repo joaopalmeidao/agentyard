@@ -644,7 +644,8 @@
     return state.branches.filter(b => !b.isBase && b.name !== state.base && !isProtected(b.name) && !unmerged.has(b.name)).length;
   }
 
-  function badge(r) {
+  /** lane: coluna do commit no grafo; com ela, a etiqueta de branch pega a cor da linha. */
+  function badge(r, lane) {
     const cls = { head: 'ref-head', remote: 'ref-remote', tag: 'ref-tag', detached: 'ref-detached' }[r.kind];
     const base = r.name === state.base && r.kind === 'head' ? ' ref-base' : '';
     const wt = r.worktree ? ' ref-wt' : '';
@@ -657,7 +658,8 @@
     const title = r.kind === 'head' ? `${r.worktree ? t('branch with worktree') : t('local branch')}${pending ? ` · ${ahead ? t('{0} commit(s) not in {1}', ahead, state.base) : t('commits not in {0}', state.base)}` : pending === false ? ` · ${t('already merged into {0}', state.base)}` : ''}` : r.kind;
     const req = r.kind === 'head' ? requestOf(r.name) : undefined;
     const lock = r.kind === 'head' && isProtected(r.name) ? '🔒 ' : '';
-    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}${lock ? ` · ${t('protected')}` : ''}">${lock}${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>${req ? requestChip(req) : ''}`;
+    const tone = lane !== undefined && (r.kind === 'head' || r.kind === 'remote') ? ` ref-lane" style="--tone:${COLORS[lane % COLORS.length]}` : '';
+    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}${tone}" ${drag} ${drop} title="${esc(title)}${lock ? ` · ${t('protected')}` : ''}">${lock}${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>${req ? requestChip(req) : ''}`;
   }
 
   function graphHeader(n, extra = '') {
@@ -724,7 +726,7 @@
     new Date(unix * 1000).toLocaleString(LOCALE, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   /** "main" e "origin/main" no mesmo commit viram uma etiqueta só. */
-  function groupedBadges(refs) {
+  function groupedBadges(refs, lane) {
     const heads = refs.filter(r => r.kind === 'head');
     const used = new Set();
     const out = [];
@@ -732,9 +734,9 @@
       if (h.kind !== 'head') continue;
       const remotes = refs.filter(r => r.kind === 'remote' && r.name.replace(/^[^/]+\//, '') === h.name);
       remotes.forEach(r => used.add(r.name));
-      out.push(badge(h).replace('</span>', remotes.map(r => `<span class="ref-origin" title="${t('{0} points to the same commit', esc(r.name))}">${esc(r.name.split('/')[0])}</span>`).join('') + '</span>'));
+      out.push(badge(h, lane).replace('</span>', remotes.map(r => `<span class="ref-origin" title="${t('{0} points to the same commit', esc(r.name))}">${esc(r.name.split('/')[0])}</span>`).join('') + '</span>'));
     }
-    for (const r of refs) if (r.kind !== 'head' && !used.has(r.name)) out.push(badge(r));
+    for (const r of refs) if (r.kind !== 'head' && !used.has(r.name)) out.push(badge(r, lane));
     return heads.length || out.length ? out.join('') : '';
   }
 
@@ -775,7 +777,7 @@
         const isHead = c.sha === state.headSha;
         const row = `<div class="row gg-row ${hide ? 'dim' : ''} ${c.boundary ? 'boundary' : ''} ${isHead ? 'head-row' : ''} ${i === openAt ? 'open' : ''}" data-sha="${c.sha}" data-parents="${c.parents.join(' ')}" ${c.boundary ? '' : `draggable="true" data-drag-commit="${c.sha}" `}${c.boundary ? `title="${t('Point on {0} where pending branches branched off', esc(state.base))}"` : ''}>
           <span class="gg-graph"></span>
-          <span class="desc">${groupedBadges(c.refs)}<span class="subject">${esc(c.subject)}</span></span>
+          <span class="desc">${groupedBadges(c.refs, c.x)}<span class="subject">${esc(c.subject)}</span></span>
           <span class="date" title="${ago(c.date)}">${fullDate(c.date)}</span>
           <span class="author">${esc(c.author)}</span>
           <span class="sha">${c.sha.slice(0, 8)}</span>
