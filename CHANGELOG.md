@@ -1,6 +1,11 @@
 # Changelog
 
 ## Não lançado
+- Barra de status: **worktree e branch** desta janela (clique abre o painel), **✦ agente** para abrir
+  o Claude Code (ou o primeiro de `worktreeGraph.agents`) na worktree atual, e **☁ Push** para enviar
+  as branches escolhidas numa lista com a base e as branches de CI já marcadas (as em dia são
+  puladas; o número é quantas delas têm commits a enviar). Cada um pode ser escondido
+  (`worktreeStatusBar`, `agentStatusBar`, `pushStatusBar`).
 - Painel com visual mais limpo: barra superior em grupos (criar · sync · telas · layout) e ações
   raras no "⋯"; cards e linhas mostram só as ações do dia a dia, o resto no "⋯" (o mesmo menu do
   botão direito); ações da tabela aparecem ao passar o mouse; nada de botão desabilitado à toa.
