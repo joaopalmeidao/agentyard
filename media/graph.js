@@ -940,39 +940,64 @@
   });
 
   let dragging = '';
-  document.addEventListener('dragstart', e => {
-    const commit = /** @type {HTMLElement} */ (e.target).closest?.('[data-drag-commit]');
-    if (commit) {
-      dragging = 'commit:' + /** @type {HTMLElement} */ (commit).dataset.dragCommit;
-      e.dataTransfer?.setData('text/plain', dragging);
-      document.body.classList.add('dragging');
-      return;
-    }
-    const el = /** @type {HTMLElement} */ (e.target).closest?.('[data-drag]');
-    if (!el) return;
-    dragging = /** @type {HTMLElement} */ (el).dataset.drag || '';
+  /** Dica flutuante que diz o que acontece ao soltar sobre o alvo atual. */
+  const dragHint = document.createElement('div');
+  dragHint.className = 'drag-hint';
+  document.body.appendChild(dragHint);
+  const startDrag = (e, value) => {
+    dragging = value;
     e.dataTransfer?.setData('text/plain', dragging);
     document.body.classList.add('dragging');
-  });
-  document.addEventListener('dragend', () => {
+  };
+  // O render() troca o innerHTML (ex.: o estado chega logo após o drop); se o elemento arrastado
+  // sai do DOM, o dragend não chega ao document e os contornos tracejados ficariam para sempre.
+  // Por isso a limpeza também roda no drop e em qualquer sinal de que o arrasto já acabou.
+  const endDrag = () => {
+    if (!dragging && !document.body.classList.contains('dragging')) return;
     dragging = '';
     document.body.classList.remove('dragging');
     document.querySelectorAll('.drop-over').forEach(x => x.classList.remove('drop-over'));
+    dragHint.style.display = 'none';
+  };
+  document.addEventListener('dragstart', e => {
+    const commit = /** @type {HTMLElement} */ (e.target).closest?.('[data-drag-commit]');
+    if (commit) return startDrag(e, 'commit:' + /** @type {HTMLElement} */ (commit).dataset.dragCommit);
+    const el = /** @type {HTMLElement} */ (e.target).closest?.('[data-drag]');
+    if (el) startDrag(e, /** @type {HTMLElement} */ (el).dataset.drag || '');
   });
+  document.addEventListener('dragend', endDrag);
+  // Durante um arrasto nativo o navegador não emite mousemove/mousedown: se chegarem, o arrasto acabou.
+  for (const ev of ['mousemove', 'mousedown']) document.addEventListener(ev, () => dragging && endDrag());
+  window.addEventListener('blur', endDrag);
   document.addEventListener('dragover', e => {
     const el = /** @type {HTMLElement} */ (e.target).closest?.('[data-drop]');
-    if (!el || !dragging || /** @type {HTMLElement} */ (el).dataset.drop === dragging) return;
+    if (!el || !dragging || /** @type {HTMLElement} */ (el).dataset.drop === dragging) {
+      document.querySelectorAll('.drop-over').forEach(x => x.classList.remove('drop-over'));
+      dragHint.style.display = 'none';
+      return;
+    }
     e.preventDefault();
     document.querySelectorAll('.drop-over').forEach(x => x !== el && x.classList.remove('drop-over'));
     el.classList.add('drop-over');
+    const target = /** @type {HTMLElement} */ (el).dataset.drop || '';
+    dragHint.innerHTML = dragging.startsWith('commit:')
+      ? `Cherry-pick <b>${esc(dragging.slice(7, 14))}</b> → <b>${esc(target)}</b>`
+      : `Merge <b>${esc(dragging)}</b> → <b>${esc(target)}</b>`;
+    dragHint.style.display = 'block';
+    const x = Math.min(e.clientX + 14, window.innerWidth - dragHint.offsetWidth - 8);
+    const y = Math.min(e.clientY + 18, window.innerHeight - dragHint.offsetHeight - 8);
+    dragHint.style.left = Math.max(8, x) + 'px';
+    dragHint.style.top = Math.max(8, y) + 'px';
   });
   document.addEventListener('drop', e => {
     const el = /** @type {HTMLElement} */ (e.target).closest?.('[data-drop]');
-    if (!el || !dragging) return;
+    const source = dragging;
+    endDrag();
+    if (!el || !source) return;
     e.preventDefault();
     const target = /** @type {HTMLElement} */ (el).dataset.drop;
-    if (target && dragging.startsWith('commit:')) send('cherryPick', { sha: dragging.slice(7), target });
-    else if (target && target !== dragging) send('mergeBranches', { source: dragging, target });
+    if (target && source.startsWith('commit:')) send('cherryPick', { sha: source.slice(7), target });
+    else if (target && target !== source) send('mergeBranches', { source, target });
   });
 
   // divisor entre worktrees e histórico
