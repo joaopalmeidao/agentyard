@@ -48,6 +48,15 @@ export class IssueService implements vscode.Disposable {
     await this.refresh(true);
   }
 
+  private redmineProjectKey() {
+    return `redmine.projectId:${this.ctl.repo?.commonDir.toLowerCase() ?? ''}`;
+  }
+
+  /** Configuração explícita tem precedência; senão, o projeto escolhido ao conectar. */
+  private redmineProject(): string | undefined {
+    return this.ctl.cfg().get<string>('redmine.projectId', '') || this.ctl.ctx.workspaceState.get<string>(this.redmineProjectKey()) || undefined;
+  }
+
   private redmineUrl(): string {
     return this.ctl.cfg().get<string>('redmine.url', '').trim().replace(/\/+$/, '');
   }
@@ -114,7 +123,7 @@ export class IssueService implements vscode.Disposable {
                 g.needsConnect = true;
                 return;
               }
-              g.issues = await client.listIssues(scope, this.ctl.cfg().get<string>('redmine.projectId', '') || undefined);
+              g.issues = await client.listIssues(scope, this.redmineProject());
             } catch (e) {
               g.error = (e as Error).message;
             }
@@ -171,7 +180,8 @@ export class IssueService implements vscode.Disposable {
           [{ label: 'Todos os projetos', id: '' }, ...projects.map(p => ({ label: p.name, description: p.identifier, id: p.identifier }))],
           { title: 'Redmine: issues de qual projeto?' },
         );
-        if (pick) await this.ctl.cfg().update('redmine.projectId', pick.id, vscode.ConfigurationTarget.Workspace);
+        // por repositório e fora do settings.json, para não deixar a worktree com alteração
+        if (pick) await this.ctl.ctx.workspaceState.update(this.redmineProjectKey(), pick.id);
       }
     } catch {
       // listar projetos é opcional
