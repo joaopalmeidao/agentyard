@@ -4,11 +4,14 @@ import { analyzeMerge, MergeAnalysis } from './analysis';
 import { resolverName, runResolve } from './conflicts';
 import { Controller } from './controller';
 import { gitUri } from './diff';
+import { describePlan, needsAttention, needsRechain } from './migrations/core';
+import { applyRechain, checkMigrations, MigrationCheck, rechainSideOf } from './migrations/register';
 
 /** Painel "Analisar merge": um por par origem → destino. */
 export class MergePanel {
   private static readonly open = new Map<string, MergePanel>();
   private analysis?: MergeAnalysis;
+  private migrations?: MigrationCheck;
 
   static async show(ctl: Controller, source: string, target: string, onMerge: (s: string, t: string) => Promise<void>, onPublish: (b: string) => Promise<void>) {
     const key = `${source}→${target}`;
@@ -43,7 +46,11 @@ export class MergePanel {
   private async load() {
     this.panel.webview.html = this.html('<div class="empty">Simulando o merge…</div>');
     try {
-      this.analysis = await analyzeMerge(this.ctl.repo!, this.source, this.target);
+      const side = await rechainSideOf(this.ctl, this.source, this.target);
+      [this.analysis, this.migrations] = await Promise.all([
+        analyzeMerge(this.ctl.repo!, this.source, this.target),
+        checkMigrations(this.ctl.repo!, side.branch, side.onto).catch(() => undefined),
+      ]);
       this.panel.webview.html = this.html(this.body(this.analysis));
     } catch (e) {
       this.panel.webview.html = this.html(`<div class="error">${esc((e as Error).message)}</div>`);
@@ -70,6 +77,11 @@ export class MergePanel {
         return this.load();
       case 'publish':
         return this.onPublish(a.source);
+      case 'rechain':
+        if (this.migrations && (await applyRechain(this.ctl, this.migrations, { commit: true }))) {
+          vscode.window.showInformationMessage(`Migrations de ${this.migrations.branch} reencadeadas após ${this.migrations.onto}.`);
+        }
+        return this.load();
       case 'resolve':
         // Mesclando na base: a branch traz a base e resolve. Outro destino: o destino traz a origem.
         return a.target === this.ctl.state?.base ? runResolve(a.source, { intoBase: true }) : runResolve(a.target, { base: a.source });
@@ -99,6 +111,13 @@ export class MergePanel {
               <button data-action="targetDiff" data-path="${esc(c.path)}">O que ${esc(a.target)} mudou</button></td></tr>`,
           )
           .join('')}</table></section>`
+      : '';
+
+    const mig = this.migrations;
+    const migrations = mig && needsAttention(mig.plan)
+      ? `<section><h2>Migrations <span class="chip bad">colidem</span><span class="hint">o git não acusa conflito, mas a cadeia de ${esc(mig.onto)} e a de ${esc(mig.branch)} se cruzam</span></h2>
+        <pre class="muted">${esc(describePlan(mig.plan).join('\n'))}</pre>
+        ${needsRechain(mig.plan) ? `<button class="primary" data-action="rechain">Reencadear as de ${esc(mig.branch)} após ${esc(mig.onto)} (commit)</button>` : ''}</section>`
       : '';
 
     const files = `<section><h2>Arquivos que ${esc(a.source)} altera <span class="count">${a.files.length}</span>
@@ -133,7 +152,7 @@ export class MergePanel {
         <div class="${a.conflicts.length ? 'bad' : ''}"><b>${a.conflicts.length}</b><span>com conflito</span></div>
         <div class="${both ? 'warn' : ''}"><b>${both}</b><span>alterados nos dois lados sem conflito</span></div>
       </div>
-      ${conflicts}${a.files.length ? files : ''}${a.incoming.length ? commits : ''}`;
+      ${conflicts}${migrations}${a.files.length ? files : ''}${a.incoming.length ? commits : ''}`;
   }
 
   private html(body: string) {

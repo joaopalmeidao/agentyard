@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "AgentYard",
   "description": "Central para desenvolver com agentes de IA em paralelo: worktrees e branches num grafo, merge e análise de merge, PR/MR com revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Redmine), Claude Code por worktree com sessões e uso, fila e agendamento de tarefas, e a base sempre em dia.",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "publisher": "joaopalmeidao",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
@@ -127,6 +127,29 @@
     ],
     "commands": [
       {
+        "command": "worktreeGraph.branchSummary",
+        "title": "Resumo: commits e alterações",
+        "category": "AgentYard",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "worktreeGraph.askAgentAboutBranch",
+        "title": "✦ Perguntar ao agente sobre a branch",
+        "category": "AgentYard",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "worktreeGraph.copyBranchContext",
+        "title": "Copiar resumo da branch (para colar no Claude)",
+        "category": "AgentYard",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "worktreeGraph.showCommitSha",
+        "title": "Ver arquivos do commit",
+        "category": "AgentYard"
+      },
+      {
         "command": "worktreeGraph.openGraph",
         "title": "Abrir grafo",
         "category": "AgentYard",
@@ -228,6 +251,18 @@
         "category": "AgentYard"
       },
       {
+        "command": "worktreeGraph.rechainMigrations",
+        "title": "Reencadear migrations após a base",
+        "category": "AgentYard",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "worktreeGraph.checkMigrations",
+        "title": "Conferir migrations das worktrees contra a base",
+        "category": "AgentYard",
+        "icon": "$(list-ordered)"
+      },
+      {
         "command": "worktreeGraph.diffWithBase",
         "title": "Revisar alterações contra a base",
         "category": "AgentYard",
@@ -322,6 +357,12 @@
         "command": "worktreeGraph.configureFlow",
         "title": "Configurar fluxo de ambientes (dev → QA → homologação → produção)…",
         "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.promotionMap",
+        "title": "Mapa de promoção: o que falta subir entre dev, QA, homologação e produção",
+        "category": "AgentYard",
+        "icon": "$(git-compare)"
       },
       {
         "command": "worktreeGraph.addToExplorer",
@@ -823,6 +864,18 @@
         "category": "AgentYard"
       },
       {
+        "command": "worktreeGraph.showUncommittedPatch",
+        "title": "Ver patch das alterações não commitadas",
+        "category": "AgentYard",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreeGraph.discardChanges",
+        "title": "Descartar alterações não commitadas…",
+        "category": "AgentYard",
+        "icon": "$(discard)"
+      },
+      {
         "command": "worktreeGraph.cherryPick",
         "title": "Cherry-pick de um commit em…",
         "category": "AgentYard"
@@ -1205,6 +1258,11 @@
           "group": "4_hosting"
         },
         {
+          "command": "worktreeGraph.promotionMap",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "4_hosting"
+        },
+        {
           "command": "worktreeGraph.addProject",
           "when": "view == worktreeGraph.projects",
           "group": "navigation@1"
@@ -1360,6 +1418,11 @@
           "group": "3_cleanup@1"
         },
         {
+          "command": "worktreeGraph.checkMigrations",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "2_merge@9"
+        },
+        {
           "command": "worktreeGraph.schedules.new",
           "when": "view == worktreeGraph.schedules",
           "group": "navigation@1"
@@ -1437,19 +1500,34 @@
       ],
       "view/item/context": [
         {
-          "command": "worktreeGraph.showUncommitted",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@3a"
-        },
-        {
-          "command": "worktreeGraph.showUncommitted",
-          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
-          "group": "inline@0"
-        },
-        {
           "command": "worktreeGraph.newWorktreeWithTaskFrom",
           "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch)",
           "group": "1_open@0c"
+        },
+        {
+          "command": "worktreeGraph.askAgentAboutBranch",
+          "when": "view == worktreeGraph.worktrees && (viewItem == branch || viewItem == commits)",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.branchSummary",
+          "when": "view == worktreeGraph.worktrees && (viewItem == branch || viewItem == commits)",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.branchSummary",
+          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "group": "0_summary@1"
+        },
+        {
+          "command": "worktreeGraph.askAgentAboutBranch",
+          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "group": "0_summary@2"
+        },
+        {
+          "command": "worktreeGraph.copyBranchContext",
+          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "group": "0_summary@3"
         },
         {
           "command": "worktreeGraph.launchAgentNew",
@@ -1520,6 +1598,11 @@
           "command": "worktreeGraph.mergeIntoBase",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "2_merge@2"
+        },
+        {
+          "command": "worktreeGraph.rechainMigrations",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@9"
         },
         {
           "command": "worktreeGraph.mergeInto",
@@ -1932,6 +2015,16 @@
           "group": "4_changes@2"
         },
         {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@0"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@9"
+        },
+        {
           "command": "worktreeGraph.reorganizeCommits",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "4_changes@3"
@@ -1940,6 +2033,51 @@
           "command": "worktreeGraph.undoReorganize",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "4_changes@4"
+        },
+        {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "1_changes@1"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "1_changes@2"
+        },
+        {
+          "command": "worktreeGraph.moveChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "1_changes@3"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "9_danger"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommittedFile",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommittedFile",
+          "group": "9_danger"
         },
         {
           "command": "worktreeGraph.stashCreate",
@@ -2125,6 +2263,10 @@
       "commandPalette": [
         {
           "command": "worktreeGraph.newWorktreeWithTaskFrom",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.showCommitSha",
           "when": "false"
         },
         {
@@ -2450,6 +2592,16 @@
           "default": true,
           "description": "Usar --no-ff ao mesclar uma branch na base, preservando o 'formato' da branch no histórico."
         },
+        "worktreeGraph.migrations.checkOnMerge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Antes de um merge, conferir se as migrations novas dos dois lados colidem (Django, Alembic, Flyway, golang-migrate e numeradas em pastas de migrations) e oferecer reencadear as da branch depois das do destino."
+        },
+        "worktreeGraph.migrations.rechainOnSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "No sync automático, reencadear (com um commit) as migrations da branch depois das da base antes de mesclá-la. Desligado, o sync para e avisa."
+        },
         "worktreeGraph.graph.maxCommits": {
           "type": "number",
           "default": 400,
@@ -2514,6 +2666,19 @@
           ],
           "default": "merge",
           "description": "O que o sync automático faz quando a base anda."
+        },
+        "worktreeGraph.autoSync.trigger": {
+          "type": "string",
+          "enum": [
+            "push",
+            "interval"
+          ],
+          "enumDescriptions": [
+            "A base é mesclada na branch só quando ela é enviada (push) pela extensão; a verificação periódica só atualiza o estado.",
+            "A base é mesclada nas worktrees limpas a cada verificação (autoSync.intervalSeconds)."
+          ],
+          "default": "push",
+          "description": "Quando o sync local mescla a base nas branches."
         },
         "worktreeGraph.autoSync.branches": {
           "type": "array",
@@ -3011,8 +3176,9 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "tsc -p ./ && node scripts/package-dist.js",
+    "dist": "node scripts/dist.js",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

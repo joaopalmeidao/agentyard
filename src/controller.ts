@@ -15,6 +15,8 @@ export class Controller implements vscode.Disposable {
   readonly statuses = new Map<string, SyncStatus>();
   /** Preenchido pelo AutoSync: se esta janela é a que está rodando o sync. */
   syncOwner = false;
+  /** Preenchido pelo AutoSync: mescla a base na branch antes do push (gatilho "push"). */
+  beforePush?: (branch: string) => Promise<void>;
   /** Preenchido na ativação; informa quais worktrees têm terminal de agente aberto. */
   agentsRunning?: () => Map<string, string[]>;
 
@@ -188,6 +190,7 @@ export class Controller implements vscode.Disposable {
           autoSync: {
             enabled: this.autoSyncEnabled(),
             mode: c.get('autoSync.mode', 'merge'),
+            trigger: c.get('autoSync.trigger', 'push'),
             testCommand: c.get('autoSync.testCommand', ''),
             owner: this.syncOwner,
             where: this.syncWhere(),

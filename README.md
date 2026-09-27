@@ -10,6 +10,8 @@ Extensão do VS Code para quem desenvolve com vários agentes de IA em paralelo,
 
 Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
 
+**Manual completo:** [docs/MANUAL.md](docs/MANUAL.md)
+
 ![VS Code com o AgentYard](docs/prints/00-vscode.png)
 
 ## O que tem
@@ -21,7 +23,7 @@ Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
 | **Branch sem worktree** | o merge acontece numa worktree temporária; se der conflito, nada muda e a extensão oferece criar uma worktree para resolver. |
 | **Revisar** | lista os arquivos que a branch mudou desde que saiu da base (inclui o que ainda não foi commitado) e abre cada um num diff. |
 | **Agentes no terminal** | botão **✦ Claude Code** em cada card abre o CLI do agente num terminal já dentro da worktree (reaproveita se já estiver aberto). A lista é configurável: Claude Code, Codex, Gemini ou qualquer comando; `{prompt}` pede a tarefa antes de abrir. |
-| **Navegar arquivos** | na barra lateral, cada worktree expande em *Alterações × base* (clique abre o diff) e na árvore de pastas; branches sem worktree também, lidas direto do git. **Arquivos** busca e abre qualquer arquivo de outra worktree sem trocar de janela. |
+| **Navegar arquivos** | na barra lateral, cada worktree expande em *Não commitadas* (o que está em disco e ainda não virou commit, com diff por arquivo e descarte que mostra o patch antes e guarda uma cópia num stash para desfazer), *Alterações × base* (clique abre o diff) e na árvore de pastas; branches sem worktree também, lidas direto do git. **Arquivos** busca e abre qualquer arquivo de outra worktree sem trocar de janela. |
 | **Muitas worktrees** | a lista aparece em ~1 s mesmo com centenas de worktrees; o detalhe chega aos poucos, com barra de progresso. Cards só para a principal, as **favoritas (★)** e as com agente aberto; o resto fica numa tabela com filtro. |
 | **Limpeza** | *Limpar worktrees…* remove em lote (já marca as mescladas e limpas); seleção múltipla na árvore; *Remover órfãs* para pastas apagadas. |
 | **PR/MR** | *Publicar PR* faz o push e abre o PR (GitHub/GitHub Enterprise) ou MR (GitLab, inclusive self-hosted); o número aparece no card. |
@@ -68,6 +70,16 @@ clicar de novo só traz o terminal para frente.
 
 Ligue pelo botão **Sync** do painel, pelo ícone na barra da árvore ou pela barra de status. O
 estado fica guardado por repositório (não em `settings.json`, para não sujar nenhuma worktree).
+
+**Quando mescla** (`autoSync.trigger`):
+
+- `push` *(padrão)* — a base só entra na branch quando você a envia pela extensão (botão de push,
+  *Enviar branches*, publicar PR/MR): antes do `git push`, a base é mesclada na worktree com as
+  regras abaixo e o merge vai junto. A verificação periódica só atualiza o estado
+  (*atrás (mescla no push)*); *Sincronizar agora* continua mesclando na hora. Se não der para
+  mesclar (conflito, worktree suja, testes falharam), o push segue sem o merge e o motivo aparece
+  na branch. `git push` feito fora da extensão não dispara o sync.
+- `interval` — mescla a cada verificação, como descrito abaixo.
 
 A cada `autoSync.intervalSeconds`, para cada worktree cuja branch casa com `autoSync.branches`:
 
@@ -146,6 +158,7 @@ O **Gerar CI** detecta o GitLab e gera `.gitlab/worktree-graph-sync.gitlab-ci.ym
 | `worktreeGraph.autoSync.enabledByDefault` | `false` | |
 | `worktreeGraph.autoSync.where` | `local` | `local`, `github`, `split` ou `both` |
 | `worktreeGraph.autoSync.mode` | `merge` | `merge` ou `notify` |
+| `worktreeGraph.autoSync.trigger` | `push` | `push` (mescla a base antes do push) ou `interval` (a cada verificação) |
 | `worktreeGraph.autoSync.branches` | `["**"]` | `*` = um segmento, `**` = qualquer coisa |
 | `worktreeGraph.autoSync.exclude` | `[]` | |
 | `worktreeGraph.autoSync.intervalSeconds` | `60` | |

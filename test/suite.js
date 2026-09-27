@@ -58,7 +58,7 @@ exports.run = async () => {
 
   await check('comandos registrados', async () => {
     const all = await vscode.commands.getCommands(true);
-    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
+    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
     // o painel foca views pelos comandos <view>.focus que o VS Code cria para cada view declarada
     for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules', 'mergeQueue']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
   });
@@ -68,13 +68,16 @@ exports.run = async () => {
     const labels = root.map(n => (typeof n.label === 'string' ? n.label : n.label.label));
     // principal primeiro, depois as mais recentes
     assert.deepStrictEqual(labels, ['master', 'ai/precos-promo', 'ai/refatorar-api', 'ai/login-oauth', 'Branches sem worktree', 'Stashes']);
+    // os grupos da worktree dependem do estado detalhado (alterações, à frente), que chega em segundo plano
+    await until(() => ctl.state.pending === 0, 30000);
   });
 
   await check('árvore: alterações × base incluem não commitados', async () => {
     const root = await tree.getChildren();
     const wt = root.find(n => n.branch === 'ai/refatorar-api');
     const kids = await tree.getChildren(wt);
-    const changes = await tree.getChildren(kids.find(k => k.kind === 'changes'));
+    assert.deepStrictEqual(kids.slice(0, 3).map(k => k.kind), ['uncommitted', 'commits', 'changes']);
+    const changes = await tree.getChildren(kids[2]);
     const names = changes.map(c => c.label).sort();
     assert.deepStrictEqual(names, ['api.ts', 'novo.ts']);
     assert.strictEqual(changes[0].command.command, 'vscode.diff');
@@ -91,7 +94,26 @@ exports.run = async () => {
     assert.strictEqual(files[0].command.command, 'vscode.diff');
     const { uncommittedFiles } = require('../out/actions');
     const direct = await uncommittedFiles(ctl.repo, wt.path);
-    assert.deepStrictEqual(files.map(f => f.resourceUri.fsPath).sort(), direct.map(f => require('path').join(wt.path, f.file)).sort());
+    assert.deepStrictEqual(files.map(f => f.file).sort(), direct.map(f => f.file).sort());
+  });
+
+  await check('árvore: commits × base na worktree e na branch sem worktree; resumo copiado', async () => {
+    const root = await tree.getChildren();
+    const wt = root.find(n => n.branch === 'ai/login-oauth');
+    const group = (await tree.getChildren(wt)).find(k => k.kind === 'commits');
+    const commits = await tree.getChildren(group);
+    assert.ok(commits.length >= 1, 'lista commits');
+    assert.strictEqual(String(commits.length), group.description);
+    assert.strictEqual(commits[0].command.command, 'worktreeGraph.showCommitSha');
+    const branches = await tree.getChildren(root.find(n => n.kind === 'branches'));
+    const fix = branches.find(b => b.branch === 'fix/typo-readme');
+    const fixKids = await tree.getChildren(fix);
+    if (fix.b.ahead) assert.strictEqual(fixKids[0].kind, 'commits');
+    await vscode.commands.executeCommand('worktreeGraph.copyBranchContext', wt);
+    const text = await vscode.env.clipboard.readText();
+    assert.match(text, /^# ai\/login-oauth/);
+    assert.ok(text.includes(commits[0].label), 'resumo traz o commit mais recente');
+    assert.match(text, /## Não commitado/);
   });
 
   await check('árvore: navegar pasta da worktree e abrir arquivo', async () => {
@@ -758,7 +780,7 @@ exports.run = async () => {
       assert.fail(`terminal da tarefa não abriu: ${vscode.window.terminals.map(x => x.name).join(' | ')} · histórico: ${JSON.stringify(sch.history().slice(0, 3))}`);
     }
     assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'Revise sched/limpa contra master');
-    assert.strictEqual(sch.runtime('teste-launch').lastRun, t0);
+    await until(() => sch.runtime('teste-launch').lastRun === t0);
     const n = vscode.window.terminals.length;
     await sch.tick(); // mesmo minuto: nada a fazer
     assert.strictEqual(vscode.window.terminals.length, n, 'não executa duas vezes no mesmo horário');

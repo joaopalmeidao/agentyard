@@ -3,11 +3,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { agentsLabel } from './agents';
 import { Controller } from './controller';
-import { uncommittedDiffArgs, uncommittedFiles } from './actions';
 import { gitUri } from './diff';
+import { discardEffect, KIND_LABEL, parseNumstat, parseUncommitted, Uncommitted } from './gitops/core';
 import { BranchView, WorktreeView } from './model';
+import { LOG_FORMAT, parseLog } from './summary/core';
 
-type Node = OrphansGroup | WorktreeItem | UncommittedItem | UncommittedFileItem | ChangesItem | ChangeItem | DirItem | FileItem | BranchesGroup | BranchItem | TreeEntryItem;
+type Node = OrphansGroup | WorktreeItem | UncommittedGroup | UncommittedFileItem | CommitsItem | CommitItem | ChangesItem | ChangeItem | DirItem | FileItem | BranchesGroup | BranchItem | TreeEntryItem;
 
 const HIDDEN = new Set(['.git']);
 const STATUS_LABEL: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', '?': 'novo, não rastreado', T: 'tipo alterado' };
@@ -88,6 +89,48 @@ export class WorktreeItem extends vscode.TreeItem {
   }
 }
 
+/** "Não commitadas": o que a worktree tem em disco e ainda não virou commit, para ver e descartar. */
+class UncommittedGroup extends vscode.TreeItem {
+  readonly kind = 'uncommitted';
+  readonly path: string;
+  readonly branch?: string;
+  constructor(readonly wt: WorktreeView) {
+    super('Não commitadas', vscode.TreeItemCollapsibleState.Collapsed);
+    this.id = `uncommitted:${wt.path}`;
+    this.path = wt.path;
+    this.branch = wt.branch;
+    this.description = String(wt.changes);
+    this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'));
+    this.contextValue = 'uncommitted';
+    this.tooltip = 'Alterações em disco ainda não commitadas (inclui o stage e os arquivos novos). Clique num arquivo para ver o diff com o último commit.';
+  }
+}
+
+class UncommittedFileItem extends vscode.TreeItem {
+  readonly kind = 'uncommittedFile';
+  readonly path: string;
+  readonly branch?: string;
+  readonly file: string;
+  constructor(wt: WorktreeView, u: Uncommitted) {
+    const cwd = wt.path;
+    super(vscode.Uri.file(path.join(cwd, u.path)), vscode.TreeItemCollapsibleState.None);
+    this.id = `uncommitted:${cwd}:${u.path}`;
+    this.path = cwd;
+    this.branch = wt.branch;
+    this.file = u.path;
+    this.label = path.basename(u.path);
+    const dir = path.dirname(u.path) === '.' ? '' : path.dirname(u.path);
+    const lines = u.binary ? 'bin' : u.added || u.deleted ? `+${u.added ?? 0} −${u.deleted ?? 0}` : '';
+    this.description = [dir, u.letter, lines, KIND_LABEL[u.kind]].filter(Boolean).join('  ');
+    this.tooltip = `${u.path}\n${STATUS_LABEL[u.letter] ?? (u.kind === 'conflict' ? 'em conflito' : u.letter)}${KIND_LABEL[u.kind] ? ` (${KIND_LABEL[u.kind]})` : ''}\nSe descartar: ${discardEffect(u)}`;
+    this.contextValue = u.kind === 'conflict' ? 'uncommittedFile-conflict' : 'uncommittedFile';
+    const file = vscode.Uri.file(path.join(cwd, u.path));
+    const left = u.letter === '?' || u.letter === 'A' ? gitUri(cwd, '__empty__', u.path) : gitUri(cwd, 'HEAD', u.path);
+    const right = u.letter === 'D' ? gitUri(cwd, '__empty__', u.path) : file;
+    this.command = { command: 'vscode.diff', title: 'Diff', arguments: [left, right, `${path.basename(u.path)} (último commit ↔ não commitado)`, { preview: true }] };
+  }
+}
+
 /** "Alterações × base": o que a branch mudou desde que saiu da base, incluindo o não commitado. */
 class ChangesItem extends vscode.TreeItem {
   readonly kind = 'changes';
@@ -99,32 +142,34 @@ class ChangesItem extends vscode.TreeItem {
   }
 }
 
-/** "Não commitadas": o que está na worktree e ainda não entrou em commit (HEAD ↔ disco). */
-class UncommittedItem extends vscode.TreeItem {
-  readonly kind = 'uncommitted';
-  readonly path: string;
-  readonly branch?: string;
-  constructor(readonly wt: WorktreeView) {
-    super('Não commitadas', vscode.TreeItemCollapsibleState.Expanded);
-    this.id = `uncommitted:${wt.path}`;
-    this.path = wt.path;
-    this.branch = wt.branch;
-    this.description = String(wt.changes);
-    this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'));
-    this.tooltip = `${wt.changes} arquivo(s) alterado(s) desde o último commit (HEAD ↔ disco)`;
-    this.contextValue = 'uncommitted';
+/** "Commits × base": o que foi commitado na branch e a base não tem. Clique num commit mostra os arquivos. */
+class CommitsItem extends vscode.TreeItem {
+  readonly kind = 'commits';
+  constructor(readonly ref: string, readonly cwd: string, readonly baseRef: string, count: number, readonly branch?: string, readonly path?: string) {
+    super(`Commits × ${baseRef}`, vscode.TreeItemCollapsibleState.Collapsed);
+    this.id = `commits:${path ?? ref}`;
+    this.description = String(count);
+    this.iconPath = new vscode.ThemeIcon('git-commit');
+    this.contextValue = 'commits';
+    this.tooltip = 'Commits da branch que a base não tem (mais recente primeiro). Botão direito: resumo, perguntar ao agente.';
   }
 }
 
-class UncommittedFileItem extends vscode.TreeItem {
-  readonly kind = 'uncommittedFile';
-  constructor(cwd: string, file: string, status: string, name: string) {
-    super(vscode.Uri.file(path.join(cwd, file)), vscode.TreeItemCollapsibleState.None);
-    this.label = path.basename(file);
-    this.description = `${path.dirname(file) === '.' ? '' : path.dirname(file)}  ${status}`;
-    this.tooltip = `${file} — ${STATUS_LABEL[status] ?? status} (não commitado)`;
-    this.contextValue = status === 'D' ? undefined : 'wtFile';
-    this.command = { command: 'vscode.diff', title: 'Diff', arguments: uncommittedDiffArgs(cwd, file, status, name) };
+class CommitItem extends vscode.TreeItem {
+  readonly kind = 'commit';
+  constructor(parentId: string, readonly sha: string, subject: string, author: string, date: number, body: string) {
+    super(subject || sha.slice(0, 7), vscode.TreeItemCollapsibleState.None);
+    this.id = `${parentId}:${sha}`;
+    this.description = `${sha.slice(0, 7)} · ${author} · ${new Date(date * 1000).toLocaleDateString()}`;
+    this.tooltip = `${sha}
+${author}
+
+${subject}${body ? `
+
+${body}` : ''}`;
+    this.iconPath = new vscode.ThemeIcon('git-commit');
+    this.contextValue = 'commit';
+    this.command = { command: 'worktreeGraph.showCommitSha', title: 'Ver arquivos do commit', arguments: [sha] };
   }
 }
 
@@ -231,7 +276,7 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
 
   getParent(el: Node): Node | undefined {
     const s = this.ctl.state;
-    if (s && (el instanceof ChangesItem || el instanceof UncommittedItem)) return new WorktreeItem(el.wt, s.base, s.baseRef);
+    if (s && (el instanceof ChangesItem || el instanceof UncommittedGroup)) return new WorktreeItem(el.wt, s.base, s.baseRef);
     return undefined;
   }
 
@@ -256,15 +301,22 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
       }
       if (el instanceof WorktreeItem) {
         const out: Node[] = [];
-        if (el.wt.changes) out.push(new UncommittedItem(el.wt));
+        if (el.wt.changes > 0) out.push(new UncommittedGroup(el.wt));
+        if (!el.wt.isBase) out.push(new CommitsItem(el.wt.branch ?? 'HEAD', el.wt.path, s.baseRef, el.wt.ahead, el.wt.branch, el.wt.path));
         if (!el.wt.isBase && el.wt.branch) out.push(new ChangesItem(el.wt, s.baseRef));
         return [...out, ...listDir(el.wt.path)];
       }
       if (el instanceof DirItem) return listDir(el.dir);
-      if (el instanceof UncommittedItem) {
-        const files = await uncommittedFiles(repo, el.wt.path);
-        el.description = String(files.length);
-        return files.map(f => new UncommittedFileItem(el.wt.path, f.file, f.status, el.wt.name));
+      if (el instanceof UncommittedGroup) {
+        const cwd = el.wt.path;
+        const [st, num] = await Promise.all([
+          repo.run(['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all'], cwd),
+          repo.run(['diff', 'HEAD', '--numstat', '-z', '--no-renames'], cwd),
+        ]);
+        const stats = parseNumstat(num.stdout);
+        const list = parseUncommitted(st.stdout).map(u => Object.assign(u, stats.get(u.path)));
+        el.description = String(list.length);
+        return list.map(u => new UncommittedFileItem(el.wt, u));
       }
       if (el instanceof ChangesItem) {
         const cwd = el.wt.path;
@@ -282,7 +334,14 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
         return changed.map(c => new ChangeItem(cwd, mb, c.file, c.status, vscode.Uri.file(path.join(cwd, c.file)), `${el.baseRef} ↔ ${el.wt.name}`));
       }
       if (el instanceof BranchesGroup) return s.branches.filter(b => !b.isBase).map(b => new BranchItem(b));
-      if (el instanceof BranchItem) return lsTree(repo.root, el.b.name, '', repo.exec.bind(repo));
+      if (el instanceof BranchItem) {
+        const files = await lsTree(repo.root, el.b.name, '', repo.exec.bind(repo));
+        return el.b.ahead ? [new CommitsItem(el.b.name, repo.root, s.baseRef, el.b.ahead, el.b.name), ...files] : files;
+      }
+      if (el instanceof CommitsItem) {
+        const out = await repo.exec(['log', LOG_FORMAT, '-n200', `${el.baseRef}..${el.ref}`, '--'], el.cwd);
+        return parseLog(out).map(c => new CommitItem(el.id!, c.sha, c.subject, c.author, c.date, c.body));
+      }
       if (el instanceof TreeEntryItem && el.isDir) return lsTree(el.cwd, el.ref, el.entryPath, repo.exec.bind(repo));
     } catch (e) {
       this.ctl.log(`Árvore: ${(e as Error).message}`);

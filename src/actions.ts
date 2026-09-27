@@ -9,6 +9,7 @@ import { Controller } from './controller';
 import { resolveButton, runResolve } from './conflicts';
 import { gitUri } from './diff';
 import { guardMerge } from './guards';
+import { migrationGate } from './migrations/register';
 import { Repo, Worktree } from './git';
 
 type BranchArg = string | { branch?: string } | undefined;
@@ -54,6 +55,8 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
     vscode.window.showInformationMessage(`${target} já contém tudo de ${source}.`);
     return false;
   }
+  // Migrations que colidem não dão conflito no git: confere e oferece reencadear (src/migrations).
+  if (opts.confirm !== false && !(await migrationGate(ctl, source, target))) return false;
   if (opts.confirm !== false) {
     const preview = await repo.mergePreview(target, source);
     const detail = [
@@ -420,7 +423,7 @@ export async function showUncommitted(ctl: Controller, arg: BranchArg | { path?:
     return;
   }
   const label: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', '?': 'novo, não rastreado', T: 'tipo alterado' };
-  type Item = vscode.QuickPickItem & { file?: string; status?: string; all?: boolean; window?: boolean; terminal?: boolean };
+  type Item = vscode.QuickPickItem & { file?: string; status?: string; all?: boolean; patch?: boolean; window?: boolean; terminal?: boolean };
   const qp = vscode.window.createQuickPick<Item>();
   qp.title = `${name} — ${files.length} arquivo(s) não commitado(s)`;
   qp.placeholder = 'Enter abre o diff; a lista continua aberta para o próximo arquivo';
@@ -428,6 +431,7 @@ export async function showUncommitted(ctl: Controller, arg: BranchArg | { path?:
   qp.matchOnDescription = true;
   qp.items = [
     { label: '$(diff-multiple) Abrir todos os diffs', description: files.length > 30 ? 'os 30 primeiros' : undefined, all: true },
+    { label: '$(file-code) Ver patch completo', description: 'tudo num documento só', patch: true },
     { label: '$(empty-window) Abrir a worktree em nova janela', window: true },
     { label: '$(terminal) Abrir terminal na worktree', terminal: true },
     { label: 'Arquivos', kind: vscode.QuickPickItemKind.Separator },
@@ -444,6 +448,9 @@ export async function showUncommitted(ctl: Controller, arg: BranchArg | { path?:
     if (it.all) {
       qp.hide();
       for (const f of files.slice(0, 30)) await openUncommittedDiff(cwd, f.file, f.status, name, { preview: false });
+    } else if (it.patch) {
+      qp.hide();
+      await vscode.commands.executeCommand('worktreeGraph.showUncommittedPatch', { path: cwd });
     } else if (it.window) {
       qp.hide();
       await openWorktree(ctl, { path: cwd });
