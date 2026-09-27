@@ -753,7 +753,7 @@ exports.run = async () => {
       assert.fail(`terminal da tarefa não abriu: ${vscode.window.terminals.map(x => x.name).join(' | ')} · histórico: ${JSON.stringify(sch.history().slice(0, 3))}`);
     }
     assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'Revise sched/limpa contra master');
-    assert.strictEqual(sch.runtime('teste-launch').lastRun, t0);
+    await until(() => sch.runtime('teste-launch').lastRun === t0);
     const n = vscode.window.terminals.length;
     await sch.tick(); // mesmo minuto: nada a fazer
     assert.strictEqual(vscode.window.terminals.length, n, 'não executa duas vezes no mesmo horário');
