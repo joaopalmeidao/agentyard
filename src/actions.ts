@@ -9,6 +9,7 @@ import { Controller } from './controller';
 import { resolveButton, runResolve } from './conflicts';
 import { gitUri } from './diff';
 import { guardMerge } from './guards';
+import { migrationGate } from './migrations/register';
 import { Repo, Worktree } from './git';
 
 type BranchArg = string | { branch?: string } | undefined;
@@ -54,6 +55,8 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
     vscode.window.showInformationMessage(`${target} já contém tudo de ${source}.`);
     return false;
   }
+  // Migrations que colidem não dão conflito no git: confere e oferece reencadear (src/migrations).
+  if (opts.confirm !== false && !(await migrationGate(ctl, source, target))) return false;
   if (opts.confirm !== false) {
     const preview = await repo.mergePreview(target, source);
     const detail = [
