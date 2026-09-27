@@ -1,21 +1,51 @@
-MIT License
+AgentYard — Licença de Uso
 
-Copyright (c) 2026 João Almeida
+Copyright (c) 2026 João Almeida. Todos os direitos reservados.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Este software, incluindo o código-fonte, os binários (.vsix), a documentação, o logo e os demais
+materiais que o acompanham ("Software"), é propriedade de João Almeida ("Titular") e é licenciado,
+não vendido.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Uso permitido
+   a) Você pode instalar e usar o Software, na forma distribuída pelo Titular (Visual Studio
+      Marketplace, Open VSX ou arquivo .vsix fornecido pelo Titular), para desenvolver software,
+      inclusive com fins comerciais.
+   b) Recursos marcados como "Pro" ou "Times" só podem ser usados durante o período de teste
+      oferecido pelo próprio Software ou com uma licença válida adquirida do Titular ou de um
+      revendedor autorizado, dentro dos limites dessa licença (número de pessoas, prazo e plano).
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. Restrições
+   Sem autorização prévia e por escrito do Titular, você não pode:
+   a) copiar, modificar, traduzir ou criar obras derivadas do Software, exceto o necessário para
+      instalá-lo e usá-lo conforme o item 1;
+   b) distribuir, sublicenciar, alugar, vender ou disponibilizar o Software a terceiros, inclusive
+      como serviço;
+   c) contornar, desativar ou alterar a verificação de licença, o período de teste ou qualquer
+      limitação técnica de recursos;
+   d) fazer engenharia reversa, descompilar ou desmontar o Software, salvo quando a lei aplicável
+      permitir expressamente, e somente nessa medida;
+   e) remover ou alterar avisos de direitos autorais, marcas ou esta licença.
+
+3. Versões anteriores
+   As versões 0.1.0 a 0.10.0, publicadas enquanto o repositório era público sob a Licença MIT,
+   continuam regidas pela Licença MIT para quem as obteve naquela época. Esta licença vale para
+   todas as versões e alterações posteriores.
+
+4. Dados
+   O Software funciona localmente. A verificação de licença pode contatar o serviço de pagamento
+   do Titular apenas para validar a chave informada. Integrações com serviços de terceiros
+   (GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Redmine, provedores de IA) usam as credenciais
+   que você mesmo configurar e seguem os termos desses serviços.
+
+5. Garantia e responsabilidade
+   O Software é fornecido "no estado em que se encontra", sem garantias de qualquer tipo. Na
+   máxima extensão permitida pela lei, o Titular não se responsabiliza por danos diretos ou
+   indiretos decorrentes do uso ou da impossibilidade de uso do Software, incluindo perda de
+   dados ou de trabalho em repositórios git.
+
+6. Término
+   Esta licença termina automaticamente se você descumprir qualquer uma de suas condições. Ao
+   término, você deve deixar de usar o Software e apagar as cópias em seu poder.
+
+7. Lei aplicável
+   Esta licença é regida pelas leis da República Federativa do Brasil.
