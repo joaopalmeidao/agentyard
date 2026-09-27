@@ -43,7 +43,7 @@ exports.run = async () => {
     const root = await tree.getChildren();
     const labels = root.map(n => (typeof n.label === 'string' ? n.label : n.label.label));
     // principal primeiro, depois as mais recentes
-    assert.deepStrictEqual(labels, ['master', 'ai/precos-promo', 'ai/refatorar-api', 'ai/login-oauth', 'Branches sem worktree']);
+    assert.deepStrictEqual(labels, ['master', 'ai/precos-promo', 'ai/refatorar-api', 'ai/login-oauth', 'Branches sem worktree', 'Stashes']);
   });
 
   await check('árvore: alterações × base incluem não commitados', async () => {
@@ -486,6 +486,75 @@ exports.run = async () => {
     assert.ok(ctl.state.worktrees.some(w => w.branch === 'try/implementar-cache-de-precos-b'));
     assert.ok(vscode.window.terminals.some(t => t.name === 'Eco · try/implementar-cache-de-precos-a · tarefa'));
     assert.strictEqual(api.agentFlow.attempts.groups()[0].attempts[1].variation.length > 0, true, 'B recebe uma variação');
+  });
+
+  await check('pull: fetch mostra ↓1 e o pull faz fast-forward', async () => {
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const root = ctl.repo.root;
+    const bare = path.join(root, '..', 'origin-push.git');
+    const clone = path.join(root, '..', 'clone-pull');
+    execSync(`git clone -q "${bare}" "${clone}"`);
+    execSync('git checkout -q ai/login-oauth', { cwd: clone });
+    execSync('git -c user.name=o -c user.email=o@o commit -q --allow-empty -m "do remoto"', { cwd: clone });
+    execSync('git push -q origin ai/login-oauth', { cwd: clone });
+    await api.gitOps.fetchNow({ quiet: true });
+    let wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(wt.remote.behind, 1, 'um commit novo no remoto');
+    assert.strictEqual(await api.gitOps.pull('ai/login-oauth', { quiet: true }), true);
+    await ctl.refresh();
+    wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(wt.remote.behind, 0);
+    assert.strictEqual(execSync('git log -1 --format=%s', { cwd: wt.path, encoding: 'utf8' }).trim(), 'do remoto');
+  });
+
+  await check('stash: guarda numa worktree e move as alterações para outra', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const from = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const to = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    fs.writeFileSync(path.join(from.path, 'nota.txt'), 'rascunho\n');
+    const sha = await api.gitOps.stashCreate(from.path, 'nota de teste', { quiet: true });
+    assert.ok(sha, 'stash criado');
+    assert.ok(!fs.existsSync(path.join(from.path, 'nota.txt')), 'saiu da origem');
+    const list = await api.gitOps.stashes();
+    assert.strictEqual(list[0].branch, 'ai/precos-promo');
+    assert.strictEqual(await api.gitOps.stashApply(sha, to.path, true, { quiet: true }), true);
+    assert.ok(fs.existsSync(path.join(to.path, 'nota.txt')), 'chegou no destino');
+    assert.ok(!(await api.gitOps.stashes()).some(e => e.sha === sha), 'pop removeu o stash');
+    fs.unlinkSync(path.join(to.path, 'nota.txt'));
+    const root = await tree.getChildren();
+    assert.ok(root.some(n => n.kind === 'stashes'), 'grupo Stashes na árvore');
+  });
+
+  await check('reorganizar commits: fixup junta dois commits e "Desfazer" volta', async () => {
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const before = execSync('git rev-parse HEAD', { cwd: wt.path, encoding: 'utf8' }).trim();
+    const { commits } = await api.gitOps.commitsSinceBase(wt.path);
+    const plan = commits.map((c, i) => ({ sha: c.sha, subject: c.subject, action: i === commits.length - 1 ? 'fixup' : 'pick' }));
+    assert.strictEqual(await api.gitOps.reorganize(wt.path, plan), true);
+    const after = await api.gitOps.commitsSinceBase(wt.path);
+    assert.strictEqual(after.commits.length, commits.length - 1, 'um commit a menos');
+    assert.strictEqual(await api.gitOps.undoReorganize('ai/login-oauth'), true);
+    assert.strictEqual(execSync('git rev-parse HEAD', { cwd: wt.path, encoding: 'utf8' }).trim(), before);
+  });
+
+  await check('cherry-pick: commit de ai/precos-promo aplicado em ai/login-oauth', async () => {
+    const { execSync } = require('child_process');
+    const src = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const sha = execSync('git rev-parse HEAD', { cwd: src.path, encoding: 'utf8' }).trim();
+    assert.strictEqual(await api.gitOps.cherryPick(sha, 'ai/login-oauth', { confirm: false }), true);
+    const dst = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(execSync('git log -1 --format=%s', { cwd: dst.path, encoding: 'utf8' }).trim(), 'feat(precos): preços da promoção');
+  });
+
+  await check('comparar duas worktrees: arquivos diferentes, inclusive não commitados', async () => {
+    const files = await api.gitOps.compareFiles('ai/refatorar-api', 'ai/precos-promo');
+    const paths = files.map(f => f.path);
+    assert.ok(paths.includes('src/api.ts'), paths.join(','));
+    assert.ok(paths.includes('src/novo.ts'), 'não rastreado em ai/refatorar-api');
+    assert.strictEqual(files.find(f => f.path === 'src/novo.ts').status, 'D', 'só existe no lado A');
   });
 
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);

@@ -14,6 +14,7 @@ import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
 import { registerReview } from './review';
+import { registerGitOps } from './gitops/register';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
@@ -229,6 +230,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return actions.copyText(a.text);
       case 'showLog':
         return out.show();
+      default:
+        // ações de módulos registrados à parte (ex.: src/gitops): mesmo nome do comando
+        return vscode.commands.executeCommand(`worktreeGraph.${action}`, a) as Promise<void>;
     }
   };
 
@@ -344,6 +348,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     pipelines: () => pipelines.pipelines,
     issueOf: b => issues.linkOf(b),
   });
+  const gitOps = registerGitOps(ctx, ctl, guard);
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -356,7 +361,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps };
 }
 
 export function deactivate() {}

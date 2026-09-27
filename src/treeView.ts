@@ -178,6 +178,12 @@ class TreeEntryItem extends vscode.TreeItem {
   }
 }
 
+/**
+ * Grupos extras na raiz da árvore, registrados por outros módulos (ex.: "Stashes" em src/gitops).
+ * `children` devolve undefined quando o item não é dele.
+ */
+export const extraTree: { roots: () => vscode.TreeItem[]; children: (el: vscode.TreeItem) => Promise<vscode.TreeItem[]> | undefined }[] = [];
+
 export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.emitter.event;
@@ -208,7 +214,12 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
         if (orphans.length) items.push(new OrphansGroup(orphans.length));
         const branches = s.branches.filter(b => !b.isBase);
         if (branches.length) items.push(new BranchesGroup(branches.length));
+        for (const x of extraTree) items.push(...(x.roots() as unknown as Node[]));
         return items;
+      }
+      for (const x of extraTree) {
+        const c = x.children(el as vscode.TreeItem);
+        if (c) return (await c) as unknown as Node[];
       }
       if (el instanceof WorktreeItem) {
         const out: Node[] = [];
