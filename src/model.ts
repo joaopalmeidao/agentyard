@@ -1,5 +1,6 @@
 import * as path from 'path';
 import { Commit, MergePreview, parseTrack, pLimit, Ref, RemoteTrack, Repo, Worktree, WorktreeStatus } from './git';
+import { CiBranch, discoverCiBranches } from './ciBranches';
 import type { FlowStep } from './flow';
 import type { ChangeRequest, HostKind } from './hosting/core';
 
@@ -87,6 +88,8 @@ export interface GraphCommit extends Commit {
   refs: RefBadge[];
 }
 
+export type GraphFilter = 'all' | 'unmerged' | 'ci';
+
 export interface GraphState {
   repoName: string;
   root: string;
@@ -104,7 +107,16 @@ export interface GraphState {
   /** Fluxo de ambientes (dev → QA → homologação → produção), se configurado. */
   flow?: FlowStep[];
   /** Filtro do histórico: tudo, ou só o que ainda não entrou na base. */
-  graphFilter: 'all' | 'unmerged';
+  graphFilter: GraphFilter;
+  /** Branches que o CI usa (filtro "CI"), com a origem de cada uma. */
+  ciBranches?: CiBranch[];
+  /** Nomes das branches locais e remotas, para o seletor "Branches:" do histórico. */
+  refNames?: { heads: string[]; remotes: string[] };
+  /** Branches escolhidas no seletor (vazio = todas) e se as remotas aparecem no grafo. */
+  graphBranches?: string[];
+  showRemotes?: boolean;
+  /** Commit apontado pela worktree desta janela (HEAD em destaque no histórico). */
+  headSha?: string;
   /** Branches locais com commits fora da base. */
   unmerged: string[];
   /** Branches protegidas (src/guards.ts): merge e push direto pedem confirmação ou PR/MR. */
@@ -129,7 +141,11 @@ export interface BuildOptions {
   agentsRunning?: Map<string, string[]>;
   /** Caminhos (minúsculos) das worktrees favoritas. */
   favorites?: Set<string>;
-  graphFilter?: 'all' | 'unmerged';
+  graphFilter?: GraphFilter;
+  /** Seletor "Branches:" do histórico (vazio = todas). Vale no filtro "Tudo". */
+  graphBranches?: string[];
+  /** Fontes das branches de CI além dos arquivos: fluxo, extras da configuração. */
+  ci?: { flow: string[]; extras: string[] };
 }
 
 export interface CompareResult {
@@ -233,13 +249,35 @@ export async function buildState(repo: Repo, opts: BuildOptions, cache: RepoCach
 
   const unmerged = baseSha ? await repo.unmerged(baseRef) : [];
   const graphFilter = opts.graphFilter ?? 'all';
-  // "Só não mescladas": os commits das branches pendentes, mais o ponto da base de onde cada uma saiu.
+  const heads = refs.filter(r => r.kind === 'head').map(r => r.name);
+  const remotes = refs.filter(r => r.kind === 'remote').map(r => r.name);
+  const remoteSet = new Set(remotes);
+  const refFor = (name: string) => [
+    ...(heads.includes(name) ? [`refs/heads/${name}`] : []),
+    ...(remoteSet.has(`origin/${name}`) ? [`refs/remotes/origin/${name}`] : []),
+  ];
+  // "CI": só as branches que o CI usa (arquivos de CI, fluxo, base e configuração), locais e origin/…
+  const ciBranches =
+    graphFilter === 'ci'
+      ? discoverCiBranches(repo.root, {
+          base,
+          flow: opts.ci?.flow,
+          extras: opts.ci?.extras,
+          existing: [...new Set([...heads, ...remotes.map(r => r.replace(/^[^/]+\//, ''))])],
+        })
+      : undefined;
+  const selected = (opts.graphBranches ?? []).filter(b => heads.includes(b) || remoteSet.has(b));
   const revs =
     graphFilter === 'unmerged'
-      ? unmerged.length
+      ? // "Só não mescladas": os commits das branches pendentes, mais o ponto da base de onde cada uma saiu.
+        unmerged.length
         ? ['--boundary', ...unmerged.map(b => `refs/heads/${b}`), `^${baseRef}`]
         : []
-      : ['--branches', '--tags', ...(opts.showRemotes ? ['--remotes'] : []), ...new Set(wts.filter(w => w.detached && w.head).map(w => w.head))];
+      : graphFilter === 'ci'
+        ? [...new Set(ciBranches!.flatMap(b => refFor(b.name)))]
+        : selected.length
+          ? selected.map(b => (heads.includes(b) ? `refs/heads/${b}` : `refs/remotes/${b}`))
+          : ['--branches', '--tags', ...(opts.showRemotes ? ['--remotes'] : []), ...new Set(wts.filter(w => w.detached && w.head).map(w => w.head))];
   const commits = await repo.log(revs, opts.maxCommits);
   const badges = new Map<string, RefBadge[]>();
   const add = (sha: string, b: RefBadge) => {
@@ -277,6 +315,11 @@ export async function buildState(repo: Repo, opts: BuildOptions, cache: RepoCach
     pending: 0,
     graphFilter,
     unmerged,
+    ciBranches,
+    refNames: { heads, remotes },
+    graphBranches: selected,
+    showRemotes: opts.showRemotes,
+    headSha: worktrees.find(w => w.isCurrent)?.head,
   };
   applyCache(state, cache);
   return state;
