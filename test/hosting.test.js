@@ -31,6 +31,13 @@ const check = async (name, fn) => {
     assert.strictEqual(parseRemote('https://bitbucket.org/a/b.git'), undefined);
   });
 
+  await check('parseRemote: GitLab em subcaminho (https://empresa.com/gitlab) e ssh com URL configurada', () => {
+    const a = parseRemote('https://empresa.com/gitlab/time/api.git', ['https://empresa.com/gitlab']);
+    assert.deepStrictEqual(a, { kind: 'gitlab', host: 'empresa.com', webBase: 'https://empresa.com/gitlab', projectPath: 'time/api' });
+    const b = parseRemote('git@empresa.com:time/api.git', ['https://empresa.com/gitlab']);
+    assert.deepStrictEqual(b, { kind: 'gitlab', host: 'empresa.com', webBase: 'https://empresa.com/gitlab', projectPath: 'time/api' });
+  });
+
   await check('suggestTitle', () => {
     assert.strictEqual(suggestTitle('ai/refatorar-login', ['a', 'b']), 'Refatorar login');
     assert.strictEqual(suggestTitle('x', ['feat: único commit']), 'feat: único commit');

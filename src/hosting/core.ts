@@ -57,12 +57,14 @@ export class HostError extends Error {
 }
 
 /** Entrada da configuração ("gitlab.empresa.com" ou "https://gitlab.empresa.com:8443") → nome e endereço web. */
-function hostEntry(entry: string): { host: string; webBase: string } | undefined {
+function hostEntry(entry: string): { host: string; webBase: string; prefix: string } | undefined {
   const e = entry.trim();
   if (!e) return undefined;
   try {
     const u = new URL(/^[a-z]+:\/\//i.test(e) ? e : `https://${e}`);
-    return { host: u.hostname.toLowerCase(), webBase: `${u.protocol}//${u.host}` };
+    // instalação em subcaminho: https://empresa.com/gitlab
+    const prefix = u.pathname.replace(/^\/+|\/+$/g, '');
+    return { host: u.hostname.toLowerCase(), webBase: `${u.protocol}//${u.host}${prefix ? `/${prefix}` : ''}`, prefix };
   } catch {
     return undefined;
   }
@@ -102,8 +104,12 @@ export function parseRemote(url: string, gitlabHosts: string[] = [], githubHosts
   if (host === 'github.com' || gh) kind = 'github';
   else if (host === 'gitlab.com' || gl || /(^|[.-])gitlab([.-]|$)/.test(host)) kind = 'gitlab';
   if (!kind) return undefined;
-  if (gl) webBase = gl.webBase;
-  if (gh) webBase = gh.webBase;
+  const entry = gl ?? gh;
+  if (entry) {
+    webBase = entry.webBase;
+    // num remoto https de instalação em subcaminho, o caminho começa com o prefixo: não é parte do projeto
+    if (entry.prefix && path.toLowerCase().startsWith(entry.prefix.toLowerCase() + '/')) path = path.slice(entry.prefix.length + 1);
+  }
   return { kind, host, webBase, projectPath: path };
 }
 

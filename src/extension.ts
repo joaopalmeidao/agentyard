@@ -302,6 +302,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (b) await ctl.requests.publish(b);
   });
   reg('connectHosting', () => ctl.requests.connect());
+  reg('connectGitLab', () => ctl.requests.connectGitLab());
   reg('pushBranch', async item => {
     const b = await actions.pickBranch(ctl, item, 'Enviar qual branch?');
     if (b) await pushBranch(ctl, b);

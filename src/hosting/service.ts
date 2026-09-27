@@ -136,15 +136,55 @@ export class RequestService {
     }
   }
 
+  /**
+   * Conectar ao GitLab informando a URL (útil para self-hosted, subcaminho, ou quando o remoto é ssh
+   * numa porta/host diferente da web). Salva a URL em worktreeGraph.gitlab.hosts e pede o token.
+   */
+  async connectGitLab() {
+    const current = await this.detectRemote(true);
+    const url = await vscode.window.showInputBox({
+      title: 'Conectar ao GitLab',
+      prompt: 'Endereço do GitLab (ex.: https://gitlab.empresa.com ou https://empresa.com/gitlab)',
+      value: current?.kind === 'gitlab' ? current.webBase : 'https://',
+      ignoreFocusOut: true,
+      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : 'Informe um endereço http(s)://'),
+    });
+    if (!url) return;
+    const base = url.trim().replace(/\/+$/, '');
+    const hosts = this.cfg().get<string[]>('gitlab.hosts', []);
+    const host = new URL(base).hostname.toLowerCase();
+    const others = hosts.filter(h => {
+      try {
+        return new URL(/^[a-z]+:\/\//i.test(h) ? h : `https://${h}`).hostname.toLowerCase() !== host;
+      } catch {
+        return true;
+      }
+    });
+    await this.cfg().update('gitlab.hosts', [...others, base], vscode.ConfigurationTarget.Global);
+    const r = await this.detectRemote(true);
+    if (!r || r.kind !== 'gitlab' || r.host !== host) {
+      vscode.window.showWarningMessage(
+        `Salvei ${base}, mas o remoto "${this.cfg().get('remote', 'origin')}" deste repositório não aponta para ${host}. Os PRs/MRs, issues e pipelines usam o remoto do repositório.`,
+      );
+      return;
+    }
+    await this.askToken(r);
+    await this.refresh(true);
+  }
+
   async connect() {
     const r = await this.detectRemote(true);
     if (!r) {
-      vscode.window.showWarningMessage(
-        'O remoto não foi reconhecido como GitHub nem GitLab. Para GitLab self-hosted cujo endereço não contém "gitlab", adicione o host em worktreeGraph.gitlab.hosts.',
+      const pick = await vscode.window.showWarningMessage(
+        'O remoto deste repositório não foi reconhecido como GitHub nem GitLab. Se for um GitLab self-hosted, informe o endereço dele.',
+        'Informar URL do GitLab',
         'Abrir configuração',
-      ).then(p => p && vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.gitlab.hosts'));
+      );
+      if (pick === 'Informar URL do GitLab') return this.connectGitLab();
+      if (pick === 'Abrir configuração') vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.gitlab.hosts');
       return;
     }
+    if (r.kind === 'gitlab') return this.connectGitLab();
     if (r.kind === 'github' && r.host === 'github.com') {
       const s = await vscode.authentication.getSession('github', ['repo'], { createIfNone: true });
       if (s) vscode.window.showInformationMessage(`Conectado ao GitHub como ${s.account.label}.`);
