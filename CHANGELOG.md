@@ -22,6 +22,16 @@
 - "Agentes abertos…" (paleta, menu da worktree e chip ✦ do card) lista os terminais agrupados;
   o chip mostra "Claude Code ×2" quando há mais de um.
 
+## 0.14.0
+- Grupo "Não commitadas" em cada worktree da view Worktrees (inclusive a principal): cada arquivo
+  com a letra (M/A/D/?), as linhas (+/−) e se está no stage; clique abre o diff com o último commit.
+- "Ver alterações não commitadas": o patch completo num editor, com os arquivos novos inteiros.
+- "Descartar alterações não commitadas…": por arquivo (ou vários selecionados) ou da worktree toda,
+  escolhendo na lista o que sai. Antes de confirmar, abre o patch do que vai ser descartado e a
+  confirmação diz o efeito em cada arquivo ("volta ao último commit (+3 −1)", "apagado (arquivo
+  novo)", "volta a existir"). Nada se perde: o descarte guarda uma cópia num stash, com "Desfazer"
+  e "Ver o que saiu" logo em seguida.
+
 ## 0.13.0
 - "Excluir mescladas" nas branches sem worktree: um clique exclui as branches locais cujos commits
   já estão todos na base (a base e as protegidas nunca entram; as do remoto continuam). Confirmação

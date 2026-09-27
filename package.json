@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "AgentYard",
   "description": "Central para desenvolver com agentes de IA em paralelo: worktrees e branches num grafo, merge e análise de merge, PR/MR com revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Redmine), Claude Code por worktree com sessões e uso, fila e agendamento de tarefas, e a base sempre em dia.",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "publisher": "joaopalmeidao",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
@@ -844,6 +844,18 @@
         "command": "worktreeGraph.moveChanges",
         "title": "Mover alterações para outra worktree…",
         "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.showUncommitted",
+        "title": "Ver alterações não commitadas (diff)",
+        "category": "AgentYard",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreeGraph.discardChanges",
+        "title": "Descartar alterações não commitadas…",
+        "category": "AgentYard",
+        "icon": "$(discard)"
       },
       {
         "command": "worktreeGraph.cherryPick",
@@ -1975,6 +1987,16 @@
           "group": "4_changes@2"
         },
         {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@0"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@9"
+        },
+        {
           "command": "worktreeGraph.reorganizeCommits",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "4_changes@3"
@@ -1983,6 +2005,51 @@
           "command": "worktreeGraph.undoReorganize",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "4_changes@4"
+        },
+        {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "1_changes@1"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "1_changes@2"
+        },
+        {
+          "command": "worktreeGraph.moveChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "1_changes@3"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommitted",
+          "group": "9_danger"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommittedFile",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem == uncommittedFile",
+          "group": "9_danger"
         },
         {
           "command": "worktreeGraph.stashCreate",
