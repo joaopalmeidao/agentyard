@@ -1,3 +1,5 @@
+import { Issue, IssueScope, mapGitHubIssue, mapGitLabIssue } from '../issues/core';
+
 /**
  * GitHub (incl. Enterprise) e GitLab (incl. self-hosted) via REST, sem depender da API do VS Code
  * para poder ser testado contra um servidor falso (test/hosting.test.js).
@@ -44,6 +46,7 @@ export interface HostClient {
   create(r: NewChangeRequest): Promise<ChangeRequest>;
   /** Confere o token; devolve o nome do usuário. */
   whoami(): Promise<string>;
+  listIssues(scope: IssueScope): Promise<Issue[]>;
 }
 
 export class HostError extends Error {
@@ -181,6 +184,19 @@ export class GitHubClient implements HostClient {
     return this.map(await this.req<any>('POST', '/pulls', { title: r.title, head: r.source, base: r.target, body: r.body, draft: r.draft }));
   }
 
+  private login?: string;
+
+  async listIssues(scope: IssueScope): Promise<Issue[]> {
+    let q = 'state=open&per_page=50&sort=updated';
+    if (scope === 'mine') {
+      this.login ??= await this.whoami();
+      q += `&assignee=${encodeURIComponent(this.login)}`;
+    }
+    const list = await this.req<any[]>('GET', `/issues?${q}`);
+    // a API de issues do GitHub devolve PRs também
+    return list.filter(i => !i.pull_request).map(mapGitHubIssue);
+  }
+
   async whoami() {
     const u = await call<any>(this.f, `${this.api}/user`, {
       headers: { Authorization: `Bearer ${this.token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'worktree-graph' },
@@ -245,6 +261,14 @@ export class GitLabClient implements HostClient {
     );
   }
 
+  async listIssues(scope: IssueScope): Promise<Issue[]> {
+    const list = await this.req<any[]>(
+      'GET',
+      `/projects/${this.project}/issues?state=opened&per_page=50&order_by=updated_at&scope=${scope === 'mine' ? 'assigned_to_me' : 'all'}`,
+    );
+    return list.map(mapGitLabIssue);
+  }
+
   async whoami() {
     const u = await this.req<any>('GET', '/user');
     return u.username as string;
@@ -259,7 +283,9 @@ export function suggestTitle(branch: string, subjects: string[]): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export function suggestBody(subjects: string[], label: 'PR' | 'MR'): string {
-  if (!subjects.length) return '';
-  return [`## Commits neste ${label}`, '', ...subjects.map(s => `- ${s}`)].join('\n');
+/** `extra`: linhas no fim, como "Closes #12" quando a branch veio de uma issue. */
+export function suggestBody(subjects: string[], label: 'PR' | 'MR', extra: string[] = []): string {
+  const parts = subjects.length ? [`## Commits neste ${label}`, '', ...subjects.map(s => `- ${s}`)] : [];
+  if (extra.length) parts.push(...(parts.length ? [''] : []), ...extra);
+  return parts.join('\n');
 }

@@ -136,7 +136,7 @@
   function toolbar() {
     const s = state.autoSync;
     return `<header class="toolbar">
-      <div class="title"><span class="repo">${esc(state.repoName)}</span>
+      <div class="title"><button class="repo" data-action="switchProject" title="${esc(state.root)} · trocar de projeto">${esc(state.repoName)} ▾</button>
         <span class="muted">base</span> <span class="ref ref-base">${esc(state.baseRef)}</span></div>
       <div class="tools">
         <button data-action="createWorktree" class="primary">＋ Nova worktree</button>
@@ -201,6 +201,12 @@
       <div class="bar"><div style="width:${Math.round((done / total) * 100)}%"></div></div>
       <span>Detalhando worktrees: ${done} de ${total}</span></div>`;
   }
+
+  function claudeChip(w) {
+    const c = w.claude;
+    return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}</span>`;
+  }
+  const fmtTokens = n => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} mi` : n >= 1e3 ? `${Math.round(n / 1e3)} mil` : String(n));
 
   function requestChip(r) {
     const st = { open: ['aberto', 'info'], draft: ['rascunho', 'muted'], merged: ['mesclado', 'ok'], closed: ['fechado', 'muted'] }[r.state] || [r.state, ''];
@@ -281,7 +287,10 @@
         : w.behind || w.ahead
           ? chip(arrows(w.behind, w.ahead), w.behind ? 'info' : 'muted', `${w.behind} atrás · ${w.ahead} à frente de ${state.baseRef}`)
           : chip('=', 'muted', `igual a ${state.baseRef}`);
-      const conf = w.preview?.conflict ? chip('⚠', 'bad', `conflita com ${state.base}: ${w.preview.files.join(', ')}`) : '';
+      const conf = w.preview?.conflict
+        ? chip('⚠', 'bad', `conflita com ${state.base}: ${w.preview.files.join(', ')}`) +
+          (agent ? `<button class="agent mini" data-action="resolveConflict" data-branch="${b}" title="Resolver com ${esc(agent)}: traz ${esc(state.base)} e resolve os conflitos">✦ resolver</button>` : '')
+        : '';
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
@@ -321,6 +330,7 @@
         if (w.branch) chips.push(syncChip(w));
         if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
         if (w.request) chips.push(requestChip(w.request));
+        if (w.claude) chips.push(claudeChip(w));
 
         const agent = state.agentNames && state.agentNames[0];
         const act = [
@@ -334,6 +344,7 @@
         if (w.branch && !w.isBase) {
           act.push(`<button data-action="diffWithBase" data-branch="${b}" title="Arquivos alterados desde que saiu da base">Revisar</button>`);
           act.push(`<button data-action="analyzeMerge" data-branch="${b}" title="Simular o merge em ${esc(state.base)}: commits, arquivos e conflitos">Analisar</button>`);
+          if (w.preview?.conflict && agent) act.unshift(`<button data-action="resolveConflict" data-branch="${b}" class="agent" title="Abre ${esc(agent)} nesta worktree com a tarefa de trazer ${esc(state.base)} e resolver os conflitos">✦ Resolver com ${esc(agent)}</button>`);
           if (state.hosting && !w.request && w.ahead) act.push(`<button data-action="publishRequest" data-branch="${b}" title="Push + ${state.hosting.label} para ${esc(state.base)}">Publicar ${state.hosting.label}</button>`);
           act.push(`<button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="git merge ${esc(state.baseRef)}">↓ Trazer ${esc(state.base)}</button>`);
           act.push(`<button data-action="mergeIntoBase" data-branch="${b}" class="primary" ${w.ahead ? '' : 'disabled'} title="Mesclar em ${esc(state.base)}">↑ Mesclar em ${esc(state.base)}</button>`);

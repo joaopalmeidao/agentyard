@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "Worktree Graph",
   "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "worktree-graph",
   "license": "MIT",
   "engines": {
@@ -45,8 +45,20 @@
     "views": {
       "worktreeGraph": [
         {
+          "id": "worktreeGraph.projects",
+          "name": "Projetos"
+        },
+        {
           "id": "worktreeGraph.worktrees",
           "name": "Worktrees"
+        },
+        {
+          "id": "worktreeGraph.issues",
+          "name": "Issues"
+        },
+        {
+          "id": "worktreeGraph.claudeSessions",
+          "name": "Sessões Claude"
         }
       ]
     },
@@ -60,6 +72,14 @@
         "view": "worktreeGraph.worktrees",
         "contents": "Nenhum repositório git encontrado neste workspace.\n[Abrir pasta](command:vscode.openFolder)",
         "when": "worktreeGraph.state == noRepo"
+      },
+      {
+        "view": "worktreeGraph.projects",
+        "contents": "Gerencie vários repositórios nesta janela.\n[Adicionar projeto](command:worktreeGraph.addProject)"
+      },
+      {
+        "view": "worktreeGraph.issues",
+        "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
       }
     ],
     "commands": [
@@ -243,6 +263,149 @@
         "command": "worktreeGraph.compareWithBase",
         "title": "Comparar com a base",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.resolveConflict",
+        "title": "Resolver conflito com o agente (traz a base e resolve)",
+        "category": "Worktree Graph",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.launchAgentWithPrompt",
+        "title": "Abrir agente com uma tarefa",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.addProject",
+        "title": "Adicionar projeto…",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.removeProject",
+        "title": "Remover projeto da lista",
+        "category": "Worktree Graph",
+        "icon": "$(close)"
+      },
+      {
+        "command": "worktreeGraph.switchProject",
+        "title": "Trocar projeto…",
+        "category": "Worktree Graph",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "worktreeGraph.openProjectGraph",
+        "title": "Abrir grafo do projeto",
+        "category": "Worktree Graph",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "worktreeGraph.openProjectWindow",
+        "title": "Abrir projeto numa nova janela",
+        "category": "Worktree Graph",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "worktreeGraph.issues.refresh",
+        "title": "Atualizar issues",
+        "category": "Worktree Graph",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.issues.scopeAll",
+        "title": "Issues: mostrando as minhas (clique para ver todas)",
+        "category": "Worktree Graph",
+        "icon": "$(account)"
+      },
+      {
+        "command": "worktreeGraph.issues.scopeMine",
+        "title": "Issues: mostrando todas (clique para ver só as minhas)",
+        "category": "Worktree Graph",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "worktreeGraph.issues.start",
+        "title": "Começar com Claude",
+        "category": "Worktree Graph",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.issues.createWorktree",
+        "title": "Criar worktree sem agente",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.issues.openUrl",
+        "title": "Abrir no navegador",
+        "category": "Worktree Graph",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "worktreeGraph.issues.copyLink",
+        "title": "Copiar link",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.issues.show",
+        "title": "Ver issue",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.issues.pick",
+        "title": "Começar trabalho numa issue…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.connectRedmine",
+        "title": "Conectar ao Redmine",
+        "category": "Worktree Graph",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "worktreeGraph.disconnectRedmine",
+        "title": "Desconectar do Redmine (apagar chave)",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.claude.refreshSessions",
+        "title": "Reler sessões do Claude Code",
+        "category": "Worktree Graph",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.claude.resume",
+        "title": "Retomar sessão",
+        "category": "Worktree Graph",
+        "icon": "$(debug-continue)"
+      },
+      {
+        "command": "worktreeGraph.claude.transcript",
+        "title": "Ver transcrição",
+        "category": "Worktree Graph",
+        "icon": "$(book)"
+      },
+      {
+        "command": "worktreeGraph.claude.copySessionId",
+        "title": "Copiar id da sessão",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.claude.newSession",
+        "title": "Nova sessão do Claude aqui",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.claude.commands",
+        "title": "Comandos do Claude Code…",
+        "category": "Worktree Graph",
+        "icon": "$(terminal-cmd)"
+      },
+      {
+        "command": "worktreeGraph.claude.usage",
+        "title": "Uso do Claude Code (janela de 5 h e semana)",
+        "category": "Worktree Graph",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -311,6 +474,61 @@
           "command": "worktreeGraph.configureFlow",
           "when": "view == worktreeGraph.worktrees",
           "group": "4_hosting"
+        },
+        {
+          "command": "worktreeGraph.addProject",
+          "when": "view == worktreeGraph.projects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.switchProject",
+          "when": "view == worktreeGraph.projects",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.issues.scopeAll",
+          "when": "view == worktreeGraph.issues && worktreeGraph.issuesScope != all",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.issues.scopeMine",
+          "when": "view == worktreeGraph.issues && worktreeGraph.issuesScope == all",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.issues.refresh",
+          "when": "view == worktreeGraph.issues",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.connectRedmine",
+          "when": "view == worktreeGraph.issues",
+          "group": "1_connect"
+        },
+        {
+          "command": "worktreeGraph.connectHosting",
+          "when": "view == worktreeGraph.issues",
+          "group": "1_connect"
+        },
+        {
+          "command": "worktreeGraph.disconnectRedmine",
+          "when": "view == worktreeGraph.issues",
+          "group": "1_connect"
+        },
+        {
+          "command": "worktreeGraph.claude.usage",
+          "when": "view == worktreeGraph.claudeSessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.claude.commands",
+          "when": "view == worktreeGraph.claudeSessions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.claude.refreshSessions",
+          "when": "view == worktreeGraph.claudeSessions",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -428,6 +646,111 @@
           "command": "worktreeGraph.copyPath",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^wt(File|Folder)$/",
           "group": "2_path@2"
+        },
+        {
+          "command": "worktreeGraph.resolveConflict",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@5"
+        },
+        {
+          "command": "worktreeGraph.openProjectGraph",
+          "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.openProjectWindow",
+          "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.removeProject",
+          "when": "view == worktreeGraph.projects && viewItem == project",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.openProjectGraph",
+          "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "worktreeGraph.openProjectWindow",
+          "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "worktreeGraph.removeProject",
+          "when": "view == worktreeGraph.projects && viewItem == project",
+          "group": "9_remove"
+        },
+        {
+          "command": "worktreeGraph.issues.start",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.issues.openUrl",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.issues.start",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "1_work@1"
+        },
+        {
+          "command": "worktreeGraph.issues.createWorktree",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "1_work@2"
+        },
+        {
+          "command": "worktreeGraph.issues.openUrl",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "2_link@1"
+        },
+        {
+          "command": "worktreeGraph.issues.copyLink",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "2_link@2"
+        },
+        {
+          "command": "worktreeGraph.claude.resume",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.claude.transcript",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.claude.resume",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "1@1"
+        },
+        {
+          "command": "worktreeGraph.claude.transcript",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "1@2"
+        },
+        {
+          "command": "worktreeGraph.claude.copySessionId",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "2@1"
+        },
+        {
+          "command": "worktreeGraph.claude.newSession",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.claude.commands",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.claude.commands",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@6"
         }
       ],
       "commandPalette": [
@@ -454,6 +777,50 @@
         {
           "command": "worktreeGraph.addToExplorer",
           "when": "false"
+        },
+        {
+          "command": "worktreeGraph.launchAgentWithPrompt",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.openProjectWindow",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.removeProject",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.start",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.createWorktree",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.openUrl",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.copyLink",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.show",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claude.resume",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claude.transcript",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claude.copySessionId",
+          "when": "false"
         }
       ]
     },
@@ -477,7 +844,7 @@
         },
         "worktreeGraph.agents": {
           "type": "array",
-          "markdownDescription": "CLIs de agente oferecidos no botão **Agente**. O primeiro é o padrão. Use `{prompt}` no comando para digitar a tarefa antes de abrir (ex.: `claude {prompt}`). O terminal recebe `WTGRAPH_BRANCH`, `WTGRAPH_BASE` e `WTGRAPH_WORKTREE`.",
+          "markdownDescription": "CLIs de agente oferecidos no botão **Agente**. O primeiro é o padrão. Use `{prompt}` no comando para digitar a tarefa antes de abrir (ex.: `claude {prompt}`). O terminal recebe `WTGRAPH_BRANCH`, `WTGRAPH_BASE` e `WTGRAPH_WORKTREE`. `promptCommand` (opcional) é usado quando a extensão manda uma tarefa pronta (ex.: resolver conflito): `{prompt}` vira o texto.",
           "items": {
             "type": "object",
             "required": [
@@ -490,13 +857,17 @@
               },
               "command": {
                 "type": "string"
+              },
+              "promptCommand": {
+                "type": "string"
               }
             }
           },
           "default": [
             {
               "name": "Claude Code",
-              "command": "claude"
+              "command": "claude",
+              "promptCommand": "claude {prompt}"
             },
             {
               "name": "Claude Code (com tarefa)",
@@ -504,11 +875,13 @@
             },
             {
               "name": "Codex CLI",
-              "command": "codex"
+              "command": "codex",
+              "promptCommand": "codex {prompt}"
             },
             {
               "name": "Gemini CLI",
-              "command": "gemini"
+              "command": "gemini",
+              "promptCommand": "gemini -i {prompt}"
             }
           ]
         },
@@ -694,6 +1067,82 @@
           "type": "string",
           "default": "",
           "markdownDescription": "URL da API do GitHub Enterprise, se não for `<host>/api/v3`."
+        },
+        "worktreeGraph.prompts.resolveConflict": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "Na branch ${branch}, traga a ${base} (git merge ${base}) e resolva os conflitos em: ${files}. Preserve a intenção das duas mudanças, rode os testes do projeto e faça o commit do merge. Se algo for ambíguo, pergunte antes de decidir.",
+          "markdownDescription": "Tarefa enviada ao agente pelo botão *Resolver com …*. Placeholders: `${branch}`, `${base}`, `${files}`."
+        },
+        "worktreeGraph.prompts.mergeIntoBase": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "A branch ${branch} conflita com ${base} e não pode ser mesclada nela ainda. Nesta worktree, traga a ${base} (git merge ${base}) e resolva os conflitos em: ${files}, preservando a intenção das duas mudanças. Rode os testes do projeto e faça o commit do merge, para que o merge de ${branch} em ${base} fique limpo. Não faça o merge em ${base} sem me perguntar. Se algo for ambíguo, pergunte antes de decidir.",
+          "markdownDescription": "Tarefa enviada ao agente quando o conflito aparece ao mesclar a branch na base. Placeholders: `${branch}`, `${base}`, `${files}`."
+        },
+        "worktreeGraph.redmine.url": {
+          "type": "string",
+          "default": "",
+          "description": "Endereço do Redmine (ex.: https://redmine.empresa.com). A chave de API fica no cofre do VS Code (comando Conectar ao Redmine)."
+        },
+        "worktreeGraph.redmine.projectId": {
+          "type": "string",
+          "default": "",
+          "description": "Identificador do projeto no Redmine. Vazio = todos os projetos."
+        },
+        "worktreeGraph.issues.branchPrefix": {
+          "type": "string",
+          "default": "issue",
+          "description": "Prefixo da branch criada para issues do GitHub/GitLab (as do Redmine usam \"redmine\")."
+        },
+        "worktreeGraph.prompts.issue": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "",
+          "markdownDescription": "Prompt enviado ao agente ao começar uma issue. Vazio = padrão. Variáveis: `${key}`, `${title}`, `${body}`, `${url}`, `${branch}`, `${base}`."
+        },
+        "worktreeGraph.claude.configDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Pasta de dados do Claude Code. Vazio = `CLAUDE_CONFIG_DIR` ou `~/.claude`."
+        },
+        "worktreeGraph.claude.showUsageInStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostrar o uso estimado (janela de 5 h e semana) na barra de status."
+        },
+        "worktreeGraph.claude.sessionBudgetTokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Orçamento de tokens da janela de 5 h, para mostrar a porcentagem usada (0 = não mostrar). Os limites oficiais não ficam no disco; calibre pelo /usage do Claude Code."
+        },
+        "worktreeGraph.claude.weeklyBudgetTokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Orçamento semanal de tokens, para mostrar a porcentagem usada (0 = não mostrar)."
+        },
+        "worktreeGraph.claude.weekStart": {
+          "type": "string",
+          "enum": [
+            "rolling",
+            "monday"
+          ],
+          "enumDescriptions": [
+            "Últimos 7 dias corridos.",
+            "Desde segunda-feira 00:00."
+          ],
+          "default": "rolling",
+          "description": "Como contar a semana no uso estimado."
+        },
+        "worktreeGraph.claude.blockHours": {
+          "type": "number",
+          "default": 5,
+          "description": "Duração da janela de uso (horas)."
+        },
+        "worktreeGraph.claude.maxSessionsPerGroup": {
+          "type": "number",
+          "default": 50,
+          "description": "Quantas sessões mostrar por worktree na view Sessões Claude."
         }
       }
     }
@@ -703,7 +1152,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/sessions.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

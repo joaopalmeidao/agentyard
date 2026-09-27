@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
+import { resolveButton, runResolve } from './conflicts';
 import { gitUri } from './diff';
 import { Repo, Worktree } from './git';
 
@@ -98,11 +99,14 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
       }
       const pick = await vscode.window.showWarningMessage(
         `Conflito ao mesclar ${source} em ${target} (${conflicts.length} arquivo(s)). O merge ficou em andamento na worktree.`,
+        resolveButton(ctl),
         'Abrir arquivos',
         'Abrir worktree',
         'Abortar merge',
       );
-      if (pick === 'Abrir arquivos') {
+      if (pick === resolveButton(ctl)) {
+        await runResolve(target, { base: source });
+      } else if (pick === 'Abrir arquivos') {
         for (const f of conflicts.slice(0, 20)) await vscode.window.showTextDocument(vscode.Uri.file(path.join(wt.path, f)), { preview: false });
       } else if (pick === 'Abrir worktree') {
         await openWorktree(ctl, target);
@@ -127,9 +131,12 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
         conflicts.length
           ? `Conflito ao mesclar ${source} em ${target}: ${conflicts.slice(0, 5).join(', ')}. Nada foi alterado.`
           : `Merge falhou: ${(r.stderr || r.stdout).trim()}`,
+        ...(conflicts.length ? [resolveButton(ctl)] : []),
         `Criar worktree de ${target} para resolver`,
       );
-      if (pick) await createWorktree(ctl, { existing: target });
+      // Mesclando na base: quem resolve é a branch, trazendo a base; senão, o destino traz a origem.
+      if (pick === resolveButton(ctl)) await (target === base ? runResolve(source, { intoBase: true }) : runResolve(target, { base: source }));
+      else if (pick) await createWorktree(ctl, { existing: target });
       return false;
     } finally {
       await repo.run(['worktree', 'remove', '--force', tmp]);
@@ -181,10 +188,17 @@ export async function mergeInto(ctl: Controller, arg: BranchArg) {
   if (target) await mergeBranches(ctl, source, target.label);
 }
 
-export async function createWorktree(ctl: Controller, opts: { startPoint?: string; existing?: string } = {}) {
+/**
+ * `branch`: nome já decidido (sem perguntar); `quiet`: sem a notificação final.
+ * Devolve a pasta criada.
+ */
+export async function createWorktree(
+  ctl: Controller,
+  opts: { startPoint?: string; existing?: string; branch?: string; quiet?: boolean } = {},
+): Promise<string | undefined> {
   const repo = repoOf(ctl);
   const { base } = await ctl.base();
-  let branch = opts.existing;
+  let branch = opts.existing ?? opts.branch;
   if (!branch) {
     const names = new Set((await repo.refs()).filter(r => r.kind === 'head').map(r => r.name));
     branch = await vscode.window.showInputBox({
@@ -216,9 +230,11 @@ export async function createWorktree(ctl: Controller, opts: { startPoint?: strin
     t.show(true);
     t.sendText(post);
   }
+  if (opts.quiet) return dir;
   const pick = await vscode.window.showInformationMessage(`Worktree ${branch} criada em ${dir}.`, 'Abrir em nova janela', 'Abrir terminal');
   if (pick === 'Abrir em nova janela') await openWorktree(ctl, branch);
   else if (pick === 'Abrir terminal') await openTerminal(ctl, branch);
+  return dir;
 }
 
 export async function openWorktree(ctl: Controller, arg: BranchArg | { path?: string }) {

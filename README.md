@@ -5,6 +5,8 @@ Extensão do VS Code para quem trabalha com vários agentes de IA em paralelo, c
 (ou arrastando uma branch sobre outra) e mantém as branches em dia com a base — localmente, pela
 própria extensão, e no GitHub, por um workflow que ela gera.
 
+![Worktree Graph](docs/social-preview.png)
+
 ![Demonstração](docs/video/worktree-graph.gif)
 
 Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
@@ -26,6 +28,10 @@ Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
 | **PR/MR** | *Publicar PR* faz o push e abre o PR (GitHub/GitHub Enterprise) ou MR (GitLab, inclusive self-hosted); o número aparece no card. |
 | **Analisar merge** | antes de mesclar: commits que entram, arquivos alterados nos dois lados e conflitos, com o arquivo já mostrando os marcadores. |
 | **Fluxo de ambientes** | dev → QA → homologação → produção: o que espera promoção em cada degrau, hotfixes que precisam descer e *Promover* por PR/MR ou merge. |
+| **Resolver com Claude** | em worktrees com conflito, um botão abre o agente com a tarefa de trazer a base, resolver, testar e commitar. |
+| **Issues** | GitHub, GitLab e Redmine numa view; *Começar com Claude* cria a worktree da issue e abre o agente com o contexto dela. |
+| **Vários projetos** | view Projetos: troque o repositório ativo sem abrir outra janela do VS Code. |
+| **Sessões do Claude Code** | sessões por worktree (retomar, nova, transcrição), tokens por worktree e uso estimado de 5 h/semana na barra de status. |
 | **Nova worktree** | cria branch + pasta a partir da base (ou de qualquer branch/commit) e roda um comando de setup (`npm install`, etc.). |
 | **Grafo** | histórico de todas as branches, worktrees (`▣`), remotas e tags, com filtro. |
 | **Sync automático** | quando a base anda, mescla nas worktrees que casam com os padrões — só se estiver limpa, sem conflito previsto, e roda um comando de verificação (desfaz o merge se falhar). |

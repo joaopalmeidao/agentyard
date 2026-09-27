@@ -136,11 +136,112 @@ exports.run = async () => {
     assert.strictEqual(ctl.state.base, 'master');
   });
 
+  await check('prompt vira UM argumento em pwsh, bash e cmd', async () => {
+    const { promptArgument, promptCommandOf } = require('../out/agents');
+    const fs = require('fs');
+    const ps = promptArgument('a\nb "c"', 'C:/Program Files/PowerShell/7/pwsh.exe');
+    assert.ok(ps.arg.startsWith("(Get-Content -Raw -LiteralPath '") && fs.readFileSync(ps.file, 'utf8') === 'a\nb "c"');
+    assert.ok(promptArgument('x', '/bin/bash').arg.startsWith('"$(cat \''));
+    assert.strictEqual(promptArgument('a\nb "c"', 'C:/Windows/System32/cmd.exe').arg, `"a b 'c'"`);
+    assert.strictEqual(promptCommandOf({ name: 'G', command: 'gemini' }), 'gemini -i {prompt}');
+    assert.strictEqual(promptCommandOf({ name: 'X', command: 'aider' }), 'aider {prompt}');
+  });
+
+  await check('conflito: "Resolver com agente" abre terminal na worktree com a tarefa', async () => {
+    const fs = require('fs');
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const before = vscode.window.terminals.length;
+    await vscode.commands.executeCommand('worktreeGraph.resolveConflict', 'ai/precos-promo');
+    await until(() => vscode.window.terminals.length === before + 1);
+    const t = vscode.window.terminals.find(x => x.name === 'Eco · ai/precos-promo · tarefa');
+    assert.ok(t, 'terminal da tarefa');
+    assert.strictEqual(t.creationOptions.cwd, wt.path);
+    const text = fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8');
+    assert.ok(text.includes('src/precos.ts'), text);
+    assert.ok(text.includes('git merge master'), text);
+  });
+
+  await check('contrato worktreeGraph.launchAgentWithPrompt (por branch, prompt multilinha)', async () => {
+    const fs = require('fs');
+    const before = vscode.window.terminals.length;
+    await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { branch: 'ai/login-oauth', prompt: 'linha 1\nlinha 2' });
+    await until(() => vscode.window.terminals.length === before + 1);
+    assert.ok(vscode.window.terminals.some(x => x.name === 'Eco · ai/login-oauth · tarefa'));
+    assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'linha 1\nlinha 2');
+  });
+
+  await check('issues: a view abre sem rede nem credenciais', async () => {
+    await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph');
+    await vscode.commands.executeCommand('worktreeGraph.issues.focus');
+    await api.issues.refresh(true);
+    assert.deepStrictEqual(api.issues.groups, [], 'demo sem remoto e sem Redmine: nenhum grupo');
+  });
+
+  await check('issues: começar cria a worktree da issue e entrega o prompt', async () => {
+    const issue = { provider: 'github', id: 99, key: '#99', title: 'Teste de issue', body: 'corpo da issue', url: 'https://example.com/99', labels: [], updated: 0 };
+    await api.issues.start(issue, true);
+    await ctl.refresh();
+    const wt = ctl.state.worktrees.find(w => w.branch === 'issue/99-teste-de-issue');
+    assert.ok(wt, 'worktree criada');
+    // com launchAgentWithPrompt disponível, o prompt vai para o agente (arquivo da tarefa)
+    await until(() => api.agentTerms.lastPromptFile && require('fs').readFileSync(api.agentTerms.lastPromptFile, 'utf8').includes('Trabalhe na issue #99: Teste de issue'));
+    assert.deepStrictEqual(api.issues.trailers('issue/99-teste-de-issue'), ['Closes #99']);
+    // de novo: reaproveita a worktree, não cria outra
+    await api.issues.start(issue, false);
+    await ctl.refresh();
+    assert.strictEqual(ctl.state.worktrees.filter(w => w.branch === 'issue/99-teste-de-issue').length, 1);
+  });
+
+  await check('sessões do Claude: mapeadas para a worktree, chip no estado, view e transcrição', async () => {
+    await until(() => api.claude.loaded, 20000);
+    await ctl.refresh();
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.deepStrictEqual({ s: wt.claude.sessions, t: wt.claude.tokens }, { s: 1, t: 3500 });
+    const m = api.claude.byWorktree();
+    assert.strictEqual(m.get(wt.path)[0].firstPrompt, 'Implemente o login OAuth');
+    await vscode.commands.executeCommand('worktreeGraph.claudeSessions.focus');
+    const { ClaudeSessionsProvider, SessionItem } = require('../out/claude/view');
+    const prov = new ClaudeSessionsProvider(api.claude, ctl);
+    const groups = prov.getChildren();
+    assert.strictEqual(groups[0].label, 'ai/login-oauth');
+    const item = prov.getChildren(groups[0])[0];
+    await vscode.commands.executeCommand('worktreeGraph.claude.transcript', item);
+    const doc = await until(() => vscode.workspace.textDocuments.find(d => d.uri.scheme === 'wtgraph-claude'));
+    assert.ok(doc.getText().includes('Feito: cliente OAuth criado.'));
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
     const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-    assert.strictEqual(tab.label, 'Worktree Graph');
+    assert.ok(tab.label.startsWith('Worktree Graph'), tab.label);
+  });
+
+  await check('vários projetos: adicionar, trocar e voltar sem abrir outra janela', async () => {
+    const path = require('path');
+    const first = ctl.repo.root;
+    // outros testes podem ter criado worktrees na demo (ex.: a da issue); compara com o que havia
+    const before = ctl.state.worktrees.length;
+    const second = path.join(first, '..', '..', 'itest2', 'loja-app');
+    const main = await api.projects.addPath(second);
+    assert.ok(main, 'segundo repositório reconhecido');
+    const names = api.projects.list().map(p => p.path.toLowerCase());
+    assert.ok(names.includes(path.normalize(second).toLowerCase()), 'aparece na lista');
+    assert.strictEqual(api.projects.list().find(p => p.active).path.toLowerCase(), path.normalize(first).toLowerCase());
+
+    await vscode.commands.executeCommand('worktreeGraph.switchProject', second);
+    await until(() => ctl.state && ctl.state.root.toLowerCase() === path.normalize(second).toLowerCase());
+    assert.strictEqual(ctl.state.worktrees.length, 5, 'o segundo projeto tem uma worktree a mais');
+    assert.ok(ctl.state.worktrees.some(w => w.branch === 'ai/extra'));
+    const root = await tree.getChildren();
+    assert.ok(root.some(n => n.branch === 'ai/extra'), 'a árvore mostra o projeto novo');
+
+    await vscode.commands.executeCommand('worktreeGraph.switchProject', first);
+    await until(() => ctl.state && ctl.state.root.toLowerCase() === path.normalize(first).toLowerCase());
+    assert.strictEqual(ctl.state.worktrees.length, before);
+    await api.projects.remove(second);
+    assert.ok(!api.projects.list().some(p => p.path.toLowerCase() === path.normalize(second).toLowerCase()));
   });
 
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);

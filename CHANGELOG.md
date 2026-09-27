@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+- Logo novo: monograma "W" feito de arestas do grafo, com o ✦ do agente; prévia social do GitHub.
+- "✦ Resolver com Claude" em conflitos (card, tabela, árvore, análise de merge e notificações): o
+  agente abre na worktree com a tarefa de trazer a base, resolver, testar e commitar. Se a branch
+  não tem worktree, ela é criada antes.
+- Tarefas para agentes vão por arquivo e entram como um único argumento (PowerShell, bash e cmd);
+  campo `promptCommand` por agente e comando `worktreeGraph.launchAgentWithPrompt`.
+- Issues do GitHub, do GitLab (inclusive self-hosted) e do Redmine numa view própria, com
+  "minhas/todas"; "Começar com Claude" cria branch e worktree da issue e abre o agente com o prompt
+  (`worktreeGraph.prompts.issue`). O PR/MR ganha "Closes #N" ou "Refs #N".
+- Vários projetos na mesma janela: view Projetos, "Adicionar projeto…" (pasta ou varredura de uma
+  pasta de repositórios) e troca do projeto ativo pelo nome ▾ no painel.
+- Sessões do Claude Code por worktree: retomar, nova sessão, transcrição, chip com sessões e tokens
+  nos cards; uso estimado da janela de 5 h e da semana na barra de status (com orçamento opcional);
+  "Comandos do Claude Code…" com comandos e skills do projeto e do usuário.
+
 ## 0.5.0
 - PR/MR com um clique: push da branch, título e descrição a partir dos commits, rascunho opcional;
   `PR #12`/`MR !5` aparece no card, na tabela e na árvore. GitHub (login nativo do VS Code),

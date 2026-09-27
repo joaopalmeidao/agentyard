@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { mergeBranches, openWorktree } from './actions';
+import { resolveButton, runResolve } from './conflicts';
 import { Controller } from './controller';
 import { branchMatches, Repo, Worktree } from './git';
 import { SyncKind, SyncWhere } from './model';
@@ -165,7 +166,7 @@ export class AutoSync implements vscode.Disposable {
     const preview = await repo.mergePreview(branch, baseRef);
     if (preview?.conflict) {
       this.set(branch, 'conflict', `Mesclar ${baseRef} vai dar conflito em: ${preview.files.join(', ')}`);
-      this.notifyOnce(`${branch}@${baseSha}@conflict`, `${branch}: a base avançou e vai conflitar em ${preview.files.length} arquivo(s).`, branch, true);
+      this.notifyOnce(`${branch}@${baseSha}@conflict`, `${branch}: a base avançou e vai conflitar em ${preview.files.length} arquivo(s).`, branch, true, true);
       return;
     }
     if (c.get<string>('autoSync.mode', 'merge') === 'notify' && !manual) {
@@ -209,12 +210,14 @@ export class AutoSync implements vscode.Disposable {
     this.ctl.statuses.set(branch, { kind, message, at: Date.now() });
   }
 
-  private async notifyOnce(key: string, message: string, branch: string, warn: boolean) {
+  private async notifyOnce(key: string, message: string, branch: string, warn: boolean, conflict = false) {
     if (this.notified.has(key)) return;
     this.notified.add(key);
-    const buttons = warn ? ['Abrir worktree', 'Ver grafo', 'Log'] : ['Mesclar agora', 'Ver grafo'];
+    const resolve = resolveButton(this.ctl);
+    const buttons = warn ? [...(conflict ? [resolve] : []), 'Abrir worktree', 'Ver grafo', 'Log'] : ['Mesclar agora', 'Ver grafo'];
     const pick = await (warn ? vscode.window.showWarningMessage : vscode.window.showInformationMessage)(message, ...buttons);
-    if (pick === 'Abrir worktree') await openWorktree(this.ctl, branch);
+    if (pick === resolve) await runResolve(branch);
+    else if (pick === 'Abrir worktree') await openWorktree(this.ctl, branch);
     else if (pick === 'Ver grafo') await vscode.commands.executeCommand('worktreeGraph.openGraph');
     else if (pick === 'Log') this.ctl.out.show();
     else if (pick === 'Mesclar agora') {
@@ -226,6 +229,8 @@ export class AutoSync implements vscode.Disposable {
   private lockPath(repo: Repo) {
     return path.join(repo.commonDir, LOCK_FILE);
   }
+
+  private lockRepo?: Repo;
 
   private acquireLock(repo: Repo): boolean {
     const file = this.lockPath(repo);
@@ -241,7 +246,9 @@ export class AutoSync implements vscode.Disposable {
       // sem lock: é nosso
     }
     try {
+      if (this.lockRepo && this.lockRepo !== repo) this.releaseLock();
       fs.writeFileSync(file, me);
+      this.lockRepo = repo;
       this.ctl.syncOwner = true;
       return true;
     } catch {
@@ -250,8 +257,9 @@ export class AutoSync implements vscode.Disposable {
   }
 
   private releaseLock() {
-    const repo = this.ctl.repo;
+    const repo = this.lockRepo ?? this.ctl.repo;
     this.ctl.syncOwner = false;
+    this.lockRepo = undefined;
     if (!repo) return;
     try {
       if (fs.readFileSync(this.lockPath(repo), 'utf8').trim() === vscode.env.sessionId) fs.unlinkSync(this.lockPath(repo));
@@ -259,6 +267,7 @@ export class AutoSync implements vscode.Disposable {
       // nada a liberar
     }
   }
+
 
   dispose() {
     if (this.timer) clearInterval(this.timer);

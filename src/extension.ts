@@ -1,14 +1,18 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { AgentTerminals } from './agents';
+import { resolveConflict, ResolveOptions } from './conflicts';
 import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
 import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
+import { registerIssues } from './issues/register';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
+import { Projects, ProjectsTreeProvider } from './projects';
 import { AutoSync } from './sync';
+import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
 
 export async function activate(ctx: vscode.ExtensionContext) {
@@ -36,11 +40,32 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (wtPath) await agentTerms.launch(wtPath, branch, agent);
   };
 
+  const projects = new Projects(ctl);
+  ctx.subscriptions.push(projects, vscode.window.createTreeView('worktreeGraph.projects', { treeDataProvider: new ProjectsTreeProvider(projects) }));
   const decorations = new WorktreeDecorations(ctl);
+  const claude = new ClaudeService(ctl);
+  const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
+  ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
+  /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */
+  const claudeTarget = async (arg?: { path?: string; wtPath?: string; branch?: string }): Promise<{ cwd: string; label: string } | undefined> => {
+    const p = arg?.wtPath ?? arg?.path;
+    const wts = ctl.state?.worktrees.filter(w => !w.prunable && !w.bare) ?? [];
+    const found = p ? wts.find(w => w.path.toLowerCase() === p.toLowerCase()) : arg?.branch ? wts.find(w => w.branch === arg.branch) : undefined;
+    if (found) return { cwd: found.path, label: found.name };
+    if (p) return { cwd: p, label: require('path').basename(p) };
+    const pick = await vscode.window.showQuickPick(
+      wts.map(w => ({ label: w.name, description: w.claude ? `${w.claude.sessions} sessão(ões)` : '', detail: w.path, w })),
+      { placeHolder: 'Em qual worktree?' },
+    );
+    return pick && { cwd: pick.w.path, label: pick.w.name };
+  };
+
   const sync = new AutoSync(ctl);
   const tree = new WorktreeTreeProvider(ctl);
   const treeView = vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true, canSelectMany: true });
+  ctl.onDidChangeRepo(() => sync.reschedule());
   ctl.onDidChange(s => {
+    if (s) treeView.description = s.repoName;
     const n = s?.pending ?? 0;
     treeView.message = n > 0 ? `Detalhando ${n} de ${s!.worktrees.filter(w => !w.prunable && !w.bare).length} worktrees…` : undefined;
     treeView.badge = n > 0 ? { value: n, tooltip: `${n} worktrees sendo detalhadas` } : undefined;
@@ -85,14 +110,19 @@ export async function activate(ctx: vscode.ExtensionContext) {
     switch (action) {
       case 'refresh':
         return ctl.refresh();
+      case 'switchProject':
+        return projects.switch(a.path);
       case 'createWorktree':
-        return actions.createWorktree(ctl, { startPoint: a.startPoint, existing: a.existing });
+        await actions.createWorktree(ctl, { startPoint: a.startPoint, existing: a.existing });
+        return;
       case 'openWorktree':
         return actions.openWorktree(ctl, a.path ? { path: a.path } : a.branch);
       case 'launchAgent':
         return launchAgent({ path: a.path, branch: a.branch }, a.agent);
       case 'openFile':
         return actions.openFileInWorktree(ctl, a.path ? { path: a.path } : a.branch);
+      case 'resolveConflict':
+        return resolveConflict(ctl, agentTerms, a.branch);
       case 'openTerminal':
         return actions.openTerminal(ctl, a.path ? { path: a.path } : a.branch);
       case 'mergeBaseInto':
@@ -145,6 +175,16 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return ctl.requests.connect();
       case 'analyzeMerge':
         return analyzeMerge(a.source ?? a.branch, a.target);
+      case 'claudeResumeLast': {
+        const s = claude.sessions.find(x => x.id === a.id);
+        if (s) claude.resume(s);
+        return;
+      }
+      case 'claudeCommands': {
+        const t = await claudeTarget({ path: a.path });
+        if (t) await claude.commands(t.cwd, t.label);
+        return;
+      }
       case 'copy':
         return actions.copyText(a.text);
       case 'showLog':
@@ -165,10 +205,36 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
   reg('openGraph', () => GraphPanel.show(ctl, handler));
   reg('refresh', () => ctl.refresh());
+  reg('addProject', () => projects.add());
+  reg('removeProject', item => projects.remove(typeof item === 'string' ? item : item?.path));
+  reg('switchProject', (p?: string | { path?: string }) => projects.switch(typeof p === 'string' ? p : p?.path));
+  reg('openProjectGraph', async (p?: string | { path?: string }) => {
+    const target = typeof p === 'string' ? p : p?.path;
+    if (target) await projects.switch(target);
+    await vscode.commands.executeCommand('worktreeGraph.openGraph');
+  });
+  reg('openProjectWindow', (p?: { path?: string }) => p?.path && vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(p.path), { forceNewWindow: true }));
   reg('createWorktree', () => actions.createWorktree(ctl));
   reg('openWorktree', item => actions.openWorktree(ctl, item));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
+  reg('resolveConflict', (branch?: string | { branch?: string }, opts?: ResolveOptions) => {
+    const b = typeof branch === 'string' ? branch : branch?.branch;
+    return b && resolveConflict(ctl, agentTerms, b, opts ?? {});
+  });
+  reg('launchAgentWithPrompt', async (a: { path?: string; branch?: string; prompt: string; agent?: string }) => {
+    if (!a?.prompt) return;
+    let p = a.path;
+    let branch = a.branch;
+    const wts = ctl.repo ? await ctl.repo.worktreesFast() : [];
+    if (!p && branch) p = wts.find(w => w.branch === branch && !w.prunable)?.path;
+    if (p && !branch) branch = wts.find(w => w.path.toLowerCase() === p!.toLowerCase())?.branch;
+    if (!p) {
+      vscode.window.showWarningMessage(`Nenhuma worktree para ${branch ?? 'a tarefa'}.`);
+      return;
+    }
+    await agentTerms.launchWithPrompt(p, branch, a.prompt, a.agent);
+  });
   reg('openFileInWorktree', item => actions.openFileInWorktree(ctl, item));
   reg('mergeBaseInto', item => actions.mergeBaseInto(ctl, item));
   reg('mergeIntoBase', item => actions.mergeIntoBase(ctl, item));
@@ -190,6 +256,19 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('pruneWorktrees', () => actions.pruneWorktrees(ctl));
   reg('generateCiWorkflow', () => generateCiWorkflow(ctl));
   reg('showLog', () => out.show());
+  reg('claude.refreshSessions', () => claude.scan());
+  reg('claude.resume', (item?: SessionItem) => item?.session && claude.resume(item.session));
+  reg('claude.transcript', (item?: SessionItem) => item?.session && claude.transcript(item.session));
+  reg('claude.copySessionId', (item?: SessionItem) => item?.session && actions.copyText(item.session.id));
+  reg('claude.newSession', async item => {
+    const t = await claudeTarget(item);
+    if (t) claude.newSession(t.cwd, t.label);
+  });
+  reg('claude.commands', async item => {
+    const t = await claudeTarget(item);
+    if (t) await claude.commands(t.cwd, t.label);
+  });
+  reg('claude.usage', () => claude.usagePanel());
   reg('publishRequest', async item => {
     const b = await actions.pickBranch(ctl, item, 'Publicar PR/MR de qual branch?');
     if (b) await ctl.requests.publish(b);
@@ -211,11 +290,16 @@ export async function activate(ctx: vscode.ExtensionContext) {
     vscode.workspace.updateWorkspaceFolders(n, 0, { uri: vscode.Uri.file(p), name: `wt: ${item.branch ?? require('path').basename(p)}` });
   });
 
+  const issues = registerIssues(ctx, ctl, guard);
+
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
-  const ready = ctl.init().then(() => sync.reschedule());
+  const ready = ctl.init().then(() => {
+    projects.scanWorkspace();
+    issues.refresh(true);
+  });
 
   // Usado pelos testes de integração (test/).
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude };
 }
 
 export function deactivate() {}
