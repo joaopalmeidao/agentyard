@@ -67,6 +67,10 @@
         {
           "id": "worktreeGraph.pipelines",
           "name": "Pipelines"
+        },
+        {
+          "id": "worktreeGraph.tasks",
+          "name": "Fila de tarefas"
         }
       ]
     },
@@ -88,6 +92,10 @@
       {
         "view": "worktreeGraph.issues",
         "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
+      },
+      {
+        "view": "worktreeGraph.tasks",
+        "contents": "Tarefas em fila para os agentes, por worktree. Quando o agente termina uma, a próxima é enviada sozinha.\n[Adicionar tarefa](command:worktreeGraph.tasks.add)\n[Tentar várias abordagens](command:worktreeGraph.attempts.try)"
       }
     ],
     "commands": [
@@ -582,6 +590,83 @@
         "title": "Iniciar job manual",
         "category": "Worktree Graph",
         "icon": "$(debug-start)"
+      },
+      {
+        "command": "worktreeGraph.tasks.add",
+        "title": "Adicionar tarefa para o agente…",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.tasks.runNow",
+        "title": "Rodar agora",
+        "category": "Worktree Graph",
+        "icon": "$(play)"
+      },
+      {
+        "command": "worktreeGraph.tasks.moveUp",
+        "title": "Subir na fila",
+        "category": "Worktree Graph",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "worktreeGraph.tasks.moveDown",
+        "title": "Descer na fila",
+        "category": "Worktree Graph",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "worktreeGraph.tasks.remove",
+        "title": "Remover tarefa",
+        "category": "Worktree Graph",
+        "icon": "$(close)"
+      },
+      {
+        "command": "worktreeGraph.tasks.markDone",
+        "title": "Marcar como pronta",
+        "category": "Worktree Graph",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "worktreeGraph.tasks.markFailed",
+        "title": "Marcar como falhou",
+        "category": "Worktree Graph",
+        "icon": "$(error)"
+      },
+      {
+        "command": "worktreeGraph.tasks.clearFinished",
+        "title": "Limpar tarefas terminadas",
+        "category": "Worktree Graph",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "worktreeGraph.agents.checkReady",
+        "title": "Verificar se o agente terminou",
+        "category": "Worktree Graph",
+        "icon": "$(check)"
+      },
+      {
+        "command": "worktreeGraph.agents.dismissReady",
+        "title": "Tirar \"pronto para revisar\"",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.attempts.try",
+        "title": "Tentar N abordagens…",
+        "category": "Worktree Graph",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "worktreeGraph.attempts.fromIssue",
+        "title": "Tentar N abordagens para esta issue…",
+        "category": "Worktree Graph",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "worktreeGraph.attempts.compare",
+        "title": "Comparar tentativas…",
+        "category": "Worktree Graph",
+        "icon": "$(split-horizontal)"
       }
     ],
     "menus": {
@@ -750,6 +835,26 @@
           "command": "worktreeGraph.pipelines.scopeWorktrees",
           "when": "view == worktreeGraph.pipelines && worktreeGraph.pipelinesScope == all",
           "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.tasks.add",
+          "when": "view == worktreeGraph.tasks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.attempts.try",
+          "when": "view == worktreeGraph.tasks",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.attempts.compare",
+          "when": "view == worktreeGraph.tasks",
+          "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.tasks.clearFinished",
+          "when": "view == worktreeGraph.tasks",
+          "group": "9_clean"
         }
       ],
       "view/item/context": [
@@ -1107,6 +1212,66 @@
           "command": "worktreeGraph.pipelines.fix",
           "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
           "group": "3_fix@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.runNow",
+          "when": "view == worktreeGraph.tasks && viewItem == task-waiting",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.moveUp",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.tasks.moveDown",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.tasks.remove",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "inline@4"
+        },
+        {
+          "command": "worktreeGraph.tasks.runNow",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "1_run@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.markDone",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "2_status@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.markFailed",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "2_status@2"
+        },
+        {
+          "command": "worktreeGraph.tasks.remove",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "9_remove"
+        },
+        {
+          "command": "worktreeGraph.tasks.add",
+          "when": "view == worktreeGraph.tasks && viewItem == taskQueue",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.add",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@6"
+        },
+        {
+          "command": "worktreeGraph.agents.checkReady",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@7"
+        },
+        {
+          "command": "worktreeGraph.attempts.fromIssue",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "1_work@3"
         }
       ],
       "commandPalette": [
@@ -1244,6 +1409,34 @@
         },
         {
           "command": "worktreeGraph.pipelines.fix",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.runNow",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.moveUp",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.moveDown",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.remove",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.markDone",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.markFailed",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.attempts.fromIssue",
           "when": "false"
         }
       ],
@@ -1580,6 +1773,21 @@
           "editPresentation": "multilineText",
           "default": "",
           "markdownDescription": "Tarefa enviada ao agente em *✦ Corrigir* de um pipeline que falhou. Vazio = texto padrão. Placeholders: `${branch}`, `${pipeline}`, `${url}`, `${jobs}`, `${log}` (últimas ~150 linhas do job que falhou)."
+        },
+        "worktreeGraph.agents.idleMinutes": {
+          "type": "number",
+          "default": 3,
+          "description": "Minutos sem mudança no HEAD nem no índice da worktree para considerar que o agente terminou (quando o fim do comando não pode ser detectado pelo shell integration)."
+        },
+        "worktreeGraph.agents.notifyReady": {
+          "type": "boolean",
+          "default": true,
+          "description": "Avisar quando um agente termina e a worktree fica pronta para revisar."
+        },
+        "worktreeGraph.tasks.autoAdvance": {
+          "type": "boolean",
+          "default": true,
+          "description": "Quando o agente termina uma tarefa da fila, enviar a próxima automaticamente."
         }
       }
     }
@@ -1589,7 +1797,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/agentFlow.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

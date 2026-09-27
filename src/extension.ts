@@ -7,6 +7,7 @@ import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
 import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
+import { registerAgentFlow } from './agentFlow/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { WorktreeDecorations } from './decorations';
@@ -26,6 +27,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const agentTerms = new AgentTerminals(ctl);
   ctl.agentsRunning = () => agentTerms.running();
   ctx.subscriptions.push(agentTerms);
+  const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
 
   /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
   const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
@@ -110,6 +112,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   /** Ações vindas do webview: mesmos nomes dos comandos, argumentos simples. */
   const handler = async (action: string, a: Record<string, string>) => {
+    if (await agentFlow.handle(action, a)) return;
     switch (action) {
       case 'refresh':
         return ctl.refresh();
@@ -318,7 +321,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Usado pelos testes de integração (test/).
   const claudeConfig = registerClaudeConfig(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, agentFlow };
 }
 
 export function deactivate() {}

@@ -49,9 +49,20 @@ export function promptArgument(prompt: string, shell = vscode.env.shell): { arg:
  * Terminais de agente abertos pela extensão, por worktree. Um terminal por (worktree, agente):
  * chamar de novo só traz o terminal para frente. Tarefas (launchWithPrompt) sempre abrem um novo.
  */
+/** Um agente acabou de ser aberto pela extensão (a frente "pronto para revisar" acompanha a partir daqui). */
+export interface AgentLaunch {
+  path: string;
+  branch?: string;
+  terminal: vscode.Terminal;
+  agent: string;
+  prompt?: string;
+}
+
 export class AgentTerminals implements vscode.Disposable {
   private readonly open = new Map<string, vscode.Terminal>();
-  private readonly disposables: vscode.Disposable[] = [];
+  private readonly launched = new vscode.EventEmitter<AgentLaunch>();
+  readonly onDidLaunch = this.launched.event;
+  private readonly disposables: vscode.Disposable[] = [this.launched];
   /** Arquivo do último prompt enviado (usado pelos testes). */
   lastPromptFile?: string;
 
@@ -135,6 +146,7 @@ export class AgentTerminals implements vscode.Disposable {
     this.open.set(key, terminal);
     terminal.show();
     terminal.sendText(command);
+    this.launched.fire({ path: worktreePath, branch, terminal, agent: agent.name });
     this.ctl.log(`Agente ${agent.name} aberto em ${worktreePath}: ${command}`);
     this.ctl.scheduleRefresh(50);
   }
@@ -150,6 +162,7 @@ export class AgentTerminals implements vscode.Disposable {
     this.open.set(`${path.normalize(worktreePath).toLowerCase()}|${agent.name}|${Date.now()}`, terminal);
     terminal.show();
     terminal.sendText(command);
+    this.launched.fire({ path: worktreePath, branch, terminal, agent: agent.name, prompt });
     this.ctl.log(`Agente ${agent.name} com tarefa em ${worktreePath} (prompt em ${p.file})`);
     this.ctl.scheduleRefresh(50);
   }

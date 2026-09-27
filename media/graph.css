@@ -220,3 +220,8 @@ button.agent.mini { font-size: 11px; padding: 0 6px; margin-left: 2px; }
 /* seletor de projeto na barra */
 button.repo { background: transparent; border: 0; padding: 0 2px; font-size: 15px; font-weight: 600; color: var(--fg); }
 button.repo:hover:not(:disabled) { background: var(--btn-bg); }
+
+/* comparar tentativas */
+body.attempts-page { overflow: auto; padding: 0 16px 24px; }
+.cards.attempts { margin-top: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.card.attempt .stats { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); margin-top: 4px; }

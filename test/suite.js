@@ -315,6 +315,52 @@ exports.run = async () => {
     assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').remote.ahead, 0, 'enviado');
   });
 
+  await check('agentes: "pronto para revisar" quando o agente deixa commits e a worktree fica limpa', async () => {
+    const { execSync } = require('child_process');
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const watch = api.agentFlow.watch;
+    await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { branch: 'ai/login-oauth', prompt: 'tarefa de teste' });
+    await until(() => watch.isWatching(wt.path));
+    assert.strictEqual(await watch.checkNow(wt.path), false, 'sem commits novos ainda não está pronto');
+    execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "agente: feito"', { cwd: wt.path });
+    assert.strictEqual(await watch.checkNow(wt.path), true, 'commit novo + limpa = pronto');
+    await ctl.refresh();
+    const v = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.ok(v.review && v.review.commits === 1, JSON.stringify(v.review));
+    await vscode.commands.executeCommand('worktreeGraph.agents.dismissReady', { path: wt.path });
+    await ctl.refresh();
+    assert.ok(!ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').review);
+  });
+
+  await check('fila de tarefas: a próxima vai sozinha quando a atual fica pronta', async () => {
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const q = api.agentFlow.tasks;
+    await q.add(wt.path, wt.branch, 'tarefa 1: criar endpoint');
+    await until(() => fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8') === 'tarefa 1: criar endpoint');
+    await q.add(wt.path, wt.branch, 'tarefa 2: escrever testes');
+    assert.deepStrictEqual(q.queue(wt.path).tasks.map(t => t.status), ['running', 'waiting']);
+    execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "tarefa 1"', { cwd: wt.path });
+    await api.agentFlow.watch.checkNow(wt.path);
+    await until(() => fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8') === 'tarefa 2: escrever testes');
+    await until(() => q.queue(wt.path).tasks.map(t => t.status).join() === 'done,running');
+    await ctl.refresh();
+    assert.deepStrictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').tasks, { waiting: 0, running: 'tarefa 2: escrever testes' });
+    await api.agentFlow.watch.clearReady(wt.path);
+  });
+
+  await check('tentativas: cria worktrees try/* com agente em cada e abre o painel de comparação', async () => {
+    const g = await api.agentFlow.attempts.tryApproaches({ prompt: 'Implementar cache de preços', n: 2, quiet: true });
+    assert.deepStrictEqual(g.attempts.map(a => a.branch), ['try/implementar-cache-de-precos-a', 'try/implementar-cache-de-precos-b']);
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Tentativas: Implementar cache de preços');
+    await ctl.refresh();
+    assert.ok(ctl.state.worktrees.some(w => w.branch === 'try/implementar-cache-de-precos-b'));
+    assert.ok(vscode.window.terminals.some(t => t.name === 'Eco · try/implementar-cache-de-precos-a · tarefa'));
+    assert.strictEqual(api.agentFlow.attempts.groups()[0].attempts[1].variation.length > 0, true, 'B recebe uma variação');
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));
