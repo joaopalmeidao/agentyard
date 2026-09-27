@@ -125,6 +125,23 @@ export async function activate(ctx: vscode.ExtensionContext) {
     await vscode.commands.executeCommand('vscode.diff', gitUri(wt.path, mb, rel), vscode.Uri.file(file), `${rel.split('/').pop()} (${ctl.state.baseRef} ↔ ${wt.name})`);
   };
 
+  /**
+   * Foca uma view da barra lateral. Se o comando <view>.focus não existir (janela ainda com uma
+   * versão anterior da extensão ativa), abre a barra do AgentYard e explica em vez de dar erro.
+   */
+  const focusView = async (id: string, name: string) => {
+    try {
+      await vscode.commands.executeCommand(`${id}.focus`);
+    } catch {
+      await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph').then(undefined, () => undefined);
+      const pick = await vscode.window.showWarningMessage(
+        `A view "${name}" ainda não está disponível nesta janela. Isso acontece quando uma versão anterior do AgentYard continua ativa depois de atualizar.`,
+        'Recarregar janela',
+      );
+      if (pick) await vscode.commands.executeCommand('workbench.action.reloadWindow');
+    }
+  };
+
   /** Ações vindas do webview: mesmos nomes dos comandos, argumentos simples. */
   const handler = async (action: string, a: Record<string, string>) => {
     if (await agentFlow.handle(action, a)) return;
@@ -210,7 +227,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
         if (a.modifier) return void (await vscode.env.openExternal(vscode.Uri.parse(a.url)));
         return void (await vscode.commands.executeCommand('worktreeGraph.pullRequests.reveal', a.ref));
       case 'focusPrs':
-        return void (await vscode.commands.executeCommand('worktreeGraph.pullRequests.focus'));
+        return focusView('worktreeGraph.pullRequests', 'Pull requests');
       case 'setGraphOptions':
         // seletor "Branches:" e "Mostrar branches remotas" do histórico
         if (a.branches !== undefined) await ctx.workspaceState.update('graphBranches', a.branches ? a.branches.split('\n').filter(Boolean) : []);
