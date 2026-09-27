@@ -453,6 +453,20 @@ exports.run = async () => {
     assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').remote.ahead, 0, 'enviado');
   });
 
+  await check('push das selecionadas: base e branches de CI vêm marcadas', async () => {
+    const { defaultPushBranches } = require('../out/push');
+    assert.deepStrictEqual(defaultPushBranches(ctl), [ctl.state.base], 'sem CI: só a base');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    await cfg.update('ciBranches', ['ai/login-*', 'nao-existe'], vscode.ConfigurationTarget.Global);
+    try {
+      assert.deepStrictEqual(defaultPushBranches(ctl), [ctl.state.base, 'ai/login-oauth'], 'base + CI existentes');
+    } finally {
+      await cfg.update('ciBranches', undefined, vscode.ConfigurationTarget.Global);
+    }
+    const cmds = await vscode.commands.getCommands(true);
+    for (const c of ['worktreeGraph.pushSelected', 'worktreeGraph.launchAgentHere']) assert.ok(cmds.includes(c), `${c} registrado (botões da barra de status)`);
+  });
+
   await check('commits: URL no GitHub/GitLab e branch criada num commit', async () => {
     const { commitUrl } = require('../out/commits');
     assert.strictEqual(commitUrl({ kind: 'github', webBase: 'https://github.com', projectPath: 'a/b' }, 'abc'), 'https://github.com/a/b/commit/abc');

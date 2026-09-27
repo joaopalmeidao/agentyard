@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import type { Controller } from './controller';
+import { discoverCiBranches } from './ciBranches';
+import { flowStages } from './flow';
 import { guardForce, guardPush } from './guards';
 import type { RemoteTrack } from './git';
 export { parseTrack } from './git';
@@ -129,14 +131,18 @@ export async function pushMany(ctl: Controller) {
     title: `Enviar branches: ${items.filter(i => i.picked).length} marcadas (publicadas com commits pendentes)`,
     placeHolder: 'Marque as branches para enviar; as não publicadas ganham upstream (push -u)',
   });
-  if (!chosen?.length) return;
+  if (chosen?.length) await pushList(ctl, chosen.map(c => c.name));
+}
+
+/** Envia as branches uma a uma (sem perguntar nada); no fim, resume o que passou e o que foi recusado. */
+async function pushList(ctl: Controller, names: string[]) {
   const ok: string[] = [];
   const failed: string[] = [];
   await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Enviando branches', cancellable: true }, async (progress, token) => {
-    for (const c of chosen) {
+    for (const name of names) {
       if (token.isCancellationRequested) break;
-      progress.report({ message: `${c.name} (${ok.length + failed.length + 1}/${chosen.length})`, increment: 100 / chosen.length });
-      ((await pushBranch(ctl, c.name, { quiet: true })) ? ok : failed).push(c.name);
+      progress.report({ message: `${name} (${ok.length + failed.length + 1}/${names.length})`, increment: 100 / names.length });
+      ((await pushBranch(ctl, name, { quiet: true })) ? ok : failed).push(name);
     }
   });
   ctl.scheduleRefresh(50);
@@ -148,5 +154,113 @@ export async function pushMany(ctl: Controller) {
     if (pick) ctl.out.show();
   } else {
     vscode.window.showInformationMessage(`${ok.length} branch(es) enviada(s).`);
+  }
+}
+
+type Local = { name: string; track: RemoteTrack; wt: boolean; date: number };
+
+/** Branches locais (com e sem worktree), sem repetir. */
+function localBranches(ctl: Controller): Local[] {
+  const s = ctl.state;
+  if (!s) return [];
+  const seen = new Set<string>();
+  return [
+    ...s.worktrees.filter(w => w.branch && !w.prunable).map(w => ({ name: w.branch!, track: w.remote, wt: true, date: w.date })),
+    ...s.branches.map(b => ({ name: b.name, track: b.remote, wt: false, date: b.date })),
+  ].filter(c => c.track && !seen.has(c.name) && seen.add(c.name));
+}
+
+/** Marcadas por padrão: a base e as branches que o CI usa (arquivos de CI, fluxo de ambientes, worktreeGraph.ciBranches). */
+export function defaultPushBranches(ctl: Controller): string[] {
+  const s = ctl.state;
+  if (!s || !ctl.repo) return [];
+  const heads = localBranches(ctl).map(b => b.name);
+  const ci = discoverCiBranches(ctl.repo.root, {
+    base: s.base,
+    flow: flowStages(ctl).map(f => f.branch),
+    extras: ctl.cfg().get<string[]>('ciBranches', []),
+    existing: heads,
+  }).map(b => b.name);
+  return [...new Set([s.base, ...ci])].filter(b => heads.includes(b));
+}
+
+const trackText = (t: RemoteTrack) =>
+  [t.published ? (t.ahead ? `↑${t.ahead} não enviado(s)` : 'em dia') : t.gone ? 'apagada no remoto' : 'não publicada', t.behind ? `↓${t.behind} no remoto` : '']
+    .filter(Boolean)
+    .join(' · ');
+
+/** Push das branches escolhidas: lista todas as locais, com a base e as de CI já marcadas. */
+export async function pushSelected(ctl: Controller) {
+  if (!ctl.state || !ctl.repo) return;
+  const defaults = new Set(defaultPushBranches(ctl));
+  const pending = (t: RemoteTrack) => t.ahead > 0 || !t.published;
+  const all = localBranches(ctl).sort(
+    (a, b) => Number(defaults.has(b.name)) - Number(defaults.has(a.name)) || Number(pending(b.track)) - Number(pending(a.track)) || b.date - a.date,
+  );
+  const item = (c: Local) => ({
+    label: c.name,
+    description: [trackText(c.track), c.wt ? 'worktree' : ''].filter(Boolean).join(' · '),
+    picked: defaults.has(c.name),
+    name: c.name,
+  });
+  const marked = all.filter(c => defaults.has(c.name));
+  const rest = all.filter(c => !defaults.has(c.name));
+  const items: (vscode.QuickPickItem & { name?: string })[] = [
+    ...(marked.length ? [{ label: 'Base e CI', kind: vscode.QuickPickItemKind.Separator }, ...marked.map(item)] : []),
+    ...(rest.length ? [{ label: 'Outras branches', kind: vscode.QuickPickItemKind.Separator }, ...rest.map(item)] : []),
+  ];
+  const chosen = await vscode.window.showQuickPick(items, {
+    canPickMany: true,
+    matchOnDescription: true,
+    title: 'Push das branches selecionadas',
+    placeHolder: 'Marcadas: a base e as branches do CI. As em dia são puladas; as não publicadas ganham upstream (push -u)',
+  });
+  if (!chosen?.length) return;
+  const byName = new Map(all.map(c => [c.name, c]));
+  const send = chosen.map(c => c.name!).filter(n => n && pending(byName.get(n)!.track));
+  const skipped = chosen.length - send.length;
+  if (!send.length) {
+    vscode.window.showInformationMessage(`${skipped === 1 ? 'A branch escolhida já está' : 'As branches escolhidas já estão'} em dia com o remoto.`);
+    return;
+  }
+  if (skipped) ctl.log(`push selecionadas: ${skipped} já em dia, puladas`);
+  await pushList(ctl, send);
+}
+
+/** Botão "☁ Push" na barra de status: abre o push das branches selecionadas e mostra quantas da base/CI têm o que enviar. */
+export class PushStatus implements vscode.Disposable {
+  private readonly item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 48);
+  private readonly subs: vscode.Disposable[];
+
+  constructor(private readonly ctl: Controller) {
+    this.item.name = 'Push das branches';
+    this.item.command = 'worktreeGraph.pushSelected';
+    this.subs = [
+      ctl.onDidChange(() => this.update()),
+      vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph') && this.update()),
+    ];
+    this.update();
+  }
+
+  private update() {
+    const s = this.ctl.state;
+    if (!s || !this.ctl.cfg().get<boolean>('pushStatusBar', true)) return this.item.hide();
+    const defaults = new Set(defaultPushBranches(this.ctl));
+    const branches = localBranches(this.ctl);
+    const waiting = branches.filter(b => defaults.has(b.name) && b.track.published && b.track.ahead > 0);
+    const others = branches.filter(b => !defaults.has(b.name) && b.track.published && b.track.ahead > 0).length;
+    this.item.text = `$(cloud-upload) Push${waiting.length ? ` ${waiting.length}` : ''}`;
+    const tip = new vscode.MarkdownString(undefined, true);
+    tip.appendMarkdown('**Push das branches selecionadas**\n\n');
+    tip.appendMarkdown(`Já vêm marcadas: ${[...defaults].map(b => `\`${b}\``).join(', ') || 'nenhuma'} (base e CI).\n\n`);
+    tip.appendMarkdown(waiting.length ? `Com commits a enviar: ${waiting.map(b => `\`${b.name}\` ↑${b.track.ahead}`).join(', ')}` : 'Base e CI em dia com o remoto.');
+    if (others) tip.appendMarkdown(`\n\n+${others} outra(s) branch(es) com commits a enviar.`);
+    this.item.tooltip = tip;
+    this.item.show();
+  }
+
+  dispose() {
+    this.subs.forEach(d => d.dispose());
+    this.item.dispose();
   }
 }

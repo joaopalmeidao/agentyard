@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
-import { AgentTerminals } from './agents';
+import { agents, AgentTerminals } from './agents';
 import { AgentsTreeProvider, AgentGroupItem, terminalOf } from './agentsView';
 import { registerPullRequests } from './prs/view';
 import * as commits from './commits';
-import { pushBranch, pushMany } from './push';
+import { pushBranch, pushMany, pushSelected, PushStatus } from './push';
 import { resolveConflict, ResolveOptions } from './conflicts';
 import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
@@ -91,6 +91,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     return pick && { cwd: pick.w.path, label: pick.w.name };
   };
 
+  ctx.subscriptions.push(new PushStatus(ctl));
   const sync = new AutoSync(ctl);
   ctl.beforePush = branch => sync.beforePush(branch);
   const tree = new WorktreeTreeProvider(ctl);
@@ -333,6 +334,55 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('newWorktreeWithTaskFrom', item => actions.newWorktreeWithTask(ctl, item));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
+  // botão da barra de status: o primeiro agente configurado, na worktree desta janela
+  const here = () => ctl.state?.worktrees.find(w => w.isCurrent);
+  reg('launchAgentHere', (mode?: 'new') => {
+    const w = here();
+    const dir = w?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return launchAgent(dir ? { path: dir, branch: w?.branch } : undefined, agents(ctl)[0]?.name, mode);
+  });
+  const agentStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 47);
+  agentStatus.name = 'Abrir agente nesta worktree';
+  agentStatus.command = 'worktreeGraph.launchAgentHere';
+  const updateAgentStatus = () => {
+    const a = agents(ctl)[0];
+    if (!a || !ctl.repo || !ctl.cfg().get<boolean>('agentStatusBar', true)) return agentStatus.hide();
+    const w = here();
+    agentStatus.text = `$(sparkle) ${a.name}`;
+    agentStatus.tooltip = `Abrir ${a.name} num terminal ${w ? `na worktree ${w.name}` : 'nesta pasta'}` + (w?.agents?.length ? ` (já há ${w.agents.length} aberto(s))` : '');
+    agentStatus.show();
+  };
+  // onde estamos: pasta da worktree e branch desta janela; clique abre o painel
+  const whereStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 52);
+  whereStatus.name = 'Worktree e branch desta janela';
+  whereStatus.command = 'worktreeGraph.openGraph';
+  const updateWhereStatus = () => {
+    const w = here();
+    if (!w || !ctl.cfg().get<boolean>('worktreeStatusBar', true)) return whereStatus.hide();
+    const folder = require('path').basename(w.path);
+    const branch = w.branch ?? `(${w.head.slice(0, 7)})`;
+    whereStatus.text = `$(repo) ${folder} $(git-branch) ${branch}`;
+    const kind = w.isMain ? 'worktree principal' : 'worktree';
+    whereStatus.tooltip = new vscode.MarkdownString(
+      `**${ctl.state!.repoName}** · ${kind}\n\n` +
+        `Pasta: \`${w.path}\`\n\nBranch: \`${branch}\`${w.isBase ? ' (base)' : ''}` +
+        (w.changes ? `\n\n● ${w.changes} alteração(ões) não commitada(s)` : '') +
+        (w.compareKnown && !w.isBase ? `\n\n↓${w.behind} ↑${w.ahead} em relação a \`${ctl.state!.baseRef}\`` : '') +
+        '\n\nClique para abrir o painel do AgentYard.',
+    );
+    whereStatus.show();
+  };
+  const updateStatusItems = () => {
+    updateAgentStatus();
+    updateWhereStatus();
+  };
+  ctx.subscriptions.push(
+    agentStatus,
+    whereStatus,
+    ctl.onDidChange(updateStatusItems),
+    vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph') && updateStatusItems()),
+  );
+  updateStatusItems();
   reg('launchAgentNew', (item?: AgentGroupItem | { path?: string; branch?: string }, agent?: string) => launchAgent(item, agent, 'new'));
   reg('agents.pick', (item?: { path?: string }) => agentTerms.pickOpen(item?.path));
   reg('agents.show', node => terminalOf(node)?.show());
@@ -401,6 +451,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (b) await pushBranch(ctl, b);
   });
   reg('pushMany', () => pushMany(ctl));
+  reg('pushSelected', () => pushSelected(ctl));
   reg('configureFlow', () => configureFlow(ctl));
   reg('disconnectHosting', () => ctl.requests.disconnect());
   reg('analyzeMerge', (source?: string | { branch?: string }, target?: string) =>

@@ -625,6 +625,18 @@
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "worktreeGraph.launchAgentHere",
+        "title": "Abrir agente na worktree desta janela",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.pushSelected",
+        "title": "Push das branches selecionadas (base e CI já marcadas)…",
+        "category": "AgentYard",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "worktreeGraph.issues.create",
         "title": "Nova issue…",
         "category": "AgentYard",
@@ -3035,6 +3047,21 @@
           },
           "default": [],
           "markdownDescription": "Branches extras para o filtro **CI** do histórico (além das achadas no fluxo de ambientes, na base e nos arquivos de CI: `.github/workflows`, `.gitlab-ci.yml`, `bitbucket-pipelines.yml`, `azure-pipelines.yml`). Aceita padrões com `*`."
+        },
+        "worktreeGraph.pushStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Mostra o botão **☁ Push** na barra de status: faz push das branches escolhidas numa lista em que a base e as branches de CI (as mesmas do filtro **CI**, incluindo `#worktreeGraph.ciBranches#`) já vêm marcadas. O número ao lado é quantas delas têm commits a enviar."
+        },
+        "worktreeGraph.agentStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Mostra na barra de status o botão **✦ agente** (o primeiro de `#worktreeGraph.agents#`), que abre o agente num terminal na worktree desta janela."
+        },
+        "worktreeGraph.worktreeStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Mostra na barra de status em qual worktree (pasta) e branch esta janela está. Clique para abrir o painel."
         },
         "worktreeGraph.mergeQueue.pushBase": {
           "type": "boolean",
