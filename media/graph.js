@@ -11,7 +11,8 @@
   let filter = '';
   /** Layout do painel (fica guardado pelo VS Code entre recargas do webview). */
   // Padrão: abas, abrindo no Histórico. A escolha do usuário fica no VS Code (mensagem 'saveUi').
-  const ui = Object.assign({ layout: 'tabs', split: 46, tab: 'b' }, (vscode.getState() || {}).ui);
+  // histMode: 'gitgraph' (tabela no estilo da extensão Git Graph) ou 'compact' (o modo antigo)
+  const ui = Object.assign({ layout: 'tabs', split: 46, tab: 'b', histMode: 'gitgraph' }, (vscode.getState() || {}).ui);
   const saveUi = () => {
     vscode.setState({ ...(vscode.getState() || {}), ui });
     vscode.postMessage({ type: 'saveUi', ui: { ...ui } });
@@ -41,6 +42,13 @@
         Object.assign(ui, m.ui);
         vscode.setState({ ...(vscode.getState() || {}), ui });
         if (state) render();
+      }
+    } else if (m.type === 'commitDetails') {
+      if (expanded && expanded.sha === m.sha) {
+        expanded.details = m.details;
+        expanded.error = m.error;
+        const box = document.querySelector('.commit-details');
+        if (box) box.innerHTML = detailsHtml(expanded);
       }
     } else if (m.type === 'demo') {
       demo(m);
@@ -94,9 +102,9 @@
   }
 
   const X = col => COL / 2 + col * COL + 2;
-  const Y = row => row * ROW + ROW / 2;
+  const defaultY = row => row * ROW + ROW / 2;
 
-  function edgePath(e) {
+  function edgePath(e, Y = defaultY) {
     let d = `M${X(e.x)},${Y(e.from)}`;
     let row = e.from;
     if (e.lane !== e.x) {
@@ -129,6 +137,14 @@
       Math.floor(Date.now() / 60000),
       filter,
       state.graphFilter,
+      ui.histMode,
+      expanded ? expanded.sha : '',
+      state.graphBranches || [],
+      state.showRemotes,
+      (state.ciBranches || []).map(b => b.name + b.sources.join('+')),
+      state.headSha || '',
+      state.graphFilter === 'ci' && !state.pending ? (state.flow || []).map(f => f.pending + ':' + f.hotfix) : '',
+      state.graphFilter === 'ci' ? Object.entries(state.pipelines || {}).map(([k, p]) => k + p.status) : '',
       state.base,
       state.unmerged,
       state.commits.map(c => c.sha + c.refs.map(r => r.name + (r.current ? '*' : '')).join(',')),
@@ -575,17 +591,50 @@
     return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}${lock ? ' · protegida' : ''}">${lock}${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>${req ? requestChip(req) : ''}`;
   }
 
-  function graphHeader(n) {
+  function graphHeader(n, extra = '') {
     const f = state.graphFilter;
-    return `<h2 class="graph-head">Histórico <span class="count">${n}</span>
+    const sel = state.graphBranches || [];
+    const gg = ui.histMode === 'gitgraph';
+    const controls = `<div class="hist-controls">
+        ${f === 'all' ? `<button class="branch-picker-btn" data-local="branchPicker" title="Escolher quais branches o histórico mostra">Branches: <b>${sel.length ? (sel.length === 1 ? esc(sel[0]) : `${sel.length} escolhidas`) : 'Mostrar todas'}</b> ▾</button>` : ''}
+        ${f === 'all' ? `<label class="check"><input type="checkbox" data-local="showRemotes" ${state.showRemotes ? 'checked' : ''}> Mostrar branches remotas</label>` : ''}
+        <button data-action="refresh" title="Atualizar">↻</button>
+        <input id="filter" type="search" placeholder="Filtrar por mensagem, autor, hash ou branch" />
+      </div>`;
+    return `<div class="graph-head-wrap"><h2 class="graph-head">Histórico <span class="count">${n}</span>
       <span class="seg" title="O que o grafo mostra">
         <button data-action="setGraphFilter" data-value="all" class="${f === 'all' ? 'on' : ''}">Tudo</button>
         <button data-action="setGraphFilter" data-value="unmerged" class="${f === 'unmerged' ? 'on' : ''}" title="Só commits de branches e worktrees que ainda não entraram em ${esc(state.base)}">Não mescladas <b>${state.unmerged.length}</b></button>
+        <button data-action="setGraphFilter" data-value="ci" class="${f === 'ci' ? 'on' : ''}" title="Só as branches que o CI usa: fluxo de ambientes, base, arquivos de CI e worktreeGraph.ciBranches">CI</button>
       </span>
-      <input id="filter" type="search" placeholder="Filtrar por mensagem, autor, hash ou branch" /></h2>`;
+      <span class="seg" title="Como o histórico é desenhado">
+        <button data-local="histMode" data-mode="gitgraph" class="${gg ? 'on' : ''}" title="Tabela com Graph, Description, Date, Author e Commit; clique num commit para ver os detalhes">Estilo Git Graph</button>
+        <button data-local="histMode" data-mode="compact" class="${gg ? '' : 'on'}" title="O modo compacto de antes">Compacto</button>
+      </span></h2>${controls}${f === 'ci' ? ciStrip() : ''}${extra}</div>`;
+  }
+
+  /** Filtro CI: as branches achadas, de onde vieram e o que espera promoção entre os estágios. */
+  function ciStrip() {
+    const list = state.ciBranches || [];
+    if (!list.length)
+      return `<div class="ci-strip muted">Nenhuma branch de CI encontrada. <button class="link" data-action="openCiBranchesSettings">configurar…</button></div>`;
+    const step = (from, to) => (state.flow || []).find(s => s.from.branch === from && s.to.branch === to);
+    const parts = list.map((b, i) => {
+      const next = list[i + 1];
+      const s = next ? step(b.name, next.name) : undefined;
+      const p = pipelineFor(b.name);
+      return `<span class="ci-branch" title="${esc(b.name)} — ${esc(b.sources.join(', '))}">
+          <span class="ref ref-head ${b.name === state.base ? 'ref-base' : ''}">${esc(b.name)}</span>${p ? pipelineChip(p, true) : ''}</span>${
+        s && !state.pending
+          ? `<span class="ci-arrow" title="${s.pending} commit(s) de ${esc(s.from.branch)} esperam promoção para ${esc(s.to.branch)}${s.hotfix ? `; ${s.hotfix} só em ${esc(s.to.branch)}` : ''}">→ ${s.pending ? `<b>↑${s.pending}</b>` : '✓'}${s.hotfix ? ` <span class="warn">↓${s.hotfix}</span>` : ''} →</span>`
+          : next ? '<span class="ci-sep">·</span>' : ''
+      }`;
+    });
+    return `<div class="ci-strip">${parts.join('')} <button class="link" data-action="openCiBranchesSettings" title="Branches extras (worktreeGraph.ciBranches)">configurar…</button></div>`;
   }
 
   function graphSection() {
+    if (ui.histMode === 'gitgraph') return gitGraphSection();
     let commits = state.commits;
     const head = graphHeader(commits.length);
     if (!commits.length)
@@ -610,8 +659,8 @@
       .map(c => {
         const color = COLORS[c.x % COLORS.length];
         const isMerge = c.parents.length > 1;
-        if (c.wip) return `<circle cx="${X(c.x)}" cy="${Y(c.y)}" r="${DOT}" fill="var(--bg)" stroke="var(--warn)" stroke-width="2" stroke-dasharray="2 2"/>`;
-        return `<circle cx="${X(c.x)}" cy="${Y(c.y)}" r="${isMerge ? DOT - 1 : DOT}" fill="${isMerge ? 'var(--bg)' : color}" stroke="${color}" stroke-width="2"/>`;
+        if (c.wip) return `<circle cx="${X(c.x)}" cy="${defaultY(c.y)}" r="${DOT}" fill="var(--bg)" stroke="var(--warn)" stroke-width="2" stroke-dasharray="2 2"/>`;
+        return `<circle cx="${X(c.x)}" cy="${defaultY(c.y)}" r="${isMerge ? DOT - 1 : DOT}" fill="${isMerge ? 'var(--bg)' : color}" stroke="${color}" stroke-width="2"/>`;
       })
       .join('');
     const q = filter.toLowerCase();
@@ -639,6 +688,149 @@
     </section>`;
   }
 
+  // ---------- estilo Git Graph ----------
+  /** Commit com o painel de detalhes aberto: { sha, details?, error? }. */
+  let expanded = null;
+  const GAP = 250;
+
+  /** Commits com as linhas de "alterações não commitadas" inseridas acima do HEAD de cada worktree. */
+  function withWip(commits) {
+    const wip = [];
+    state.worktrees.forEach((w, i) => {
+      if (!w.changes || !w.head) return;
+      const at = commits.findIndex(c => c.sha === w.head);
+      if (at >= 0) wip.push({ at, c: { sha: `wip-${i}`, parents: [w.head], author: '', date: Date.now() / 1000, subject: `Alterações não commitadas em ${w.name}: ${w.changes} arquivo(s)`, refs: [], wip: true, branch: w.branch, path: w.path } });
+    });
+    if (!wip.length) return commits;
+    const out = commits.slice();
+    wip.sort((a, b) => b.at - a.at).forEach(x => out.splice(x.at, 0, x.c));
+    return out;
+  }
+
+  const fullDate = unix =>
+    new Date(unix * 1000).toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  /** Como o Git Graph: "main" e "origin/main" no mesmo commit viram uma etiqueta só. */
+  function groupedBadges(refs) {
+    const heads = refs.filter(r => r.kind === 'head');
+    const used = new Set();
+    const out = [];
+    for (const h of refs) {
+      if (h.kind !== 'head') continue;
+      const remotes = refs.filter(r => r.kind === 'remote' && r.name.replace(/^[^/]+\//, '') === h.name);
+      remotes.forEach(r => used.add(r.name));
+      out.push(badge(h).replace('</span>', remotes.map(r => `<span class="ref-origin" title="${esc(r.name)} aponta para o mesmo commit">${esc(r.name.split('/')[0])}</span>`).join('') + '</span>'));
+    }
+    for (const r of refs) if (r.kind !== 'head' && !used.has(r.name)) out.push(badge(r));
+    return heads.length || out.length ? out.join('') : '';
+  }
+
+  function gitGraphSection() {
+    const commits = withWip(state.commits);
+    if (!commits.length)
+      return `<section class="graph-section gg">${graphHeader(0)}<div class="empty">${state.graphFilter === 'unmerged' ? `Tudo já está mesclado em ${esc(state.base)}.` : 'Sem commits.'}</div></section>`;
+    const openAt = expanded ? commits.findIndex(c => c.sha === expanded.sha) : -1;
+    if (expanded && openAt < 0) expanded = null;
+    const Yg = row => row * ROW + ROW / 2 + (openAt >= 0 && row > openAt ? GAP : 0);
+    const { edges, width } = layout(commits);
+    const W = Math.max(width * COL + 8, 56);
+    const H = commits.length * ROW + (openAt >= 0 ? GAP : 0);
+    const head = graphHeader(
+      state.commits.length,
+      `<div class="gg-head" style="--gw:${W}px"><span class="gg-graph">Graph</span><span class="desc">Description</span><span class="date">Date</span><span class="author">Author</span><span class="sha">Commit</span></div>`,
+    );
+    const paths = edges.map(e => `<path d="${edgePath(e, Yg)}" stroke="${COLORS[(e.merge ? e.lane : e.x) % COLORS.length]}" />`).join('');
+    const dots = commits
+      .map(c => {
+        const color = COLORS[c.x % COLORS.length];
+        if (c.wip) return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${DOT}" fill="var(--bg)" stroke="var(--warn)" stroke-width="2" stroke-dasharray="2 2"/>`;
+        if (c.sha === state.headSha) return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${DOT + 1.5}" fill="var(--bg)" stroke="${color}" stroke-width="3"/>`;
+        const isMerge = c.parents.length > 1;
+        return `<circle cx="${X(c.x)}" cy="${Yg(c.y)}" r="${isMerge ? DOT - 1 : DOT}" fill="${isMerge ? 'var(--bg)' : color}" stroke="${color}" stroke-width="2"/>`;
+      })
+      .join('');
+    const q = filter.toLowerCase();
+    const rows = commits
+      .map((c, i) => {
+        const hide = q && !(c.subject.toLowerCase().includes(q) || c.author.toLowerCase().includes(q) || c.sha.startsWith(q) || c.refs.some(r => r.name.toLowerCase().includes(q)));
+        if (c.wip)
+          return `<div class="row gg-row wip ${hide ? 'dim' : ''}" data-menu="${esc(c.branch || '')}">
+            <span class="gg-graph"></span><span class="desc"><span class="subject">● ${esc(c.subject)}</span>
+            <button class="link" data-action="diffWithBase" data-branch="${esc(c.branch || '')}">revisar</button></span>
+            <span class="date">agora</span><span class="author"></span><span class="sha">*</span></div>`;
+        const isHead = c.sha === state.headSha;
+        const row = `<div class="row gg-row ${hide ? 'dim' : ''} ${c.boundary ? 'boundary' : ''} ${isHead ? 'head-row' : ''} ${i === openAt ? 'open' : ''}" data-sha="${c.sha}" data-parents="${c.parents.join(' ')}" ${c.boundary ? '' : `draggable="true" data-drag-commit="${c.sha}" `}${c.boundary ? `title="Ponto de ${esc(state.base)} de onde branches pendentes saíram"` : ''}>
+          <span class="gg-graph"></span>
+          <span class="desc">${groupedBadges(c.refs)}<span class="subject">${esc(c.subject)}</span></span>
+          <span class="date" title="${ago(c.date)}">${fullDate(c.date)}</span>
+          <span class="author">${esc(c.author)}</span>
+          <span class="sha">${c.sha.slice(0, 8)}</span>
+        </div>`;
+        return i === openAt ? row + `<div class="commit-details" data-sha="${c.sha}" style="height:${GAP}px">${detailsHtml(expanded)}</div>` : row;
+      })
+      .join('');
+    return `<section class="graph-section gg">${head}
+      <div class="gg-table" style="--gw:${W}px">
+        <div class="graph-scroll"><div class="graph" style="height:${H}px">
+          <svg class="lanes" width="${W}" height="${H}" fill="none" stroke-width="2">${paths}${dots}</svg>
+          ${rows}
+        </div></div>
+      </div>
+    </section>`;
+  }
+
+  /** Painel abaixo do commit clicado: hash, pais, autor, committer, mensagem e arquivos com +/−. */
+  function detailsHtml(x) {
+    if (!x) return '';
+    if (x.error) return `<div class="cd-body error">${esc(x.error)}</div>`;
+    const d = x.details;
+    if (!d) return '<div class="cd-body muted">Carregando detalhes do commit…</div>';
+    const parent = d.parents[0] || '';
+    const files = d.files
+      .map(f => `<div class="cd-file" data-action="openCommitFile" data-sha="${esc(d.sha)}" data-parent="${esc(parent)}" data-path="${esc(f.path)}" data-status="${esc(f.status)}" title="Abrir o diff de ${esc(f.path)} contra o pai">
+          <span class="cd-st st-${esc(f.status)}">${esc(f.status)}</span><span class="cd-path">${esc(f.path)}</span>
+          <span class="cd-num">${f.added < 0 ? 'binário' : `<span class="add">+${f.added}</span> <span class="del">−${f.deleted}</span>`}</span></div>`)
+      .join('');
+    return `<div class="cd-body">
+      <div class="cd-meta">
+        <div><b>Commit:</b> <span class="mono">${esc(d.sha)}</span></div>
+        <div><b>Pais:</b> ${d.parents.length ? d.parents.map(p => `<a class="cd-parent mono" data-local="goParent" data-sha="${esc(p)}" title="Ir para o commit">${esc(p.slice(0, 8))}</a>`).join(' ') : '<span class="muted">nenhum</span>'}</div>
+        <div><b>Autor:</b> ${esc(d.author)} &lt;${esc(d.authorEmail)}&gt; · ${fullDate(d.authorDate)}</div>
+        ${d.committer !== d.author || d.committerDate !== d.authorDate ? `<div><b>Committer:</b> ${esc(d.committer)} &lt;${esc(d.committerEmail)}&gt; · ${fullDate(d.committerDate)}</div>` : ''}
+        <pre class="cd-msg">${esc(d.message)}</pre>
+      </div>
+      <div class="cd-files"><div class="cd-files-head">${d.files.length} arquivo(s) alterado(s)${d.parents.length > 1 ? ' (em relação ao 1º pai)' : ''}</div>${files || '<div class="muted">Nenhum arquivo.</div>'}</div>
+      <button class="cd-close" data-local="closeDetails" title="Fechar (Esc)">✕</button>
+    </div>`;
+  }
+
+  function toggleDetails(sha) {
+    expanded = expanded && expanded.sha === sha ? null : { sha };
+    if (expanded) vscode.postMessage({ type: 'commitDetails', sha });
+    graphKey = ''; // força redesenhar o grafo com (ou sem) o vão
+    render();
+    if (expanded) document.querySelector('.commit-details')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  // seletor "Branches:" (fica fora do painel para não fechar a cada redesenho)
+  const picker = document.createElement('div');
+  picker.className = 'menu branch-picker';
+  document.body.appendChild(picker);
+  let pickerSel = new Set();
+  function openPicker(btn) {
+    pickerSel = new Set(state.graphBranches || []);
+    const names = [...(state.refNames?.heads || []), ...(state.showRemotes ? state.refNames?.remotes || [] : [])];
+    picker.innerHTML = `<input id="picker-q" type="search" placeholder="Buscar branch" />
+      <div class="picker-actions"><button data-local="pickAll">Mostrar todas</button><button class="primary" data-local="pickApply">Aplicar</button></div>
+      <div class="picker-list">${names.map(n => `<label class="picker-item" data-name="${esc(n.toLowerCase())}"><input type="checkbox" data-local="pick" data-name="${esc(n)}" ${pickerSel.has(n) ? 'checked' : ''}> ${esc(n)}</label>`).join('')}</div>`;
+    const r = btn.getBoundingClientRect();
+    picker.style.display = 'block';
+    picker.style.left = `${Math.min(r.left, window.innerWidth - 320)}px`;
+    picker.style.top = `${r.bottom + 4}px`;
+    /** @type {HTMLInputElement} */ (document.getElementById('picker-q')).focus();
+  }
+  const closePicker = () => (picker.style.display = 'none');
+
   // ---------- interação ----------
   document.addEventListener('click', e => {
     const t = /** @type {HTMLElement} */ (e.target);
@@ -655,6 +847,54 @@
       saveUi();
       render();
       return;
+    }
+    if (local && local.dataset.local === 'histMode') {
+      ui.histMode = local.dataset.mode === 'compact' ? 'compact' : 'gitgraph';
+      saveUi();
+      render();
+      return;
+    }
+    if (local && local.dataset.local === 'branchPicker') {
+      if (picker.style.display === 'block') closePicker();
+      else openPicker(local);
+      return;
+    }
+    if (local && local.dataset.local === 'pick') return; // checkbox: aplica no botão
+    if (local && local.dataset.local === 'pickAll') {
+      closePicker();
+      send('setGraphOptions', { branches: '' });
+      return;
+    }
+    if (local && local.dataset.local === 'pickApply') {
+      const chosen = [...picker.querySelectorAll('input[data-local="pick"]:checked')].map(i => /** @type {HTMLElement} */ (i).dataset.name);
+      closePicker();
+      send('setGraphOptions', { branches: chosen.join('\n') });
+      return;
+    }
+    if (local && local.dataset.local === 'showRemotes') {
+      send('setGraphOptions', { showRemotes: String(/** @type {HTMLInputElement} */ (local).checked) });
+      return;
+    }
+    if (local && local.dataset.local === 'closeDetails') {
+      if (expanded) toggleDetails(expanded.sha);
+      return;
+    }
+    if (local && local.dataset.local === 'goParent') {
+      const sha = local.dataset.sha;
+      const row = document.querySelector(`.row[data-sha="${sha}"]`);
+      if (row) {
+        toggleDetails(sha);
+        document.querySelector(`.row[data-sha="${sha}"]`)?.scrollIntoView({ block: 'center' });
+      }
+      return;
+    }
+    if (!picker.contains(t) && !t.closest('[data-local="branchPicker"]')) closePicker();
+    if (ui.histMode === 'gitgraph' && !t.closest('[data-action], .ref, button, input, a, .commit-details')) {
+      const row = /** @type {HTMLElement|null} */ (t.closest('.gg-row[data-sha]'));
+      if (row && !row.classList.contains('boundary')) {
+        toggleDetails(row.dataset.sha);
+        return;
+      }
     }
     if (local && local.dataset.local === 'dirty') {
       onlyDirty = !onlyDirty;
@@ -685,6 +925,11 @@
       rowLimit = 60;
       const body = document.getElementById('wt-rows');
       if (body) body.innerHTML = tableRows();
+      return;
+    }
+    if (t.id === 'picker-q') {
+      const q = t.value.toLowerCase();
+      picker.querySelectorAll('.picker-item').forEach(el => ((/** @type {HTMLElement} */ (el)).style.display = !q || (el.getAttribute('data-name') || '').includes(q) ? '' : 'none'));
       return;
     }
     if (t.id !== 'filter') return;
@@ -734,7 +979,7 @@
 
   document.addEventListener('dblclick', e => {
     const row = /** @type {HTMLElement} */ (e.target).closest?.('.row[data-sha]');
-    if (row) send('showCommit', { sha: /** @type {HTMLElement} */ (row).dataset.sha });
+    if (row && ui.histMode !== 'gitgraph') send('showCommit', { sha: /** @type {HTMLElement} */ (row).dataset.sha });
   });
 
   // divisor entre worktrees e histórico
@@ -853,7 +1098,12 @@
       .join(' ');
     return `<div class="menu-item ${cls}" data-action="${action}" ${data}>${esc(label)}</div>`;
   }
-  document.addEventListener('keydown', e => e.key === 'Escape' && hideMenu(null));
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    hideMenu(null);
+    closePicker();
+    if (expanded) toggleDetails(expanded.sha);
+  });
   window.addEventListener('blur', () => hideMenu(null));
 
   function demo(m) {
@@ -862,6 +1112,14 @@
       if (!el) return;
       const r = el.getBoundingClientRect();
       el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 80, clientY: r.top + 12 }));
+    } else if (m.scene === 'expand') {
+      const row = /** @type {HTMLElement|null} */ (document.querySelectorAll('.gg-row[data-sha]')[m.index || 0]);
+      if (row) toggleDetails(row.dataset.sha);
+      if (m.details) {
+        expanded.details = m.details;
+        const box = document.querySelector('.commit-details');
+        if (box) box.innerHTML = detailsHtml(expanded);
+      }
     } else if (m.scene === 'hide') {
       hideMenu(null);
     } else if (m.scene === 'scroll') {

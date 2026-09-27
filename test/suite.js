@@ -594,6 +594,35 @@ exports.run = async () => {
     execSync(`git worktree remove --force "${suja}"`, { cwd: root });
   });
 
+  await check('histórico: filtro CI lista as branches do workflow e detalhes do commit vêm sob demanda', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const root = ctl.repo.root;
+    const dir = path.join(root, '.github', 'workflows');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ci.yml'), 'on:\n  push:\n    branches: [master, "release/*"]\njobs: {}\n');
+    try {
+      await vscode.commands.executeCommand('worktreeGraph.refresh');
+      await ctl.ctx.workspaceState.update('graphFilter', 'ci');
+      await ctl.refresh();
+      const names = ctl.state.ciBranches.map(b => b.name);
+      assert.ok(names.includes('master') && names.includes('release/1.0'), names.join(','));
+      assert.ok(ctl.state.ciBranches.find(b => b.name === 'release/1.0').sources.includes('.github/workflows/ci.yml'));
+      assert.ok(!names.includes('ai/login-oauth'), 'branch de trabalho não entra');
+      assert.ok(ctl.state.commits.length > 0 && !ctl.state.commits.some(c => c.subject === 'feat(auth): login via OAuth'), 'só commits das branches de CI');
+      const { commitDetails } = require('../out/commits');
+      const sha = ctl.state.commits[0].sha;
+      assert.ok(!('files' in ctl.state.commits[0]), 'estado não carrega detalhes');
+      const d = await commitDetails(ctl, sha);
+      assert.strictEqual(d.sha, sha);
+      assert.ok(d.authorEmail && d.message && Array.isArray(d.files));
+    } finally {
+      fs.rmSync(path.join(root, '.github'), { recursive: true, force: true });
+      await ctl.ctx.workspaceState.update('graphFilter', 'all');
+      await ctl.refresh();
+    }
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));
