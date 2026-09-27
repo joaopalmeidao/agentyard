@@ -212,8 +212,8 @@
         <span class="muted">base</span> <span class="ref ref-base">${esc(state.baseRef)}</span></div>
       <div class="tools">
         <button data-action="createWorktree" class="primary">＋ Nova worktree</button>
-        <button data-action="toggleAutoSync" class="${s.enabled ? 'on' : ''}" title="Mescla a base automaticamente nas worktrees limpas">
-          ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : 'ligado') : 'desligado'}</button>
+        <button data-action="toggleAutoSync" class="${s.enabled ? 'on' : ''}" title="${s.trigger === 'push' ? 'Mescla a base na branch antes de cada push (worktreeGraph.autoSync.trigger)' : 'Mescla a base automaticamente nas worktrees limpas'}">
+          ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : s.trigger === 'push' ? 'no push' : 'ligado') : 'desligado'}</button>
         <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">onde: ${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'}</button>
         <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
         ${toPull() ? `<button data-action="pullMany" title="Trazer do remoto as branches com novidades (lista para escolher)">☁↓ Trazer ${toPull()}</button>` : ''}
@@ -402,7 +402,7 @@
     const map = {
       uptodate: ['⟳ em dia', 'ok'],
       merged: ['⟳ base mesclada', 'ok'],
-      behind: ['⟳ atrás (avisar)', 'info'],
+      behind: [state.autoSync.mode !== 'notify' && state.autoSync.trigger === 'push' ? '⟳ atrás (mescla no push)' : '⟳ atrás (avisar)', 'info'],
       'waiting-dirty': ['⟳ esperando commit', 'warn'],
       conflict: ['⟳ conflito', 'bad'],
       testing: ['⟳ testando…', 'info'],

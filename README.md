@@ -69,6 +69,16 @@ clicar de novo só traz o terminal para frente.
 Ligue pelo botão **Sync** do painel, pelo ícone na barra da árvore ou pela barra de status. O
 estado fica guardado por repositório (não em `settings.json`, para não sujar nenhuma worktree).
 
+**Quando mescla** (`autoSync.trigger`):
+
+- `push` *(padrão)* — a base só entra na branch quando você a envia pela extensão (botão de push,
+  *Enviar branches*, publicar PR/MR): antes do `git push`, a base é mesclada na worktree com as
+  regras abaixo e o merge vai junto. A verificação periódica só atualiza o estado
+  (*atrás (mescla no push)*); *Sincronizar agora* continua mesclando na hora. Se não der para
+  mesclar (conflito, worktree suja, testes falharam), o push segue sem o merge e o motivo aparece
+  na branch. `git push` feito fora da extensão não dispara o sync.
+- `interval` — mescla a cada verificação, como descrito abaixo.
+
 A cada `autoSync.intervalSeconds`, para cada worktree cuja branch casa com `autoSync.branches`:
 
 1. em dia com a base → nada;
@@ -146,6 +156,7 @@ O **Gerar CI** detecta o GitLab e gera `.gitlab/worktree-graph-sync.gitlab-ci.ym
 | `worktreeGraph.autoSync.enabledByDefault` | `false` | |
 | `worktreeGraph.autoSync.where` | `local` | `local`, `github`, `split` ou `both` |
 | `worktreeGraph.autoSync.mode` | `merge` | `merge` ou `notify` |
+| `worktreeGraph.autoSync.trigger` | `push` | `push` (mescla a base antes do push) ou `interval` (a cada verificação) |
 | `worktreeGraph.autoSync.branches` | `["**"]` | `*` = um segmento, `**` = qualquer coisa |
 | `worktreeGraph.autoSync.exclude` | `[]` | |
 | `worktreeGraph.autoSync.intervalSeconds` | `60` | |

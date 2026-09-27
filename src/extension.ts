@@ -89,6 +89,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   };
 
   const sync = new AutoSync(ctl);
+  ctl.beforePush = branch => sync.beforePush(branch);
   const tree = new WorktreeTreeProvider(ctl);
   const treeView = vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true, canSelectMany: true });
   ctl.onDidChangeRepo(() => sync.reschedule());

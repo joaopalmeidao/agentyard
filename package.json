@@ -2473,6 +2473,19 @@
           "default": "merge",
           "description": "O que o sync automático faz quando a base anda."
         },
+        "worktreeGraph.autoSync.trigger": {
+          "type": "string",
+          "enum": [
+            "push",
+            "interval"
+          ],
+          "enumDescriptions": [
+            "A base é mesclada na branch só quando ela é enviada (push) pela extensão; a verificação periódica só atualiza o estado.",
+            "A base é mesclada nas worktrees limpas a cada verificação (autoSync.intervalSeconds)."
+          ],
+          "default": "push",
+          "description": "Quando o sync local mescla a base nas branches."
+        },
         "worktreeGraph.autoSync.branches": {
           "type": "array",
           "items": {

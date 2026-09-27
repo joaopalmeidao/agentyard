@@ -1,6 +1,10 @@
 # Changelog
 
 ## Não lançado
+- Sync local da base agora acontece no push, por padrão: antes de enviar uma branch pela extensão, a
+  base é mesclada nela (mesmas regras: worktree limpa, sem conflito previsto, testes). A verificação
+  periódica só mostra quem está atrás. Para voltar ao comportamento anterior (mesclar a cada
+  verificação), use `worktreeGraph.autoSync.trigger: "interval"`.
 - Vários agentes na mesma worktree: com um já aberto, o ✦ pergunta se vai para um dos terminais
   abertos ou abre outro (`worktreeGraph.agentWhenOpen`: perguntar, reaproveitar ou sempre novo).
   Ctrl/Alt+clique no ✦ e "Abrir outro agente na worktree" sempre abrem um terminal novo (`#2`, `#3`…).

@@ -12,7 +12,8 @@ const LOCK_FILE = 'worktree-graph-sync.lock';
 const LOCK_STALE_MS = 5 * 60_000;
 
 /**
- * Vigia a base e a mescla nas worktrees que ficaram para trás.
+ * Vigia a base e a mescla nas worktrees que ficaram para trás. Com `autoSync.trigger = push`
+ * (padrão), a verificação periódica só atualiza o estado; o merge acontece antes do push da branch.
  * Regras de segurança: só mexe em worktree limpa, sem merge/rebase em andamento, e só quando a
  * simulação (git merge-tree) não prevê conflito. Várias janelas do mesmo repositório disputam um
  * lock no common dir para que só uma rode o sync.
@@ -49,13 +50,56 @@ export class AutoSync implements vscode.Disposable {
     const on = this.ctl.autoSyncEnabled();
     const mode = this.ctl.cfg().get<string>('autoSync.mode', 'merge');
     const where = { local: '', github: ' · CI', split: ' · dividido', both: ' · local+CI' }[this.ctl.syncWhere()];
-    this.statusBar.text = on ? `$(sync) Sync ${mode === 'notify' ? '(avisar)' : 'on'}${where}` : `$(sync-ignored) Sync off${where}`;
+    const label = mode === 'notify' ? '(avisar)' : this.onPush() ? 'no push' : 'on';
+    this.statusBar.text = on ? `$(sync) Sync ${label}${where}` : `$(sync-ignored) Sync off${where}`;
     this.statusBar.tooltip = on
       ? this.ctl.syncOwner
         ? 'AgentYard: esta janela está mantendo as worktrees em dia com a base. Clique para desligar.'
         : 'AgentYard: sync ligado (outra janela do mesmo repositório pode estar rodando). Clique para desligar.'
       : 'AgentYard: sync automático desligado. Clique para ligar.';
     this.statusBar.show();
+  }
+
+  /** true = a base só é mesclada quando a branch é enviada (push), não a cada verificação. */
+  private onPush() {
+    return this.ctl.cfg().get<string>('autoSync.trigger', 'push') === 'push';
+  }
+
+  /**
+   * Chamado por pushBranch antes de enviar: com o gatilho "push", mescla a base na worktree da
+   * branch (mesmas regras de segurança do sync). Se não der para mesclar, o push segue e o motivo
+   * fica no estado da branch.
+   */
+  async beforePush(branch: string) {
+    const repo = this.ctl.repo;
+    if (!repo || !this.ctl.autoSyncEnabled() || !this.onPush()) return;
+    const c = this.ctl.cfg();
+    if (c.get<string>('autoSync.mode', 'merge') === 'notify') return;
+    if (!branchMatches(branch, c.get<string[]>('autoSync.branches', ['**'])) || branchMatches(branch, c.get<string[]>('autoSync.exclude', []))) return;
+    if (this.ctl.paused().includes(branch)) return;
+    const where = this.ctl.syncWhere();
+    if (where === 'github' || (where === 'split' && (await repo.upstream(branch)))) return;
+    const wt = (await repo.worktreesFast()).find(w => w.branch === branch && !w.bare && !w.prunable);
+    if (!wt) return;
+    while (this.running) await new Promise(r => setTimeout(r, 200));
+    this.running = true;
+    try {
+      if (c.get('autoSync.fetchRemote', false)) {
+        const f = await repo.run(['fetch', '--prune', '--quiet', 'origin'], repo.root, 120_000);
+        if (f.code !== 0) this.ctl.log(`fetch falhou: ${f.stderr.trim()}`);
+      }
+      const { base, baseRef } = await this.ctl.base();
+      if (branch === base) return;
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Mesclando ${baseRef} em ${branch} antes do push…` }, () =>
+        this.syncOne(repo, wt, baseRef, true),
+      );
+    } catch (e) {
+      this.set(branch, 'error', (e as Error).message);
+      this.ctl.log(`[${branch}] erro no sync antes do push: ${(e as Error).message}`);
+    } finally {
+      this.running = false;
+      this.ctl.scheduleRefresh(50);
+    }
   }
 
   async toggle() {
@@ -172,6 +216,10 @@ export class AutoSync implements vscode.Disposable {
     if (c.get<string>('autoSync.mode', 'merge') === 'notify' && !manual) {
       this.set(branch, 'behind', `${behind} commit(s) atrás de ${baseRef}, sem conflitos previstos.`);
       this.notifyOnce(`${branch}@${baseSha}@behind`, `${branch} está ${behind} commit(s) atrás de ${baseRef}.`, branch, false);
+      return;
+    }
+    if (this.onPush() && !manual) {
+      this.set(branch, 'behind', `${behind} commit(s) atrás de ${baseRef}, sem conflitos previstos. A base será mesclada no próximo push.`);
       return;
     }
 
