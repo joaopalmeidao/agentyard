@@ -142,7 +142,8 @@ table.wts .row-actions button { font-size: 12px; padding: 1px 7px; }
 html, body { height: 100%; }
 body { padding: 0; overflow: hidden; }
 #app { height: 100vh; display: flex; flex-direction: column; }
-#app > .toolbar, #app > .tabs, #app > .error { padding-inline: 16px; flex: none; }
+#top { flex: none; }
+#top > .toolbar, #top > .tabs, #top > .error { padding-inline: 16px; }
 .split { flex: 1; min-height: 0; display: flex; }
 .split.layout-rows { flex-direction: column; }
 .split.layout-rows .pane-a { flex: 0 0 var(--split); }

@@ -105,23 +105,70 @@
   }
 
   // ---------- render ----------
+  // O que já está na tela, para só trocar o pedaço que mudou (o grafo é a parte cara).
+  let skeletonKey = '';
+  let topHtml = '';
+  let paneAHtml = '';
+  let graphKey = '';
+
+  /** Muda quando algo que o grafo mostra muda; o minuto entra para os "há 5 min" não envelhecerem. */
+  function graphKeyOf() {
+    const shown = new Set();
+    for (const c of state.commits) for (const r of c.refs) if (r.kind === 'head') shown.add(r.name);
+    return JSON.stringify([
+      Math.floor(Date.now() / 60000),
+      filter,
+      state.graphFilter,
+      state.base,
+      state.unmerged,
+      state.commits.map(c => c.sha + c.refs.map(r => r.name + (r.current ? '*' : '')).join(',')),
+      state.worktrees.filter(w => w.changes && w.head).map(w => w.head + ':' + w.changes),
+      [...shown].map(n => n + ':' + aheadOf(n)),
+    ]);
+  }
+
   function render() {
     if (!state) {
       app.innerHTML = '<div class="empty">Nenhum repositório git aberto neste workspace.</div>';
+      skeletonKey = '';
       return;
     }
-    const scrolls = [...document.querySelectorAll('.pane')].map(p => p.scrollTop);
     const focused = document.activeElement?.id;
+    const sk = `${ui.layout}|${ui.tab}`;
+    if (sk !== skeletonKey || !document.querySelector('.split')) {
+      app.innerHTML = `<div id="top"></div>
+        <div class="split layout-${ui.layout} ${ui.layout === 'tabs' ? `show-${ui.tab}` : ''}" style="--split:${ui.split}%">
+          <div class="pane pane-a"></div>
+          <div class="splitter" title="Arraste para redimensionar"></div>
+          <div class="pane pane-b"></div>
+        </div>`;
+      skeletonKey = sk;
+      topHtml = paneAHtml = graphKey = '';
+    }
     const tab = ui.layout === 'tabs' ? `<nav class="tabs">
         <button data-local="tab" data-tab="a" class="${ui.tab === 'a' ? 'on' : ''}">Worktrees</button>
         <button data-local="tab" data-tab="b" class="${ui.tab === 'b' ? 'on' : ''}">Histórico</button></nav>` : '';
-    app.innerHTML = `${toolbar()}${tab}
-      <div class="split layout-${ui.layout} ${ui.layout === 'tabs' ? `show-${ui.tab}` : ''}" style="--split:${ui.split}%">
-        <div class="pane pane-a">${flowSection()}${worktreesSection()}${branchesSection()}</div>
-        <div class="splitter" title="Arraste para redimensionar"></div>
-        <div class="pane pane-b">${graphSection()}</div>
-      </div>`;
-    document.querySelectorAll('.pane').forEach((p, i) => (p.scrollTop = scrolls[i] || 0));
+    const top = toolbar() + tab;
+    if (top !== topHtml) {
+      /** @type {HTMLElement} */ (document.getElementById('top')).innerHTML = top;
+      topHtml = top;
+    }
+    const a = flowSection() + worktreesSection() + branchesSection();
+    if (a !== paneAHtml) {
+      const pane = /** @type {HTMLElement} */ (document.querySelector('.pane-a'));
+      const y = pane.scrollTop;
+      pane.innerHTML = a;
+      pane.scrollTop = y;
+      paneAHtml = a;
+    }
+    const gk = graphKeyOf();
+    if (gk !== graphKey) {
+      const pane = /** @type {HTMLElement} */ (document.querySelector('.pane-b'));
+      const y = pane.scrollTop;
+      pane.innerHTML = graphSection();
+      pane.scrollTop = y;
+      graphKey = gk;
+    }
     for (const [id, value] of [['filter', filter], ['wtfilter', wtFilter]]) {
       const f = /** @type {HTMLInputElement|null} */ (document.getElementById(id));
       if (!f) continue;
