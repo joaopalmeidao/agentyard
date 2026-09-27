@@ -10,14 +10,22 @@
   },
   "categories": [
     "SCM Providers",
-    "Visualization"
+    "Visualization",
+    "AI"
   ],
   "keywords": [
     "git",
     "worktree",
+    "git worktree",
     "graph",
     "merge",
-    "ai"
+    "branch",
+    "ai",
+    "agents",
+    "claude code",
+    "codex",
+    "sync",
+    "github actions"
   ],
   "icon": "media/logo.png",
   "main": "./out/extension.js",
@@ -476,5 +484,9 @@
   "homepage": "https://github.com/joaopalmeidao/worktree-graph#readme",
   "bugs": {
     "url": "https://github.com/joaopalmeidao/worktree-graph/issues"
+  },
+  "galleryBanner": {
+    "color": "#1f1f1f",
+    "theme": "dark"
   }
 }
