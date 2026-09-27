@@ -219,6 +219,7 @@
         ${toPull() ? `<button data-action="pullMany" title="Trazer do remoto as branches com novidades (lista para escolher)">☁↓ Trazer ${toPull()}</button>` : ''}
         ${toPush() ? `<button data-action="pushMany" title="Enviar branches com commits não enviados (lista para escolher)">☁↑ Enviar ${toPush()}</button>` : ''}
         <button data-action="activity" title="Commits, sessões e tokens do dia por worktree, e custo por tarefa">Atividade</button>
+        ${state.hosting ? `<button data-action="focusPrs" title="Lista de pull requests / merge requests do remoto">${state.hosting.label}s</button>` : ''}
         <button data-action="timeline" title="Quando cada branch nasceu, virou PR/MR e foi mesclada">Linha do tempo</button>
         <button data-action="generateCi" title="Gera o workflow de sync para o GitHub Actions ou o GitLab CI">Gerar CI</button>
         ${state.hosting && !state.hosting.connected ? `<button data-action="connectHosting" title="Para publicar e acompanhar ${state.hosting.label}s em ${esc(state.hosting.host)}">Conectar ${esc(state.hosting.name || state.hosting.kind)}</button>` : ''}
@@ -360,7 +361,7 @@
 
   function requestChip(r) {
     const [txt, cls, tip] = reviewInfo(r);
-    return `<span class="chip ${cls} link" data-action="openUrl" data-url="${esc(r.url)}" title="${esc(r.ref)} ${esc(r.title)} — ${esc(tip)}. Clique para abrir no navegador.">${esc(r.ref)} ${txt}</span>`;
+    return `<span class="chip ${cls} link" data-action="showPr" data-ref="${esc(r.ref)}" data-url="${esc(r.url)}" title="${esc(r.ref)} ${esc(r.title)} — ${esc(tip)}. Clique: ver na lista de PRs · Ctrl/Alt+clique: navegador.">${esc(r.ref)} ${txt}</span>`;
   }
 
   /** PR/MR aberto da branch (worktree ou branch sem worktree). */
@@ -886,6 +887,7 @@
     }
     if (!el || /** @type {HTMLButtonElement} */ (el).disabled) return;
     const { action, ...args } = el.dataset;
+    if (e.ctrlKey || e.altKey || e.metaKey) args.modifier = '1';
     send(action, args);
   });
 

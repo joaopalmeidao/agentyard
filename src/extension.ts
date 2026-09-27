@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { AgentTerminals } from './agents';
+import { registerPullRequests } from './prs/view';
 import * as commits from './commits';
 import { pushBranch, pushMany } from './push';
 import { resolveConflict, ResolveOptions } from './conflicts';
@@ -204,6 +205,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return commits.openCommitOnWeb(ctl, a.sha);
       case 'explainCommit':
         return commits.explainCommit(ctl, a.sha);
+      case 'showPr':
+        // chip de PR no painel: clique = view de PRs; ctrl/alt/cmd + clique = navegador
+        if (a.modifier) return void (await vscode.env.openExternal(vscode.Uri.parse(a.url)));
+        return void (await vscode.commands.executeCommand('worktreeGraph.pullRequests.reveal', a.ref));
+      case 'focusPrs':
+        return void (await vscode.commands.executeCommand('worktreeGraph.pullRequests.focus'));
       case 'setGraphOptions':
         // seletor "Branches:" e "Mostrar branches remotas" do histórico
         if (a.branches !== undefined) await ctx.workspaceState.update('graphBranches', a.branches ? a.branches.split('\n').filter(Boolean) : []);
@@ -367,6 +374,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const issues = registerIssues(ctx, ctl, guard);
   const pipelines = registerPipelines(ctx, ctl, guard);
   const review = registerReview(ctx, ctl, guard);
+  const prs = registerPullRequests(ctx, ctl, guard);
   const activity = registerActivity(ctx, ctl, guard, {
     claude,
     pipelines: () => pipelines.pipelines,
@@ -391,7 +399,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs };
 }
 
 export function deactivate() {}

@@ -82,6 +82,10 @@
         {
           "id": "worktreeGraph.mergeQueue",
           "name": "Fila de merge"
+        },
+        {
+          "id": "worktreeGraph.pullRequests",
+          "name": "Pull requests"
         }
       ]
     },
@@ -990,6 +994,88 @@
         "title": "Preparar versão (changelog e tag)…",
         "category": "AgentYard",
         "icon": "$(tag)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.refresh",
+        "title": "Atualizar PRs/MRs",
+        "category": "AgentYard",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.filter",
+        "title": "Filtrar PRs/MRs…",
+        "category": "AgentYard",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.clearFilter",
+        "title": "Limpar filtro de PRs/MRs",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.openBrowser",
+        "title": "Abrir no navegador",
+        "category": "AgentYard",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.copyLink",
+        "title": "Copiar link",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.openWorktree",
+        "title": "Abrir worktree do PR",
+        "category": "AgentYard",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.bringWorktree",
+        "title": "Trazer para uma worktree",
+        "category": "AgentYard",
+        "icon": "$(repo-pull)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.reviewFiles",
+        "title": "Revisar arquivos do PR…",
+        "category": "AgentYard",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.reviewWithAgent",
+        "title": "✦ Revisar com o agente",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.analyzeMerge",
+        "title": "Analisar merge",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.merge",
+        "title": "Mesclar PR/MR…",
+        "category": "AgentYard",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.ready",
+        "title": "Marcar pronto para revisão",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.draft",
+        "title": "Converter em rascunho",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.reveal",
+        "title": "Mostrar PR na lista",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.openFileDiff",
+        "title": "Diff do arquivo do PR",
+        "category": "AgentYard"
       }
     ],
     "menus": {
@@ -1273,6 +1359,16 @@
           "command": "worktreeGraph.prepareRelease",
           "when": "view == worktreeGraph.worktrees",
           "group": "5_delivery"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.filter",
+          "when": "view == worktreeGraph.pullRequests",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.refresh",
+          "when": "view == worktreeGraph.pullRequests",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -1845,6 +1941,71 @@
           "command": "worktreeGraph.env.runDev",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "1_open@8"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.openBrowser",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.openWorktree",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-.*-wt/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.bringWorktree",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)-nowt/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.openBrowser",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.openWorktree",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-.*-wt/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.bringWorktree",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)-nowt/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.reviewFiles",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
+          "group": "1_open@3"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.reviewWithAgent",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)/",
+          "group": "2_review@1"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.analyzeMerge",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)/",
+          "group": "2_review@2"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.merge",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-open/",
+          "group": "3_merge@1"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.ready",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-draft/",
+          "group": "3_merge@2"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.draft",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-open/",
+          "group": "3_merge@3"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.copyLink",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
+          "group": "4_copy@1"
         }
       ],
       "commandPalette": [
@@ -2042,6 +2203,18 @@
         },
         {
           "command": "worktreeGraph.mergeQueue.moveDown",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.clearFilter",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.reveal",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.openFileDiff",
           "when": "false"
         }
       ],
@@ -2679,6 +2852,16 @@
           "type": "boolean",
           "default": false,
           "description": "No Relatório do dia, oferecer \"✦ Redigir resumo com o agente\"."
+        },
+        "worktreeGraph.pullRequests.mergeMethod": {
+          "type": "string",
+          "enum": [
+            "merge",
+            "squash",
+            "rebase"
+          ],
+          "default": "merge",
+          "description": "Método ao mesclar um PR/MR pela view Pull requests (o GitLab não faz rebase por aqui: usa merge)."
         }
       }
     }
@@ -2688,7 +2871,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

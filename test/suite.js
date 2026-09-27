@@ -16,10 +16,13 @@ exports.run = async () => {
   const results = [];
   const check = async (name, fn) => {
     try {
+      console.log(`[teste] começando: ${name}`);
       await fn();
       results.push(`ok   ${name}`);
+      console.log(`[teste] ok: ${name}`);
     } catch (e) {
       results.push(`FAIL ${name}: ${e.stack || e}`);
+      console.log(`[teste] FAIL: ${name}`);
     }
   };
 
@@ -592,6 +595,52 @@ exports.run = async () => {
     assert.ok(!names.includes('master'), 'base nunca entra');
     execSync(`git worktree remove --force "${pronta}"`, { cwd: root });
     execSync(`git worktree remove --force "${suja}"`, { cwd: root });
+  });
+
+  await check('pull requests: sem remoto pede conexão; com API falsa agrupa e traz a branch para uma worktree', async () => {
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const prs = api.prs;
+    prs.svc.setBrowser(undefined);
+    prs.svc.resetForProject();
+    await prs.svc.refresh(true);
+    let root = await prs.tree.getChildren();
+    if (!ctl.requests.remote) assert.ok(String(root[0].label).startsWith('Conectar'), String(root[0].label));
+
+    // remoto local com uma branch que ainda não existe aqui
+    const repoRoot = ctl.repo.root;
+    const hasOrigin = execSync('git remote', { cwd: repoRoot, encoding: 'utf8' }).split(/\r?\n/).includes('origin');
+    if (!hasOrigin) {
+      const bare = path.join(repoRoot, '..', 'origin-prs.git');
+      execSync(`git init -q --bare "${bare}"`);
+      execSync(`git remote add origin "${bare}"`, { cwd: repoRoot });
+    }
+    execSync('git push -q origin master:refs/heads/prs/feature', { cwd: repoRoot });
+    const pr = (id, author, source, extra = {}) => ({ id, ref: `#${id}`, url: `https://example.com/pull/${id}`, title: `PR ${id}`, state: 'open', source, target: 'master', author, reviewers: [], createdAt: 0, updatedAt: 0, ...extra });
+    const open = [pr(1, 'eu', 'prs/feature'), pr(2, 'ana', 'ana/x', { reviewers: ['eu'], review: { state: 'changes', approvals: 0, by: ['ana'] } })];
+    prs.svc.setBrowser({
+      kind: 'github', label: 'PR',
+      can: { files: false, comments: false, checks: false, merge: false, draft: false, reviewRequested: true },
+      whoami: async () => 'eu',
+      groups: async () => ({ mine: [open[0]], reviewRequested: [open[1]], open, recentlyMerged: [] }),
+    });
+    await prs.svc.refresh(true);
+    root = await prs.tree.getChildren();
+    const labels = root.map(n => `${n.label}:${n.description}`);
+    assert.deepStrictEqual(labels, ['Meus:1', 'Pedem minha revisão:1', 'Abertos:2', 'Mesclados (7 dias):0']);
+    const mine = await prs.tree.getChildren(root[0]);
+    assert.ok(String(mine[0].label).startsWith('#1'), String(mine[0].label));
+    assert.ok(mine[0].contextValue.includes('nowt'));
+    const rev = await prs.tree.getChildren(root[1]);
+    assert.ok(rev[0].description.includes('mudanças pedidas'), rev[0].description);
+
+    await vscode.commands.executeCommand('worktreeGraph.pullRequests.bringWorktree', '#1');
+    await ctl.refresh();
+    const wt = ctl.state.worktrees.find(w => w.branch === 'prs/feature');
+    assert.ok(wt, 'worktree da branch do PR criada');
+    assert.ok((await prs.tree.getChildren(root[0]))[0].contextValue.includes('-wt'), 'item passa a indicar a worktree');
+    await ctl.repo.removeWorktree(wt.path, true);
+    prs.svc.setBrowser(undefined);
   });
 
   await check('histórico: filtro CI lista as branches do workflow e detalhes do commit vêm sob demanda', async () => {
