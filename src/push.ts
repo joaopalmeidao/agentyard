@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { Controller } from './controller';
+import { guardForce, guardPush } from './guards';
 import type { RemoteTrack } from './git';
 export { parseTrack } from './git';
 
@@ -26,6 +27,8 @@ export async function pushBranch(ctl: Controller, branch: string, opts: { quiet?
       return true;
     }
   }
+  // branch protegida e checagens antes de enviar (src/guards.ts)
+  if (!(await guardPush(ctl, branch))) return false;
   const run = (extra: string[]) =>
     vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `git push ${remote} ${branch}…` }, () =>
       repo.run(['push', ...extra, remote, `refs/heads/${branch}:refs/heads/${branch}`], repo.root, 300_000),
@@ -52,6 +55,7 @@ export async function pushBranch(ctl: Controller, branch: string, opts: { quiet?
   );
   if (!pick) return false;
   if (pick.startsWith('Forçar')) {
+    if (!(await guardForce(ctl, branch))) return false;
     r = await run(['--force-with-lease']);
     if (r.code === 0) return done(ctl, branch, remote, false, false);
     vscode.window.showErrorMessage(`Nem o push forçado passou (o remoto mudou de novo?): ${(r.stderr || r.stdout).trim()}`);

@@ -582,6 +582,16 @@
         "title": "Iniciar job manual",
         "category": "Worktree Graph",
         "icon": "$(debug-start)"
+      },
+      {
+        "command": "worktreeGraph.cleanupReminder",
+        "title": "Verificar worktrees mescladas e paradas",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.showChecksOutput",
+        "title": "Mostrar saída das checagens",
+        "category": "Worktree Graph"
       }
     ],
     "menus": {
@@ -1580,6 +1590,86 @@
           "editPresentation": "multilineText",
           "default": "",
           "markdownDescription": "Tarefa enviada ao agente em *✦ Corrigir* de um pipeline que falhou. Vazio = texto padrão. Placeholders: `${branch}`, `${pipeline}`, `${url}`, `${jobs}`, `${log}` (últimas ~150 linhas do job que falhou)."
+        },
+        "worktreeGraph.checks.mode": {
+          "type": "string",
+          "enum": [
+            "block",
+            "warn",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Falha impede o merge/push (dá para continuar mesmo assim, confirmando).",
+            "Falha só avisa.",
+            "Não roda checagens."
+          ],
+          "default": "block",
+          "description": "O que acontece quando as checagens antes de mesclar ou enviar falham."
+        },
+        "worktreeGraph.checks.beforeMerge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Comandos rodados na worktree da branch de origem antes de mesclá-la (ex.: `[\"npm run lint\", \"npm test\"]`). Não roda quando é a base descendo para uma branch de trabalho."
+        },
+        "worktreeGraph.checks.beforePush": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Comandos rodados na worktree da branch antes do push e antes de abrir PR/MR."
+        },
+        "worktreeGraph.checks.useTestCommand": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Sem comandos configurados, usar `worktreeGraph.autoSync.testCommand` nas checagens."
+        },
+        "worktreeGraph.checks.timeoutSeconds": {
+          "type": "number",
+          "default": 900,
+          "description": "Tempo máximo de cada comando de checagem."
+        },
+        "worktreeGraph.prompts.fixChecks": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "Tarefa enviada ao agente em \"✦ Corrigir\" quando as checagens falham. Placeholders: `${branch}`, `${action}`, `${commands}`, `${failed}`, `${log}`. Vazio = texto padrão."
+        },
+        "worktreeGraph.protectedBranches": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Branches protegidas (aceita `*`/`**`). Vazio = automático: a base, os estágios do fluxo de ambientes, `main` e `master`."
+        },
+        "worktreeGraph.protection.mode": {
+          "type": "string",
+          "enum": [
+            "confirm",
+            "require-pr",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Merge/push direto numa protegida pede para digitar o nome da branch.",
+            "Merge/push direto bloqueado; oferece abrir PR/MR.",
+            "Sem proteção."
+          ],
+          "default": "confirm",
+          "description": "Como tratar merge e push direto em branches protegidas. Push forçado numa protegida só passa com \"off\"."
+        },
+        "worktreeGraph.cleanup.remindThreshold": {
+          "type": "number",
+          "default": 20,
+          "description": "Avisar quando houver pelo menos esta quantidade de worktrees mescladas e paradas (ou órfãs)."
+        },
+        "worktreeGraph.cleanup.staleDays": {
+          "type": "number",
+          "default": 7,
+          "description": "Dias sem commit para uma worktree mesclada contar como parada."
         }
       }
     }
@@ -1589,7 +1679,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

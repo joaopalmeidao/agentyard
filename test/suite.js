@@ -315,6 +315,85 @@ exports.run = async () => {
     assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').remote.ahead, 0, 'enviado');
   });
 
+  await check('proteções: checagem bloqueia e libera merge, cache, branch protegida e lembrete de limpeza', async () => {
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    const guards = api.guards;
+    const originalUi = guards.ui;
+    const seen = [];
+    let answers = [];
+    let typed;
+    guards.ui = {
+      warn: async (m, o, ...items) => (seen.push(m), answers.shift()),
+      input: async () => typed,
+    };
+    const root = ctl.repo.root;
+    const git = (c, cwd = root) => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd }).toString().trim();
+    try {
+      // lista automática: base protegida
+      await ctl.refresh();
+      assert.ok(ctl.state.protectedBranches.includes('master'), 'master protegida por padrão');
+
+      // branches descartáveis: guard/teste (com worktree e um commit) → guard/alvo
+      const wtTeste = path.join(root, '..', 'guard-teste');
+      git('branch guard/alvo master');
+      git(`worktree add -q -b guard/teste "${wtTeste}" master`);
+      git('commit -q --allow-empty -m "trabalho do agente"', wtTeste);
+      const alvoAntes = git('rev-parse guard/alvo');
+
+      await cfg.update('protection.mode', 'off', G);
+      await cfg.update('checks.mode', 'block', G);
+      await cfg.update('checks.beforeMerge', ['node -e "process.exit(3)"'], G);
+      answers = [undefined]; // fecha o aviso de falha sem escolher nada
+      let ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'guard/alvo', { confirm: false, quiet: true });
+      assert.strictEqual(ok, false, 'checagem falhando bloqueia');
+      assert.strictEqual(guards.lastCheck.ok, false);
+      assert.ok(guards.lastCheck.failed.includes('process.exit(3)'));
+      assert.strictEqual(git('rev-parse guard/alvo'), alvoAntes, 'destino intacto');
+
+      await cfg.update('checks.beforeMerge', ['node -e "process.exit(0)"'], G);
+      ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'guard/alvo', { confirm: false, quiet: true });
+      assert.strictEqual(ok, true, 'checagem passando libera');
+      assert.notStrictEqual(git('rev-parse guard/alvo'), alvoAntes, 'merge feito');
+      assert.strictEqual(await guards.runChecks('merge', 'guard/teste'), true);
+      assert.strictEqual(guards.lastCheck.cached, true, 'mesmo commit, worktree limpa: não roda de novo');
+      await cfg.update('checks.beforeMerge', undefined, G);
+
+      // merge direto na master protegida
+      const masterAntes = git('rev-parse master');
+      await cfg.update('protection.mode', 'require-pr', G);
+      answers = [undefined];
+      ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'master', { confirm: false, quiet: true });
+      assert.strictEqual(ok, false, 'require-pr bloqueia');
+      assert.ok(seen.some(m => m.includes('master é protegida')), seen.join(' | '));
+      await cfg.update('protection.mode', 'confirm', G);
+      typed = 'errado';
+      ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'master', { confirm: false, quiet: true });
+      assert.strictEqual(ok, false, 'confirm sem digitar o nome certo bloqueia');
+      assert.strictEqual(git('rev-parse master'), masterAntes, 'master intacta');
+
+      // lembrete: uma worktree mesclada e limpa, limite 1, sem espera de dias
+      git(`worktree add -q -b guard/parada "${path.join(root, '..', 'guard-parada')}" master`);
+      await cfg.update('cleanup.remindThreshold', 1, G);
+      await cfg.update('cleanup.staleDays', 0, G);
+      await ctl.refresh();
+      await until(() => ctl.state.pending === 0, 30000);
+      await ctl.ctx.globalState.update(`cleanupRemind:${ctl.repo.commonDir.toLowerCase()}`, undefined);
+      guards.lastReminder = undefined;
+      guards.maybeRemind();
+      assert.ok(guards.lastReminder && guards.lastReminder.stale >= 1, JSON.stringify(guards.lastReminder));
+      assert.ok(seen.some(m => /worktrees sobrando/.test(m)));
+      const again = guards.lastReminder.at;
+      guards.maybeRemind();
+      assert.strictEqual(guards.lastReminder.at, again, 'no máximo um aviso por dia');
+    } finally {
+      guards.ui = originalUi;
+      for (const k of ['protection.mode', 'checks.mode', 'checks.beforeMerge', 'cleanup.remindThreshold', 'cleanup.staleDays']) await cfg.update(k, undefined, G);
+    }
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));

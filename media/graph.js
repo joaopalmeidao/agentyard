@@ -444,6 +444,7 @@
             ${w.isMain ? '' : starBtn(w)}
             <span class="branch">${esc(w.name)}</span>
             ${w.isBase ? '<span class="tag">base</span>' : ''}
+            ${w.branch && isProtected(w.branch) ? '<span class="tag" title="Branch protegida: merge e push direto pedem confirmação ou PR/MR">🔒 protegida</span>' : ''}
             ${w.isMain ? '<span class="tag">principal</span>' : ''}
             ${w.isCurrent ? '<span class="tag accent">esta janela</span>' : ''}
           </div>
@@ -484,6 +485,8 @@
     return v && v.compareKnown ? v.ahead : 0;
   }
 
+  const isProtected = name => (state.protectedBranches || []).includes(name);
+
   function badge(r) {
     const cls = { head: 'ref-head', remote: 'ref-remote', tag: 'ref-tag', detached: 'ref-detached' }[r.kind];
     const base = r.name === state.base && r.kind === 'head' ? ' ref-base' : '';
@@ -495,7 +498,8 @@
     const ahead = pending ? aheadOf(r.name) : 0;
     const merged = pending === false ? ' ref-merged' : '';
     const title = r.kind === 'head' ? `${r.worktree ? 'branch com worktree' : 'branch local'}${pending ? ` · ${ahead || 'com'} commit(s) fora de ${state.base}` : pending === false ? ` · já mesclada em ${state.base}` : ''}` : r.kind;
-    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}">${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>`;
+    const lock = r.kind === 'head' && isProtected(r.name) ? '🔒 ' : '';
+    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}${lock ? ' · protegida' : ''}">${lock}${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>`;
   }
 
   function graphHeader(n) {

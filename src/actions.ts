@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { Controller } from './controller';
 import { resolveButton, runResolve } from './conflicts';
 import { gitUri } from './diff';
+import { guardMerge } from './guards';
 import { Repo, Worktree } from './git';
 
 type BranchArg = string | { branch?: string } | undefined;
@@ -66,6 +67,9 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
     }
     if (ok !== 'Mesclar') return false;
   }
+
+  // branch protegida e checagens (src/guards.ts)
+  if (!(await guardMerge(ctl, source, target))) return false;
 
   const noFf = target === base && ctl.cfg().get('noFastForwardIntoBase', true);
   const args = ['merge', '--no-edit', ...(noFf ? ['--no-ff'] : []), source];
