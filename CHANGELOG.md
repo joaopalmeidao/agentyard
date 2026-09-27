@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+- View "Pipelines": GitHub Actions e GitLab CI (inclusive self-hosted), com jobs, log, re-executar
+  (inclusive só os falhos), cancelar, disparar numa branch e iniciar job manual.
+- Último pipeline de cada branch no painel (cards, tabela e estágios do fluxo) e na árvore; o clique
+  abre no navegador.
+- "✦ Corrigir com o agente" num pipeline que falhou: abre o agente na worktree com o final do log
+  (template `worktreeGraph.prompts.fixPipeline`); aviso quando um pipeline de worktree falha.
+- Painel mais leve: só o pedaço que mudou é redesenhado; o grafo não é refeito enquanto as
+  worktrees são detalhadas.
+
 ## 0.7.0
 - Push fácil: botão "☁ Push ↑n" nos cards e na tabela quando há commits não enviados, "☁ Publicar"
   (push -u) para branches que ainda não estão no remoto, chip com a situação no remoto (↑ a enviar,
