@@ -203,6 +203,8 @@ exports.run = async () => {
   await check('vários projetos: adicionar, trocar e voltar sem abrir outra janela', async () => {
     const path = require('path');
     const first = ctl.repo.root;
+    // outros testes podem ter criado worktrees na demo (ex.: a da issue); compara com o que havia
+    const before = ctl.state.worktrees.length;
     const second = path.join(first, '..', '..', 'itest2', 'loja-app');
     const main = await api.projects.addPath(second);
     assert.ok(main, 'segundo repositório reconhecido');
@@ -219,7 +221,7 @@ exports.run = async () => {
 
     await vscode.commands.executeCommand('worktreeGraph.switchProject', first);
     await until(() => ctl.state && ctl.state.root.toLowerCase() === path.normalize(first).toLowerCase());
-    assert.strictEqual(ctl.state.worktrees.length, 4);
+    assert.strictEqual(ctl.state.worktrees.length, before);
     await api.projects.remove(second);
     assert.ok(!api.projects.list().some(p => p.path.toLowerCase() === path.normalize(second).toLowerCase()));
   });
