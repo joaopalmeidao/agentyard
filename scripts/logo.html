@@ -1,10 +1,51 @@
-<!DOCTYPE html><html><body style="margin:0;background:transparent">
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-<rect width="128" height="128" rx="24" fill="#1f1f1f"/>
-<g fill="none" stroke-width="7" stroke-linecap="round">
-<path d="M36 26v76" stroke="#4fc1ff"/>
-<path d="M36 44c0 18 56 6 56 24v12" stroke="#c586c0"/>
-<path d="M92 80c0 18-56 8-56 22" stroke="#c586c0"/></g>
-<circle cx="36" cy="26" r="10" fill="#4fc1ff"/><circle cx="36" cy="102" r="10" fill="#4fc1ff"/>
-<circle cx="92" cy="68" r="10" fill="#1f1f1f" stroke="#e5c07b" stroke-width="6"/>
-</svg></body></html>
+<!DOCTYPE html>
+<!-- Logo do Worktree Graph, renderizado por scripts/make-logo.sh (Edge headless).
+     Hash: a (tronco + worktrees + agente) ou b (monograma W); -light para fundo claro. ?s=tamanho em px. -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}svg{display:block}</style></head>
+<body>
+<svg id="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1c2635"/><stop offset="1" stop-color="#0c1016"/></linearGradient>
+    <linearGradient id="bgLight" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9eef5"/></linearGradient>
+  </defs>
+  <g id="content"></g>
+</svg>
+<script>
+  const star = (cx, cy, r) => `M${cx},${cy - r} Q${cx},${cy} ${cx + r},${cy} Q${cx},${cy} ${cx},${cy + r} Q${cx},${cy} ${cx - r},${cy} Q${cx},${cy} ${cx},${cy - r}Z`;
+  const V = {
+    // Tronco (base) com duas worktrees: uma já voltou (merge), a outra termina num agente (✦).
+    a: dark => `
+      <rect width="128" height="128" rx="28" fill="url(#${dark ? 'bg' : 'bgLight'})"/>
+      <g fill="none" stroke-width="9" stroke-linecap="round">
+        <path d="M40 22 V106" stroke="#3aa8f0"/>
+        <path d="M40 36 C40 52 74 44 74 60 V68 C74 84 40 76 40 92" stroke="#b56fc9"/>
+        <path d="M40 50 C40 64 96 56 96 72 V80" stroke="#e0a82e"/>
+      </g>
+      <circle cx="40" cy="22" r="9" fill="#3aa8f0"/>
+      <circle cx="40" cy="106" r="9" fill="#3aa8f0"/>
+      <circle cx="74" cy="64" r="7" fill="#b56fc9"/>
+      <circle cx="40" cy="92" r="8" fill="${dark ? '#131a24' : '#f3f6fa'}" stroke="#b56fc9" stroke-width="5"/>
+      <path d="${star(96, 94, 15)}" fill="#e0a82e"/>`,
+    // Monograma W feito de arestas do grafo, uma cor por lane; merge no meio, agente na ponta.
+    b: dark => `
+      <rect width="128" height="128" rx="28" fill="url(#${dark ? 'bg' : 'bgLight'})"/>
+      <g fill="none" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M24 38 L44 94" stroke="#3aa8f0"/>
+        <path d="M44 94 L64 52" stroke="#b56fc9"/>
+        <path d="M64 52 L84 94" stroke="#e0a82e"/>
+        <path d="M84 94 L101 46" stroke="#4fbf7a"/>
+      </g>
+      <circle cx="24" cy="38" r="9" fill="#3aa8f0"/>
+      <circle cx="44" cy="94" r="9" fill="#b56fc9"/>
+      <circle cx="64" cy="52" r="8.5" fill="${dark ? '#18212e' : '#f3f6fa'}" stroke="#e0a82e" stroke-width="5"/>
+      <circle cx="84" cy="94" r="9" fill="#4fbf7a"/>
+      <path d="${star(104, 32, 16)}" fill="#4fbf7a"/>`,
+  };
+  const [variant, theme] = (location.hash.slice(1) || 'a').split('-');
+  document.getElementById('content').innerHTML = V[variant] ? V[variant](theme !== 'light') : V.a(true);
+  const s = Number(new URLSearchParams(location.search).get('s') || 128);
+  const svg = document.getElementById('logo');
+  svg.setAttribute('width', s);
+  svg.setAttribute('height', s);
+</script>
+</body></html>
