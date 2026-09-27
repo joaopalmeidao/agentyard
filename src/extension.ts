@@ -291,6 +291,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       : actions.removeWorktree(ctl, item),
   );
   reg('cleanupWorktrees', () => actions.cleanupWorktrees(ctl));
+  reg('removeMerged', () => actions.removeMerged(ctl));
   reg('toggleFavorite', item => actions.toggleFavorite(ctl, item));
   reg('deleteBranch', item => actions.deleteBranch(ctl, item));
   reg('togglePauseSync', item => item?.branch && handler('togglePause', { branch: item.branch }));

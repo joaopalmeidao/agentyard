@@ -571,6 +571,28 @@ exports.run = async () => {
     assert.strictEqual(files.find(f => f.path === 'src/novo.ts').status, 'D', 'só existe no lado A');
   });
 
+  await check('remover mescladas: entram só as limpas com a branch inteira na base', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const root = ctl.repo.root;
+    const pronta = path.join(root, '..', 'limpeza-pronta');
+    const suja = path.join(root, '..', 'limpeza-suja');
+    execSync(`git worktree add -q -b limpeza/pronta "${pronta}" master`, { cwd: root });
+    execSync(`git worktree add -q -b limpeza/suja "${suja}" master`, { cwd: root });
+    fs.writeFileSync(path.join(suja, 'rascunho.txt'), 'x');
+    await ctl.refresh();
+    await until(() => ctl.state.pending === 0, 30000);
+    const { removable, dirty } = api.actions.mergedWorktrees(ctl);
+    const names = removable.map(w => w.branch);
+    assert.ok(names.includes('limpeza/pronta'), names.join(','));
+    assert.ok(!names.includes('limpeza/suja') && dirty.some(w => w.branch === 'limpeza/suja'), 'suja fica de fora');
+    assert.ok(!names.includes('ai/login-oauth'), 'branch com commits fora da base não entra');
+    assert.ok(!names.includes('master'), 'base nunca entra');
+    execSync(`git worktree remove --force "${pronta}"`, { cwd: root });
+    execSync(`git worktree remove --force "${suja}"`, { cwd: root });
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));

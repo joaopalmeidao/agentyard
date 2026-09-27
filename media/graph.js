@@ -408,6 +408,7 @@
     return `<section>
       <h2>Todas as worktrees <span class="count">${rest.length}</span>
         ${orphans ? `<button class="link" data-action="pruneWorktrees" title="Pastas que não existem mais (git worktree prune)">${orphans} órfã(s) · remover</button>` : ''}
+        ${mergedCount() ? `<button class="link" data-action="removeMerged" title="Worktrees limpas cuja branch já está inteira em ${esc(state.base)} (favoritas, com agente e protegidas ficam de fora)">remover mescladas (${mergedCount()})</button>` : ''}
         <button class="link" data-action="cleanupWorktrees" title="Remover várias de uma vez; já marca as mescladas e limpas">limpar em lote…</button>
         <button class="link ${onlyDirty ? 'on' : ''}" data-local="dirty" title="Mostrar só worktrees com alterações não commitadas">${onlyDirty ? '✓ ' : ''}com alterações (${state.worktrees.filter(w => w.changes > 0).length})</button>
         <input id="wtfilter" type="search" placeholder="Filtrar por branch, pasta ou commit" /></h2>
@@ -548,6 +549,15 @@
   }
 
   const isProtected = name => (state.protectedBranches || []).includes(name);
+
+  /** Mesma regra de actions.mergedWorktrees (a pasta desta janela é conferida na hora de remover). */
+  function mergedCount() {
+    return state.worktrees.filter(
+      w => !w.isMain && !w.isBase && !w.bare && !w.prunable && w.branch && !isProtected(w.branch) && !w.isCurrent &&
+        w.compareKnown && w.ahead === 0 && !w.favorite && !(w.agents && w.agents.length) &&
+        w.statusKnown && w.changes === 0 && !w.operation,
+    ).length;
+  }
 
   function badge(r) {
     const cls = { head: 'ref-head', remote: 'ref-remote', tag: 'ref-tag', detached: 'ref-detached' }[r.kind];
