@@ -8,6 +8,7 @@ import { GraphPanel } from './graphPanel';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
+import { Projects, ProjectsTreeProvider } from './projects';
 import { AutoSync } from './sync';
 import { WorktreeTreeProvider } from './treeView';
 
@@ -36,11 +37,15 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (wtPath) await agentTerms.launch(wtPath, branch, agent);
   };
 
+  const projects = new Projects(ctl);
+  ctx.subscriptions.push(projects, vscode.window.createTreeView('worktreeGraph.projects', { treeDataProvider: new ProjectsTreeProvider(projects) }));
   const decorations = new WorktreeDecorations(ctl);
   const sync = new AutoSync(ctl);
   const tree = new WorktreeTreeProvider(ctl);
   const treeView = vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true, canSelectMany: true });
+  ctl.onDidChangeRepo(() => sync.reschedule());
   ctl.onDidChange(s => {
+    if (s) treeView.description = s.repoName;
     const n = s?.pending ?? 0;
     treeView.message = n > 0 ? `Detalhando ${n} de ${s!.worktrees.filter(w => !w.prunable && !w.bare).length} worktrees…` : undefined;
     treeView.badge = n > 0 ? { value: n, tooltip: `${n} worktrees sendo detalhadas` } : undefined;
@@ -85,6 +90,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
     switch (action) {
       case 'refresh':
         return ctl.refresh();
+      case 'switchProject':
+        return projects.switch(a.path);
       case 'createWorktree':
         return actions.createWorktree(ctl, { startPoint: a.startPoint, existing: a.existing });
       case 'openWorktree':
@@ -165,6 +172,15 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
   reg('openGraph', () => GraphPanel.show(ctl, handler));
   reg('refresh', () => ctl.refresh());
+  reg('addProject', () => projects.add());
+  reg('removeProject', item => projects.remove(typeof item === 'string' ? item : item?.path));
+  reg('switchProject', (p?: string | { path?: string }) => projects.switch(typeof p === 'string' ? p : p?.path));
+  reg('openProjectGraph', async (p?: string | { path?: string }) => {
+    const target = typeof p === 'string' ? p : p?.path;
+    if (target) await projects.switch(target);
+    await vscode.commands.executeCommand('worktreeGraph.openGraph');
+  });
+  reg('openProjectWindow', (p?: { path?: string }) => p?.path && vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(p.path), { forceNewWindow: true }));
   reg('createWorktree', () => actions.createWorktree(ctl));
   reg('openWorktree', item => actions.openWorktree(ctl, item));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
@@ -212,10 +228,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
   });
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
-  const ready = ctl.init().then(() => sync.reschedule());
+  const ready = ctl.init().then(() => projects.scanWorkspace());
 
   // Usado pelos testes de integração (test/).
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects };
 }
 
 export function deactivate() {}

@@ -7,6 +7,10 @@ const { runTests } = require('@vscode/test-electron');
   const root = path.resolve(__dirname, '..');
   const demo = path.join(root, 'docs', '.tmp', 'itest');
   execSync(`bash scripts/make-demo.sh "${demo}"`, { cwd: root, stdio: 'ignore' });
+  // Segundo projeto, para os testes de vários projetos: uma worktree a mais para distinguir do primeiro.
+  const demo2 = path.join(root, 'docs', '.tmp', 'itest2');
+  execSync(`bash scripts/make-demo.sh "${demo2}"`, { cwd: root, stdio: 'ignore' });
+  execSync(`git -C "${path.join(demo2, 'loja-app')}" worktree add -q "${path.join(demo2, 'worktrees', 'extra')}" -b ai/extra`, { stdio: 'ignore' });
   const tmp = path.join(root, 'docs', '.tmp', 'vscode-profile');
   require('fs').rmSync(tmp, { recursive: true, force: true });
   await runTests({

@@ -227,6 +227,8 @@ export class AutoSync implements vscode.Disposable {
     return path.join(repo.commonDir, LOCK_FILE);
   }
 
+  private lockRepo?: Repo;
+
   private acquireLock(repo: Repo): boolean {
     const file = this.lockPath(repo);
     const me = vscode.env.sessionId;
@@ -241,7 +243,9 @@ export class AutoSync implements vscode.Disposable {
       // sem lock: é nosso
     }
     try {
+      if (this.lockRepo && this.lockRepo !== repo) this.releaseLock();
       fs.writeFileSync(file, me);
+      this.lockRepo = repo;
       this.ctl.syncOwner = true;
       return true;
     } catch {
@@ -250,8 +254,9 @@ export class AutoSync implements vscode.Disposable {
   }
 
   private releaseLock() {
-    const repo = this.ctl.repo;
+    const repo = this.lockRepo ?? this.ctl.repo;
     this.ctl.syncOwner = false;
+    this.lockRepo = undefined;
     if (!repo) return;
     try {
       if (fs.readFileSync(this.lockPath(repo), 'utf8').trim() === vscode.env.sessionId) fs.unlinkSync(this.lockPath(repo));
@@ -259,6 +264,7 @@ export class AutoSync implements vscode.Disposable {
       // nada a liberar
     }
   }
+
 
   dispose() {
     if (this.timer) clearInterval(this.timer);

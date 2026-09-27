@@ -31,7 +31,10 @@ export class GraphPanel implements vscode.Disposable {
     panel.webview.html = this.html();
     this.disposables.push(
       panel.onDidDispose(() => this.dispose()),
-      ctl.onDidChange(() => this.post()),
+      ctl.onDidChange(s => {
+        this.post();
+        if (s) panel.title = `Worktree Graph · ${s.repoName}`;
+      }),
       panel.onDidChangeViewState(e => e.webviewPanel.visible && ctl.scheduleRefresh(50)),
       panel.webview.onDidReceiveMessage(async msg => {
         if (msg.type === 'ready') {

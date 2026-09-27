@@ -45,6 +45,10 @@
     "views": {
       "worktreeGraph": [
         {
+          "id": "worktreeGraph.projects",
+          "name": "Projetos"
+        },
+        {
           "id": "worktreeGraph.worktrees",
           "name": "Worktrees"
         }
@@ -60,6 +64,10 @@
         "view": "worktreeGraph.worktrees",
         "contents": "Nenhum repositório git encontrado neste workspace.\n[Abrir pasta](command:vscode.openFolder)",
         "when": "worktreeGraph.state == noRepo"
+      },
+      {
+        "view": "worktreeGraph.projects",
+        "contents": "Gerencie vários repositórios nesta janela.\n[Adicionar projeto](command:worktreeGraph.addProject)"
       }
     ],
     "commands": [
@@ -243,6 +251,36 @@
         "command": "worktreeGraph.compareWithBase",
         "title": "Comparar com a base",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.addProject",
+        "title": "Adicionar projeto…",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.removeProject",
+        "title": "Remover projeto da lista",
+        "category": "Worktree Graph",
+        "icon": "$(close)"
+      },
+      {
+        "command": "worktreeGraph.switchProject",
+        "title": "Trocar projeto…",
+        "category": "Worktree Graph",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "worktreeGraph.openProjectGraph",
+        "title": "Abrir grafo do projeto",
+        "category": "Worktree Graph",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "worktreeGraph.openProjectWindow",
+        "title": "Abrir projeto numa nova janela",
+        "category": "Worktree Graph",
+        "icon": "$(empty-window)"
       }
     ],
     "menus": {
@@ -311,6 +349,16 @@
           "command": "worktreeGraph.configureFlow",
           "when": "view == worktreeGraph.worktrees",
           "group": "4_hosting"
+        },
+        {
+          "command": "worktreeGraph.addProject",
+          "when": "view == worktreeGraph.projects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.switchProject",
+          "when": "view == worktreeGraph.projects",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -428,6 +476,36 @@
           "command": "worktreeGraph.copyPath",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^wt(File|Folder)$/",
           "group": "2_path@2"
+        },
+        {
+          "command": "worktreeGraph.openProjectGraph",
+          "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.openProjectWindow",
+          "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.removeProject",
+          "when": "view == worktreeGraph.projects && viewItem == project",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.openProjectGraph",
+          "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "worktreeGraph.openProjectWindow",
+          "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "worktreeGraph.removeProject",
+          "when": "view == worktreeGraph.projects && viewItem == project",
+          "group": "9_remove"
         }
       ],
       "commandPalette": [
@@ -453,6 +531,14 @@
         },
         {
           "command": "worktreeGraph.addToExplorer",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.openProjectWindow",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.removeProject",
           "when": "false"
         }
       ]
