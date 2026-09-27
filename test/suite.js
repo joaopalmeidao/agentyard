@@ -136,6 +136,24 @@ exports.run = async () => {
     assert.strictEqual(ctl.state.base, 'master');
   });
 
+  await check('sessões do Claude: mapeadas para a worktree, chip no estado, view e transcrição', async () => {
+    await until(() => api.claude.loaded, 20000);
+    await ctl.refresh();
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.deepStrictEqual({ s: wt.claude.sessions, t: wt.claude.tokens }, { s: 1, t: 3500 });
+    const m = api.claude.byWorktree();
+    assert.strictEqual(m.get(wt.path)[0].firstPrompt, 'Implemente o login OAuth');
+    await vscode.commands.executeCommand('worktreeGraph.claudeSessions.focus');
+    const { ClaudeSessionsProvider, SessionItem } = require('../out/claude/view');
+    const prov = new ClaudeSessionsProvider(api.claude, ctl);
+    const groups = prov.getChildren();
+    assert.strictEqual(groups[0].label, 'ai/login-oauth');
+    const item = prov.getChildren(groups[0])[0];
+    await vscode.commands.executeCommand('worktreeGraph.claude.transcript', item);
+    const doc = await until(() => vscode.workspace.textDocuments.find(d => d.uri.scheme === 'wtgraph-claude'));
+    assert.ok(doc.getText().includes('Feito: cliente OAuth criado.'));
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);

@@ -9,6 +9,7 @@ import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
 import { AutoSync } from './sync';
+import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
 
 export async function activate(ctx: vscode.ExtensionContext) {
@@ -37,6 +38,23 @@ export async function activate(ctx: vscode.ExtensionContext) {
   };
 
   const decorations = new WorktreeDecorations(ctl);
+  const claude = new ClaudeService(ctl);
+  const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
+  ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
+  /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */
+  const claudeTarget = async (arg?: { path?: string; wtPath?: string; branch?: string }): Promise<{ cwd: string; label: string } | undefined> => {
+    const p = arg?.wtPath ?? arg?.path;
+    const wts = ctl.state?.worktrees.filter(w => !w.prunable && !w.bare) ?? [];
+    const found = p ? wts.find(w => w.path.toLowerCase() === p.toLowerCase()) : arg?.branch ? wts.find(w => w.branch === arg.branch) : undefined;
+    if (found) return { cwd: found.path, label: found.name };
+    if (p) return { cwd: p, label: require('path').basename(p) };
+    const pick = await vscode.window.showQuickPick(
+      wts.map(w => ({ label: w.name, description: w.claude ? `${w.claude.sessions} sessão(ões)` : '', detail: w.path, w })),
+      { placeHolder: 'Em qual worktree?' },
+    );
+    return pick && { cwd: pick.w.path, label: pick.w.name };
+  };
+
   const sync = new AutoSync(ctl);
   const tree = new WorktreeTreeProvider(ctl);
   const treeView = vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true, canSelectMany: true });
@@ -145,6 +163,16 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return ctl.requests.connect();
       case 'analyzeMerge':
         return analyzeMerge(a.source ?? a.branch, a.target);
+      case 'claudeResumeLast': {
+        const s = claude.sessions.find(x => x.id === a.id);
+        if (s) claude.resume(s);
+        return;
+      }
+      case 'claudeCommands': {
+        const t = await claudeTarget({ path: a.path });
+        if (t) await claude.commands(t.cwd, t.label);
+        return;
+      }
       case 'copy':
         return actions.copyText(a.text);
       case 'showLog':
@@ -190,6 +218,19 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('pruneWorktrees', () => actions.pruneWorktrees(ctl));
   reg('generateCiWorkflow', () => generateCiWorkflow(ctl));
   reg('showLog', () => out.show());
+  reg('claude.refreshSessions', () => claude.scan());
+  reg('claude.resume', (item?: SessionItem) => item?.session && claude.resume(item.session));
+  reg('claude.transcript', (item?: SessionItem) => item?.session && claude.transcript(item.session));
+  reg('claude.copySessionId', (item?: SessionItem) => item?.session && actions.copyText(item.session.id));
+  reg('claude.newSession', async item => {
+    const t = await claudeTarget(item);
+    if (t) claude.newSession(t.cwd, t.label);
+  });
+  reg('claude.commands', async item => {
+    const t = await claudeTarget(item);
+    if (t) await claude.commands(t.cwd, t.label);
+  });
+  reg('claude.usage', () => claude.usagePanel());
   reg('publishRequest', async item => {
     const b = await actions.pickBranch(ctl, item, 'Publicar PR/MR de qual branch?');
     if (b) await ctl.requests.publish(b);
@@ -215,7 +256,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const ready = ctl.init().then(() => sync.reschedule());
 
   // Usado pelos testes de integração (test/).
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, claude };
 }
 
 export function deactivate() {}

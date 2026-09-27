@@ -48,6 +48,8 @@ export interface WorktreeView extends Worktree {
   /** Agentes com terminal aberto nesta worktree. */
   agents: string[];
   favorite: boolean;
+  /** Sessões do Claude Code cujo cwd está nesta worktree (preenchido em segundo plano). */
+  claude?: { sessions: number; tokens: number; last: number; lastId: string };
   /** PR/MR aberto desta branch. */
   request?: ChangeRequest;
 }

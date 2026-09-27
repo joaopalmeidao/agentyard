@@ -47,6 +47,10 @@
         {
           "id": "worktreeGraph.worktrees",
           "name": "Worktrees"
+        },
+        {
+          "id": "worktreeGraph.claudeSessions",
+          "name": "Sessões Claude"
         }
       ]
     },
@@ -243,6 +247,47 @@
         "command": "worktreeGraph.compareWithBase",
         "title": "Comparar com a base",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.claude.refreshSessions",
+        "title": "Reler sessões do Claude Code",
+        "category": "Worktree Graph",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.claude.resume",
+        "title": "Retomar sessão",
+        "category": "Worktree Graph",
+        "icon": "$(debug-continue)"
+      },
+      {
+        "command": "worktreeGraph.claude.transcript",
+        "title": "Ver transcrição",
+        "category": "Worktree Graph",
+        "icon": "$(book)"
+      },
+      {
+        "command": "worktreeGraph.claude.copySessionId",
+        "title": "Copiar id da sessão",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.claude.newSession",
+        "title": "Nova sessão do Claude aqui",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.claude.commands",
+        "title": "Comandos do Claude Code…",
+        "category": "Worktree Graph",
+        "icon": "$(terminal-cmd)"
+      },
+      {
+        "command": "worktreeGraph.claude.usage",
+        "title": "Uso do Claude Code (janela de 5 h e semana)",
+        "category": "Worktree Graph",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -311,6 +356,21 @@
           "command": "worktreeGraph.configureFlow",
           "when": "view == worktreeGraph.worktrees",
           "group": "4_hosting"
+        },
+        {
+          "command": "worktreeGraph.claude.usage",
+          "when": "view == worktreeGraph.claudeSessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.claude.commands",
+          "when": "view == worktreeGraph.claudeSessions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.claude.refreshSessions",
+          "when": "view == worktreeGraph.claudeSessions",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -428,6 +488,46 @@
           "command": "worktreeGraph.copyPath",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^wt(File|Folder)$/",
           "group": "2_path@2"
+        },
+        {
+          "command": "worktreeGraph.claude.resume",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.claude.transcript",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.claude.resume",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "1@1"
+        },
+        {
+          "command": "worktreeGraph.claude.transcript",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "1@2"
+        },
+        {
+          "command": "worktreeGraph.claude.copySessionId",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "2@1"
+        },
+        {
+          "command": "worktreeGraph.claude.newSession",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.claude.commands",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.claude.commands",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@6"
         }
       ],
       "commandPalette": [
@@ -453,6 +553,18 @@
         },
         {
           "command": "worktreeGraph.addToExplorer",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claude.resume",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claude.transcript",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claude.copySessionId",
           "when": "false"
         }
       ]
@@ -694,6 +806,49 @@
           "type": "string",
           "default": "",
           "markdownDescription": "URL da API do GitHub Enterprise, se não for `<host>/api/v3`."
+        },
+        "worktreeGraph.claude.configDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Pasta de dados do Claude Code. Vazio = `CLAUDE_CONFIG_DIR` ou `~/.claude`."
+        },
+        "worktreeGraph.claude.showUsageInStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostrar o uso estimado (janela de 5 h e semana) na barra de status."
+        },
+        "worktreeGraph.claude.sessionBudgetTokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Orçamento de tokens da janela de 5 h, para mostrar a porcentagem usada (0 = não mostrar). Os limites oficiais não ficam no disco; calibre pelo /usage do Claude Code."
+        },
+        "worktreeGraph.claude.weeklyBudgetTokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Orçamento semanal de tokens, para mostrar a porcentagem usada (0 = não mostrar)."
+        },
+        "worktreeGraph.claude.weekStart": {
+          "type": "string",
+          "enum": [
+            "rolling",
+            "monday"
+          ],
+          "enumDescriptions": [
+            "Últimos 7 dias corridos.",
+            "Desde segunda-feira 00:00."
+          ],
+          "default": "rolling",
+          "description": "Como contar a semana no uso estimado."
+        },
+        "worktreeGraph.claude.blockHours": {
+          "type": "number",
+          "default": 5,
+          "description": "Duração da janela de uso (horas)."
+        },
+        "worktreeGraph.claude.maxSessionsPerGroup": {
+          "type": "number",
+          "default": 50,
+          "description": "Quantas sessões mostrar por worktree na view Sessões Claude."
         }
       }
     }
