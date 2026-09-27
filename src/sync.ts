@@ -107,7 +107,7 @@ export class AutoSync implements vscode.Disposable {
       const exclude = c.get<string[]>('autoSync.exclude', []);
       const paused = new Set(this.ctl.paused());
       const where = this.ctl.syncWhere();
-      for (const wt of await repo.worktrees()) {
+      for (const wt of await repo.worktreesFast()) {
         if (!wt.branch || wt.bare || wt.prunable || wt.branch === base) continue;
         if (!branchMatches(wt.branch, include) || branchMatches(wt.branch, exclude)) continue;
         if (where === 'github' || (where === 'split' && (await repo.upstream(wt.branch)))) {
@@ -118,6 +118,12 @@ export class AutoSync implements vscode.Disposable {
               ? 'Sync configurado para rodar só no GitHub Actions.'
               : 'Branch publicada: quem sincroniza é o GitHub Actions (modo dividido).',
           );
+          continue;
+        }
+        // Com centenas de worktrees, só vale conferir de novo quem o estado não sabe se está em dia.
+        const known = this.ctl.state?.worktrees.find(v => v.path.toLowerCase() === wt.path.toLowerCase());
+        if (known?.compareKnown && known.behind === 0 && this.ctl.state?.baseRef === baseRef) {
+          this.set(wt.branch, 'uptodate', `Em dia com ${baseRef}.`);
           continue;
         }
         if (paused.has(wt.branch)) {

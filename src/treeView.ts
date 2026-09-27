@@ -5,7 +5,7 @@ import { Controller } from './controller';
 import { gitUri } from './diff';
 import { BranchView, WorktreeView } from './model';
 
-type Node = WorktreeItem | ChangesItem | ChangeItem | DirItem | FileItem | BranchesGroup | BranchItem | TreeEntryItem;
+type Node = OrphansGroup | WorktreeItem | ChangesItem | ChangeItem | DirItem | FileItem | BranchesGroup | BranchItem | TreeEntryItem;
 
 const HIDDEN = new Set(['.git']);
 const STATUS_LABEL: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', '?': 'novo, não rastreado', T: 'tipo alterado' };
@@ -20,9 +20,11 @@ export class WorktreeItem extends vscode.TreeItem {
     this.id = `wt:${wt.path}`;
     this.branch = wt.branch;
     this.path = wt.path;
-    this.contextValue = wt.isMain || wt.isBase ? 'worktree-main' : 'worktree';
+    this.contextValue = (wt.isMain || wt.isBase ? 'worktree-main' : 'worktree') + (wt.favorite ? '-fav' : '');
 
     const parts: string[] = [];
+    if (wt.favorite) parts.push('★');
+    if (!wt.statusKnown || !wt.compareKnown) parts.push('…');
     if (!wt.isBase && wt.behind) parts.push(`↓${wt.behind}`);
     if (!wt.isBase && wt.ahead) parts.push(`↑${wt.ahead}`);
     if (wt.changes) parts.push(`●${wt.changes}`);
@@ -104,6 +106,18 @@ class FileItem extends vscode.TreeItem {
   }
 }
 
+class OrphansGroup extends vscode.TreeItem {
+  readonly kind = 'orphans';
+  constructor(count: number) {
+    super(`Worktrees órfãs (pasta apagada)`, vscode.TreeItemCollapsibleState.None);
+    this.id = 'orphans';
+    this.description = String(count);
+    this.iconPath = new vscode.ThemeIcon('trash');
+    this.tooltip = 'Registros de worktrees cuja pasta não existe mais. Clique para removê-los (git worktree prune).';
+    this.command = { command: 'worktreeGraph.pruneWorktrees', title: 'Remover órfãs' };
+  }
+}
+
 class BranchesGroup extends vscode.TreeItem {
   readonly kind = 'branches';
   constructor(count: number) {
@@ -166,7 +180,9 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
     if (!s || !repo) return [];
     try {
       if (!el) {
-        const items: Node[] = s.worktrees.map(w => new WorktreeItem(w, s.base, s.baseRef));
+        const items: Node[] = s.worktrees.filter(w => !w.prunable).map(w => new WorktreeItem(w, s.base, s.baseRef));
+        const orphans = s.worktrees.filter(w => w.prunable);
+        if (orphans.length) items.push(new OrphansGroup(orphans.length));
         const branches = s.branches.filter(b => !b.isBase);
         if (branches.length) items.push(new BranchesGroup(branches.length));
         return items;

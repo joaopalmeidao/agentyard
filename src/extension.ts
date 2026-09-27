@@ -12,7 +12,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const out = vscode.window.createOutputChannel('Worktree Graph');
   const ctl = new Controller(ctx, out);
   ctx.subscriptions.push(out, ctl);
-  await ctl.init();
 
   const agentTerms = new AgentTerminals(ctl);
   ctl.agentsRunning = () => agentTerms.running();
@@ -36,7 +35,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const sync = new AutoSync(ctl);
   const tree = new WorktreeTreeProvider(ctl);
-  const treeView = vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true });
+  const treeView = vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true, canSelectMany: true });
+  ctl.onDidChange(s => {
+    const n = s?.pending ?? 0;
+    treeView.message = n > 0 ? `Detalhando ${n} de ${s!.worktrees.filter(w => !w.prunable && !w.bare).length} worktrees…` : undefined;
+    treeView.badge = n > 0 ? { value: n, tooltip: `${n} worktrees sendo detalhadas` } : undefined;
+  });
   ctx.subscriptions.push(sync);
   ctx.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph.autoSync') && sync.reschedule()),
@@ -82,6 +86,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return sync.toggle();
       case 'chooseSyncWhere':
         return sync.chooseWhere();
+      case 'cleanupWorktrees':
+        return actions.cleanupWorktrees(ctl);
+      case 'toggleFavorite':
+        return actions.toggleFavorite(ctl, a.path ? { path: a.path } : a.branch);
+      case 'pruneWorktrees':
+        return actions.pruneWorktrees(ctl);
       case 'syncNow':
         return sync.tick(true);
       case 'generateCi':
@@ -115,17 +125,28 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('mergeIntoBase', item => actions.mergeIntoBase(ctl, item));
   reg('mergeInto', item => actions.mergeInto(ctl, item));
   reg('diffWithBase', item => actions.diffWithBase(ctl, item));
-  reg('removeWorktree', item => actions.removeWorktree(ctl, item));
+  // Com seleção múltipla na árvore, o segundo argumento traz todos os itens selecionados.
+  reg('removeWorktree', (item, items?: { path?: string; kind?: string }[]) =>
+    items && items.length > 1
+      ? actions.cleanupWorktrees(ctl, items.filter(i => i.kind === 'worktree').map(i => i.path!))
+      : actions.removeWorktree(ctl, item),
+  );
+  reg('cleanupWorktrees', () => actions.cleanupWorktrees(ctl));
+  reg('toggleFavorite', item => actions.toggleFavorite(ctl, item));
   reg('deleteBranch', item => actions.deleteBranch(ctl, item));
   reg('togglePauseSync', item => item?.branch && handler('togglePause', { branch: item.branch }));
   reg('toggleAutoSync', () => sync.toggle());
   reg('syncNow', () => sync.tick(true));
   reg('chooseSyncWhere', () => sync.chooseWhere());
+  reg('pruneWorktrees', () => actions.pruneWorktrees(ctl));
   reg('generateCiWorkflow', () => generateCiWorkflow(ctl));
   reg('showLog', () => out.show());
 
+  // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
+  const ready = ctl.init().then(() => sync.reschedule());
+
   // Usado pelos testes de integração (test/).
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready };
 }
 
 export function deactivate() {}

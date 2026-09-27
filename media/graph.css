@@ -113,3 +113,27 @@ body.dragging [data-drop] { outline: 1px dashed var(--muted); outline-offset: 1p
 .menu-item:hover { background: var(--vscode-menu-selectionBackground, #04395e); color: var(--vscode-menu-selectionForeground, #fff); }
 .menu-item.danger { color: var(--bad); }
 .menu hr { border: 0; border-top: 1px solid var(--vscode-menu-separatorBackground, #454545); margin: 4px 0; }
+
+/* favoritas, tabela compacta e progresso */
+button.star { background: transparent; border: 0; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--muted); }
+button.star:hover:not(:disabled) { background: transparent; color: #e5c07b; }
+button.star.on { color: #e5c07b; }
+button.link { background: transparent; border: 0; color: var(--info); padding: 0 4px; font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+button.link:hover:not(:disabled) { background: transparent; text-decoration: underline; }
+h2 input#wtfilter { margin-left: auto; width: 300px; max-width: 45%; background: var(--vscode-input-background, #3c3c3c); color: var(--vscode-input-foreground, #ccc); border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; padding: 3px 6px; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.table-wrap { border: 1px solid var(--border); border-radius: 4px; overflow: auto; max-height: 60vh; }
+table.wts { width: 100%; border-collapse: collapse; }
+table.wts td { padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
+table.wts tr:hover { background: var(--hover); }
+table.wts td.c-star { width: 24px; padding-right: 0; }
+table.wts td.c-name { max-width: 340px; overflow: hidden; }
+table.wts td.c-name .branch { font-size: 13px; }
+table.wts td.c-name .path { font-size: 10.5px; max-width: 340px; }
+table.wts td.c-chips .chip { margin-right: 3px; }
+table.wts td.subject { overflow: hidden; text-overflow: ellipsis; max-width: 1px; width: 100%; }
+table.wts td.more { text-align: center; }
+table.wts .row-actions button { font-size: 12px; padding: 1px 7px; }
+.card-head button.star { margin-right: 2px; }
+.progress { flex-basis: 100%; display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
+.progress .bar { flex: 0 0 220px; height: 4px; border-radius: 2px; background: var(--btn-bg); overflow: hidden; }
+.progress .bar div { height: 100%; background: var(--accent); transition: width .3s ease; }

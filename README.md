@@ -21,6 +21,8 @@ Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
 | **Revisar** | lista os arquivos que a branch mudou desde que saiu da base (inclui o que ainda não foi commitado) e abre cada um num diff. |
 | **Agentes no terminal** | botão **✦ Claude Code** em cada card abre o CLI do agente num terminal já dentro da worktree (reaproveita se já estiver aberto). A lista é configurável: Claude Code, Codex, Gemini ou qualquer comando; `{prompt}` pede a tarefa antes de abrir. |
 | **Navegar arquivos** | na barra lateral, cada worktree expande em *Alterações × base* (clique abre o diff) e na árvore de pastas; branches sem worktree também, lidas direto do git. **Arquivos** busca e abre qualquer arquivo de outra worktree sem trocar de janela. |
+| **Muitas worktrees** | a lista aparece em ~1 s mesmo com centenas de worktrees; o detalhe chega aos poucos, com barra de progresso. Cards só para a principal, as **favoritas (★)** e as com agente aberto; o resto fica numa tabela com filtro. |
+| **Limpeza** | *Limpar worktrees…* remove em lote (já marca as mescladas e limpas); seleção múltipla na árvore; *Remover órfãs* para pastas apagadas. |
 | **Nova worktree** | cria branch + pasta a partir da base (ou de qualquer branch/commit) e roda um comando de setup (`npm install`, etc.). |
 | **Grafo** | histórico de todas as branches, worktrees (`▣`), remotas e tags, com filtro. |
 | **Sync automático** | quando a base anda, mescla nas worktrees que casam com os padrões — só se estiver limpa, sem conflito previsto, e roda um comando de verificação (desfaz o merge se falhar). |
@@ -114,6 +116,9 @@ compartilhadas — os padrões (`autoSync.branches`/`exclude`) ajudam a separar.
 | `worktreeGraph.agentTerminalLocation` | `panel` | `panel` ou `editor` |
 | `worktreeGraph.noFastForwardIntoBase` | `true` | `--no-ff` ao mesclar na base |
 | `worktreeGraph.refreshIntervalSeconds` | `15` | atualização do painel |
+| `worktreeGraph.statusRefresh.activeSeconds` | `30` | idade máxima do status de worktrees ativas |
+| `worktreeGraph.statusRefresh.idleSeconds` | `600` | idade máxima do status das demais |
+| `worktreeGraph.gitConcurrency` | `8` | processos git em paralelo |
 | `worktreeGraph.graph.maxCommits` | `400` | |
 | `worktreeGraph.graph.showRemoteBranches` | `true` | |
 | `worktreeGraph.autoSync.enabledByDefault` | `false` | |

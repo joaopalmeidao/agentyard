@@ -18,7 +18,7 @@ export async function pickBranch(ctl: Controller, arg: BranchArg, placeHolder: s
   if (typeof arg === 'string') return arg;
   if (arg?.branch) return arg.branch;
   const repo = repoOf(ctl);
-  const wts = await repo.worktrees();
+  const wts = await repo.worktreesFast();
   const items: vscode.QuickPickItem[] = wts
     .filter(w => w.branch)
     .map(w => ({ label: w.branch!, description: w.path, iconPath: new vscode.ThemeIcon('folder') }));
@@ -32,7 +32,7 @@ export async function pickBranch(ctl: Controller, arg: BranchArg, placeHolder: s
 }
 
 async function worktreeOf(repo: Repo, branch: string): Promise<Worktree | undefined> {
-  return (await repo.worktrees()).find(w => w.branch === branch);
+  return (await repo.worktreesFast()).find(w => w.branch === branch);
 }
 
 /**
@@ -196,7 +196,7 @@ export async function createWorktree(ctl: Controller, opts: { startPoint?: strin
     if (!branch) return;
   }
   const configured = ctl.cfg().get<string>('worktreeRoot', '');
-  const mainPath = (await repo.worktrees())[0]?.path ?? repo.root;
+  const mainPath = (await repo.worktreesFast())[0]?.path ?? repo.root;
   const root = configured || path.join(path.dirname(mainPath), `${path.basename(mainPath)}.worktrees`);
   let dir = path.join(root, branch.replace(/[\/\\]/g, '-'));
   for (let i = 2; fs.existsSync(dir); i++) dir = path.join(root, `${branch.replace(/[\/\\]/g, '-')}-${i}`);
@@ -349,7 +349,7 @@ export async function openFileInWorktree(ctl: Controller, arg: BranchArg | { pat
   let dir = typeof arg === 'object' && arg && 'path' in arg && arg.path ? arg.path : undefined;
   let label = dir ? path.basename(dir) : '';
   if (!dir) {
-    const wts = (await repo.worktrees()).filter(w => !w.bare && !w.prunable);
+    const wts = (await repo.worktreesFast()).filter(w => !w.bare && !w.prunable);
     const byArg = typeof arg === 'string' ? wts.find(w => w.branch === arg) : undefined;
     const pick =
       byArg ??
@@ -367,4 +367,125 @@ export async function openFileInWorktree(ctl: Controller, arg: BranchArg | { pat
     { placeHolder: `Abrir arquivo de ${label} (${files.length} arquivos)`, matchOnDescription: true },
   );
   if (chosen) await vscode.window.showTextDocument(vscode.Uri.file(path.join(dir, chosen.file)), { preview: true });
+}
+
+export async function toggleFavorite(ctl: Controller, arg: BranchArg | { path?: string }) {
+  const p = typeof arg === 'object' && arg && 'path' in arg && arg.path ? arg.path : undefined;
+  const wtPath = p ?? (await worktreeOf(repoOf(ctl), (await pickBranch(ctl, arg as BranchArg, 'Favoritar qual worktree?', true)) ?? ''))?.path;
+  if (!wtPath) return;
+  await ctl.setFavorite(wtPath, !ctl.isFavorite(wtPath));
+  ctl.scheduleRefresh(20);
+}
+
+/** `git worktree prune`: esquece worktrees cuja pasta já foi apagada. */
+export async function pruneWorktrees(ctl: Controller) {
+  const repo = repoOf(ctl);
+  const orphans = (await repo.worktreesFast()).filter(w => w.prunable);
+  if (orphans.length === 0) {
+    vscode.window.showInformationMessage('Nenhuma worktree órfã.');
+    return;
+  }
+  const list = orphans
+    .slice(0, 12)
+    .map(o => `• ${o.branch ?? o.path}`)
+    .join('\n');
+  const ok = await vscode.window.showWarningMessage(
+    `Esquecer ${orphans.length} worktree(s) órfã(s)?`,
+    {
+      modal: true,
+      detail: `A pasta delas não existe mais; só o registro no .git é apagado (git worktree prune). As branches continuam.\n\n${list}${
+        orphans.length > 12 ? `\n… e mais ${orphans.length - 12}` : ''
+      }`,
+    },
+    'Remover órfãs',
+  );
+  if (!ok) return;
+  await repo.exec(['worktree', 'prune']);
+  ctl.log(`git worktree prune: ${orphans.length} registro(s) removido(s).`);
+  vscode.window.showInformationMessage(`${orphans.length} worktree(s) órfã(s) removida(s).`);
+  ctl.scheduleRefresh(50);
+}
+
+/**
+ * Remoção em lote. Sem `preselected`, abre uma lista com as worktrees já marcadas quando estão
+ * mescladas na base, limpas e sem agente aberto.
+ */
+export async function cleanupWorktrees(ctl: Controller, preselected?: string[]) {
+  const repo = repoOf(ctl);
+  const s = ctl.state;
+  if (!s) return;
+  const open = new Set((vscode.workspace.workspaceFolders ?? []).map(f => path.normalize(f.uri.fsPath).toLowerCase()));
+  const candidates = s.worktrees.filter(w => !w.isMain && !w.isBase && !w.bare && !w.prunable && !open.has(w.path.toLowerCase()));
+  let chosen = candidates.filter(w => preselected?.some(p => p.toLowerCase() === w.path.toLowerCase()));
+
+  if (!preselected) {
+    const age = (d: number) => (d ? `${Math.max(1, Math.round((Date.now() / 1000 - d) / 86400))} d` : '');
+    const items = candidates.map(w => {
+      const merged = w.compareKnown && w.ahead === 0;
+      const clean = w.statusKnown && w.changes === 0;
+      const tags = [
+        merged ? 'mesclada' : w.compareKnown ? `↑${w.ahead} fora de ${s.base}` : 'comparando…',
+        clean ? 'limpa' : w.statusKnown ? `● ${w.changes} alteração(ões)` : 'status…',
+        w.favorite ? '★' : '',
+        w.agents.length ? `✦ ${w.agents.join(', ')}` : '',
+        age(w.date),
+      ].filter(Boolean);
+      return { label: w.name, description: tags.join(' · '), detail: w.path, picked: merged && clean && !w.agents.length && !w.favorite, wt: w };
+    });
+    items.sort((a, b) => Number(b.picked) - Number(a.picked) || a.wt.date - b.wt.date);
+    const picked = await vscode.window.showQuickPick(items, {
+      canPickMany: true,
+      matchOnDescription: true,
+      matchOnDetail: true,
+      title: `Limpar worktrees: ${items.filter(i => i.picked).length} já marcadas (mescladas em ${s.base}, limpas, sem agente, não favoritas)`,
+      placeHolder: 'Marque as worktrees a remover; digite para filtrar',
+    });
+    if (!picked?.length) return;
+    chosen = picked.map(p => p.wt);
+  }
+  if (!chosen.length) return;
+
+  const dirty = chosen.filter(w => w.changes > 0 || !w.statusKnown);
+  const unmerged = chosen.filter(w => !(w.compareKnown && w.ahead === 0));
+  const detail = [
+    dirty.length ? `⚠ ${dirty.length} com alterações não commitadas (ou ainda sem status): elas serão PERDIDAS.` : 'Todas limpas.',
+    unmerged.length ? `${unmerged.length} têm commits fora de ${s.base}: a branch delas é mantida mesmo pedindo para excluir.` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const pick = await vscode.window.showWarningMessage(
+    `Remover ${chosen.length} worktree(s)?`,
+    { modal: true, detail },
+    'Remover worktrees',
+    'Remover worktrees e branches mescladas',
+  );
+  if (!pick) return;
+  const alsoBranch = pick === 'Remover worktrees e branches mescladas';
+
+  const failed: string[] = [];
+  let removed = 0;
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Removendo worktrees', cancellable: true },
+    async (progress, token) => {
+      for (const w of chosen) {
+        if (token.isCancellationRequested) break;
+        progress.report({ message: `${w.name} (${removed + failed.length + 1}/${chosen.length})`, increment: 100 / chosen.length });
+        const r = await repo.run(['worktree', 'remove', '--force', w.path], repo.root, 120_000);
+        if (r.code !== 0) {
+          failed.push(`${w.name}: ${r.stderr.trim()}`);
+          continue;
+        }
+        removed++;
+        if (alsoBranch && w.branch) await repo.run(['branch', '-d', w.branch]);
+      }
+    },
+  );
+  ctl.log(`Limpeza: ${removed} worktree(s) removida(s).${failed.length ? `\nFalhas:\n${failed.join('\n')}` : ''}`);
+  if (failed.length) {
+    const see = await vscode.window.showWarningMessage(`${removed} removida(s), ${failed.length} falharam.`, 'Ver log');
+    if (see) ctl.out.show();
+  } else {
+    vscode.window.showInformationMessage(`${removed} worktree(s) removida(s).`);
+  }
+  ctl.scheduleRefresh(50);
 }

@@ -2,8 +2,8 @@
   "name": "worktree-graph",
   "displayName": "Worktree Graph",
   "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
-  "version": "0.3.0",
-  "publisher": "jp-08",
+  "version": "0.4.0",
+  "publisher": "worktree-graph",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
@@ -53,7 +53,13 @@
     "viewsWelcome": [
       {
         "view": "worktreeGraph.worktrees",
-        "contents": "Nenhum repositório git encontrado neste workspace.\n[Abrir pasta](command:vscode.openFolder)"
+        "contents": "Lendo o repositório…",
+        "when": "worktreeGraph.state == loading || !worktreeGraph.state"
+      },
+      {
+        "view": "worktreeGraph.worktrees",
+        "contents": "Nenhum repositório git encontrado neste workspace.\n[Abrir pasta](command:vscode.openFolder)",
+        "when": "worktreeGraph.state == noRepo"
       }
     ],
     "commands": [
@@ -166,6 +172,23 @@
         "command": "worktreeGraph.chooseSyncWhere",
         "title": "Escolher onde o sync roda (local, GitHub Actions, dividido, ambos)",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.cleanupWorktrees",
+        "title": "Limpar worktrees… (remoção em lote)",
+        "category": "Worktree Graph",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "worktreeGraph.pruneWorktrees",
+        "title": "Remover worktrees órfãs (pasta apagada)",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.toggleFavorite",
+        "title": "Favoritar / desfavoritar",
+        "category": "Worktree Graph",
+        "icon": "$(star-empty)"
       }
     ],
     "menus": {
@@ -214,6 +237,16 @@
           "command": "worktreeGraph.chooseSyncWhere",
           "when": "view == worktreeGraph.worktrees",
           "group": "1_sync"
+        },
+        {
+          "command": "worktreeGraph.cleanupWorktrees",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "3_cleanup"
+        },
+        {
+          "command": "worktreeGraph.pruneWorktrees",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "3_cleanup"
         }
       ],
       "view/item/context": [
@@ -229,12 +262,12 @@
         },
         {
           "command": "worktreeGraph.mergeBaseInto",
-          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "inline@2"
         },
         {
           "command": "worktreeGraph.mergeIntoBase",
-          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "inline@3"
         },
         {
@@ -249,17 +282,17 @@
         },
         {
           "command": "worktreeGraph.diffWithBase",
-          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "1_open@3"
         },
         {
           "command": "worktreeGraph.mergeBaseInto",
-          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "2_merge@1"
         },
         {
           "command": "worktreeGraph.mergeIntoBase",
-          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "2_merge@2"
         },
         {
@@ -269,12 +302,12 @@
         },
         {
           "command": "worktreeGraph.togglePauseSync",
-          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "3_sync"
         },
         {
           "command": "worktreeGraph.removeWorktree",
-          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "9_danger"
         },
         {
@@ -286,6 +319,16 @@
           "command": "worktreeGraph.openFileInWorktree",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "1_open@4"
+        },
+        {
+          "command": "worktreeGraph.toggleFavorite",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "inline@9"
+        },
+        {
+          "command": "worktreeGraph.toggleFavorite",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "0_fav"
         }
       ],
       "commandPalette": [
@@ -382,6 +425,21 @@
           "type": "number",
           "default": 15,
           "description": "Intervalo de atualização automática (alterações feitas por agentes em outras worktrees)."
+        },
+        "worktreeGraph.statusRefresh.activeSeconds": {
+          "type": "number",
+          "default": 30,
+          "description": "Idade máxima do git status de worktrees ativas (esta janela, favorita, com agente, com alterações ou com commit nas últimas 24 h)."
+        },
+        "worktreeGraph.statusRefresh.idleSeconds": {
+          "type": "number",
+          "default": 600,
+          "description": "Idade máxima do git status das demais worktrees."
+        },
+        "worktreeGraph.gitConcurrency": {
+          "type": "number",
+          "default": 8,
+          "description": "Quantos processos git rodam em paralelo ao detalhar worktrees."
         },
         "worktreeGraph.autoSync.enabledByDefault": {
           "type": "boolean",

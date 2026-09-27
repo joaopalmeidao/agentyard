@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+- Repositórios grandes: a ativação não espera mais a leitura do repositório; a lista aparece em ~1 s
+  (lida direto de `.git/worktrees`) e cada worktree é detalhada em segundo plano, com barra de
+  progresso no painel e contador na árvore. Testado com 274 worktrees: 1,3 s até a lista, 28 s até o
+  detalhe completo na primeira vez, 2,3 s nas seguintes.
+- Cache de ahead/behind e previsão de conflito por par de commits, persistido entre sessões.
+- Status por prioridade: worktrees ativas a cada 30 s, as demais a cada 10 min.
+- Favoritas (★): viram card no painel e sobem na árvore.
+- Painel: cards só para a principal, favoritas e com agente aberto; as demais numa tabela compacta com filtro.
+- Limpeza em lote ("Limpar worktrees…"), já marcando as mescladas e limpas; seleção múltipla na árvore.
+- "Remover worktrees órfãs" (`git worktree prune`) para registros cuja pasta foi apagada.
+- Publisher do Marketplace: `worktree-graph`.
+
 ## 0.3.0
 - Escolha de onde o sync roda, por repositório: só local, só GitHub Actions, dividido (local para branches não publicadas, CI para as publicadas) ou ambos.
 - Vídeo de demonstração gravado num VS Code real (`scripts/make-video.sh`).

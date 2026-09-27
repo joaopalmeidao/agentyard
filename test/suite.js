@@ -23,7 +23,7 @@ exports.run = async () => {
     }
   };
 
-  const ext = vscode.extensions.getExtension('jp-08.worktree-graph');
+  const ext = vscode.extensions.getExtension('worktree-graph.worktree-graph');
   const api = await ext.activate();
   const { ctl, tree, agentTerms } = api;
 
@@ -42,7 +42,8 @@ exports.run = async () => {
   await check('árvore: worktrees + branches sem worktree', async () => {
     const root = await tree.getChildren();
     const labels = root.map(n => (typeof n.label === 'string' ? n.label : n.label.label));
-    assert.deepStrictEqual(labels, ['master', 'ai/login-oauth', 'ai/precos-promo', 'ai/refatorar-api', 'Branches sem worktree']);
+    // principal primeiro, depois as mais recentes
+    assert.deepStrictEqual(labels, ['master', 'ai/precos-promo', 'ai/refatorar-api', 'ai/login-oauth', 'Branches sem worktree']);
   });
 
   await check('árvore: alterações × base incluem não commitados', async () => {

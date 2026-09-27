@@ -215,22 +215,62 @@ export class Repo {
   }
 
   async status(worktreePath: string): Promise<WorktreeStatus> {
-    const [st, gp] = await Promise.all([
-      runGit(worktreePath, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=normal']),
-      runGit(worktreePath, [
-        'rev-parse', '--path-format=absolute',
-        '--git-path', 'MERGE_HEAD', '--git-path', 'rebase-merge', '--git-path', 'rebase-apply', '--git-path', 'CHERRY_PICK_HEAD',
-      ]),
-    ]);
+    const st = await runGit(worktreePath, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=normal']);
     const changes = st.code === 0 ? st.stdout.split('\0').filter(Boolean).length : 0;
+    // Lido direto do diretório git da worktree: no Windows cada processo git custa ~0,5 s.
     let operation: WorktreeStatus['operation'];
-    if (gp.code === 0) {
-      const [merge, rbm, rba, cp] = gp.stdout.trim().split(/\r?\n/);
-      if (merge && fs.existsSync(merge)) operation = 'merge';
-      else if ((rbm && fs.existsSync(rbm)) || (rba && fs.existsSync(rba))) operation = 'rebase';
-      else if (cp && fs.existsSync(cp)) operation = 'cherry-pick';
+    const gitDir = gitDirOf(worktreePath);
+    if (gitDir) {
+      const has = (f: string) => fs.existsSync(path.join(gitDir, f));
+      if (has('MERGE_HEAD')) operation = 'merge';
+      else if (has('rebase-merge') || has('rebase-apply')) operation = 'rebase';
+      else if (has('CHERRY_PICK_HEAD')) operation = 'cherry-pick';
     }
     return { changes, operation };
+  }
+
+  /**
+   * Lista as worktrees lendo `<common dir>/worktrees/*` em vez de rodar `git worktree list`
+   * (que, com centenas de worktrees, leva segundos). Branch worktrees vêm com `head` vazio: quem
+   * chama resolve pelo sha da ref. Cai para o git se o formato não for o esperado.
+   */
+  async worktreesFast(): Promise<Worktree[]> {
+    try {
+      if (path.basename(this.commonDir).toLowerCase() !== '.git') return this.worktrees();
+      const readHead = (dir: string) => {
+        const h = fs.readFileSync(path.join(dir, 'HEAD'), 'utf8').trim();
+        return h.startsWith('ref: ') ? { branch: h.slice(5).replace(/^refs\/heads\//, ''), head: '' } : { branch: undefined, head: h };
+      };
+      const main = readHead(this.commonDir);
+      const list: Worktree[] = [
+        { path: path.dirname(this.commonDir), ...main, detached: !main.branch, bare: false, locked: false, prunable: false, isMain: true },
+      ];
+      const wtDir = path.join(this.commonDir, 'worktrees');
+      const names = fs.existsSync(wtDir) ? fs.readdirSync(wtDir) : [];
+      for (const n of names) {
+        const dir = path.join(wtDir, n);
+        let gitdirFile: string;
+        try {
+          gitdirFile = fs.readFileSync(path.join(dir, 'gitdir'), 'utf8').trim();
+        } catch {
+          continue;
+        }
+        const wtPath = path.normalize(path.dirname(path.resolve(dir, gitdirFile)));
+        const h = readHead(dir);
+        list.push({
+          path: wtPath,
+          ...h,
+          detached: !h.branch,
+          bare: false,
+          locked: fs.existsSync(path.join(dir, 'locked')),
+          prunable: !fs.existsSync(wtPath),
+          isMain: false,
+        });
+      }
+      return list;
+    } catch {
+      return this.worktrees();
+    }
   }
 
   async conflictedFiles(worktreePath: string): Promise<string[]> {
@@ -257,6 +297,19 @@ export class Repo {
     }
     for (const c of ['main', 'master', 'develop']) if (localBranches.includes(c)) return c;
     return localBranches[0] ?? 'main';
+  }
+}
+
+/** Diretório git de uma worktree: `.git` da principal, ou o apontado pelo arquivo `.git` das demais. */
+export function gitDirOf(worktreePath: string): string | undefined {
+  const dotGit = path.join(worktreePath, '.git');
+  try {
+    const st = fs.statSync(dotGit);
+    if (st.isDirectory()) return dotGit;
+    const m = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(dotGit, 'utf8'));
+    return m ? path.resolve(worktreePath, m[1].trim()) : undefined;
+  } catch {
+    return undefined;
   }
 }
 

@@ -110,15 +110,19 @@
     const scroll = document.querySelector('.graph-scroll');
     const top = scroll ? scroll.scrollTop : 0;
     const pageTop = document.scrollingElement ? document.scrollingElement.scrollTop : 0;
-    const hadFocus = document.activeElement?.id === 'filter';
+    const focused = document.activeElement?.id;
     app.innerHTML = toolbar() + worktreesSection() + branchesSection() + graphSection();
     const s2 = document.querySelector('.graph-scroll');
     if (s2) s2.scrollTop = top;
     if (document.scrollingElement) document.scrollingElement.scrollTop = pageTop;
-    const f = /** @type {HTMLInputElement|null} */ (document.getElementById('filter'));
-    if (f) {
-      f.value = filter;
-      if (hadFocus) f.focus();
+    for (const [id, value] of [['filter', filter], ['wtfilter', wtFilter]]) {
+      const f = /** @type {HTMLInputElement|null} */ (document.getElementById(id));
+      if (!f) continue;
+      f.value = value;
+      if (focused === id) {
+        f.focus();
+        f.setSelectionRange(value.length, value.length);
+      }
     }
   }
 
@@ -136,8 +140,19 @@
         <button data-action="generateCi" title="Gera .github/workflows para fazer o mesmo no GitHub">Gerar CI</button>
         <button data-action="refresh" title="Atualizar">↻</button>
       </div>
+      ${progressBar()}
     </header>
     ${state.error ? `<div class="error">${esc(state.error)}</div>` : ''}`;
+  }
+
+  /** Progresso do detalhamento: some quando todas as worktrees têm status e comparação. */
+  function progressBar() {
+    const total = state.worktrees.filter(w => !w.prunable && !w.bare).length;
+    if (!state.pending || !total) return '';
+    const done = total - state.pending;
+    return `<div class="progress" title="git status e comparação com ${esc(state.baseRef)}, das mais recentes para as mais antigas">
+      <div class="bar"><div style="width:${Math.round((done / total) * 100)}%"></div></div>
+      <span>Detalhando worktrees: ${done} de ${total}</span></div>`;
   }
 
   const arrows = (behind, ahead) => [behind ? `↓${behind}` : '', ahead ? `↑${ahead}` : ''].filter(Boolean).join(' ');
@@ -167,16 +182,79 @@
     return chip(`${t} · ${ago(s.at / 1000)}`, c, s.message);
   }
 
+  /** Em destaque (card): a principal, as favoritas, as com agente aberto e a desta janela. */
+  const featured = w => !w.prunable && (w.isMain || w.favorite || w.isCurrent || (w.agents && w.agents.length > 0));
+  const starBtn = w =>
+    `<button class="star ${w.favorite ? 'on' : ''}" data-action="toggleFavorite" data-path="${esc(w.path)}" title="${w.favorite ? 'Desfavoritar' : 'Favoritar: vira card e sobe na lista'}">${w.favorite ? '★' : '☆'}</button>`;
+
   function worktreesSection() {
-    const cards = state.worktrees
-      .map(w => {
+    const all = state.worktrees.filter(w => !w.prunable);
+    const cards = all.filter(featured).map(card).join('');
+    return `<section>
+      <h2>Em destaque <span class="count">${all.filter(featured).length}</span>
+        <span class="hint">principal, favoritas (☆) e com agente aberto · arraste um sobre outro para mesclar · botão direito para mais opções</span></h2>
+      <div class="cards">${cards}</div>
+    </section>${tableSection()}`;
+  }
+
+  // ---------- tabela compacta ----------
+  let wtFilter = '';
+  let rowLimit = 60;
+
+  function tableSection() {
+    const rest = state.worktrees.filter(w => !w.prunable && !featured(w));
+    const orphans = state.worktrees.filter(w => w.prunable).length;
+    if (!rest.length && !orphans) return '';
+    return `<section>
+      <h2>Todas as worktrees <span class="count">${rest.length}</span>
+        ${orphans ? `<button class="link" data-action="pruneWorktrees" title="Pastas que não existem mais (git worktree prune)">${orphans} órfã(s) · remover</button>` : ''}
+        <button class="link" data-action="cleanupWorktrees" title="Remover várias de uma vez; já marca as mescladas e limpas">limpar em lote…</button>
+        <input id="wtfilter" type="search" placeholder="Filtrar por branch, pasta ou commit" /></h2>
+      <div class="table-wrap"><table class="wts"><tbody id="wt-rows">${tableRows()}</tbody></table></div>
+    </section>`;
+  }
+
+  function tableRows() {
+    const q = wtFilter.toLowerCase();
+    const rest = state.worktrees.filter(w => !w.prunable && !featured(w));
+    const match = rest.filter(w => !q || `${w.name} ${w.path} ${w.subject}`.toLowerCase().includes(q));
+    const agent = state.agentNames && state.agentNames[0];
+    const rows = match.slice(0, rowLimit).map(w => {
+      const b = esc(w.branch || '');
+      const st = !w.statusKnown ? chip('…', 'muted', 'lendo status') : w.operation ? chip(esc(w.operation), 'bad') : w.changes ? chip(`● ${w.changes}`, 'warn', 'alterações não commitadas') : chip('✓', 'ok', 'limpa');
+      const cmp = !w.compareKnown
+        ? chip('…', 'muted', 'comparando com a base')
+        : w.behind || w.ahead
+          ? chip(arrows(w.behind, w.ahead), w.behind ? 'info' : 'muted', `${w.behind} atrás · ${w.ahead} à frente de ${state.baseRef}`)
+          : chip('=', 'muted', `igual a ${state.baseRef}`);
+      const conf = w.preview?.conflict ? chip('⚠', 'bad', `conflita com ${state.base}: ${w.preview.files.join(', ')}`) : '';
+      return `<tr draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
+        <td class="c-star">${starBtn(w)}</td>
+        <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
+        <td class="c-chips">${st}${cmp}${conf}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
+        <td class="row-actions">
+          ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
+          <button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>
+          <button data-action="diffWithBase" data-branch="${b}" title="Revisar alterações × ${esc(state.base)}">Revisar</button>
+          <button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="Trazer ${esc(state.baseRef)}">↓</button>
+          <button data-action="mergeIntoBase" data-branch="${b}" ${w.ahead ? '' : 'disabled'} title="Mesclar em ${esc(state.base)}">↑</button>
+          <button data-action="removeWorktree" data-branch="${b}" class="danger" title="Remover worktree">✕</button>
+        </td></tr>`;
+    });
+    if (match.length > rowLimit) rows.push(`<tr><td colspan="5" class="more"><button data-local="more">Mostrar mais ${Math.min(60, match.length - rowLimit)} de ${match.length - rowLimit}</button></td></tr>`);
+    if (!match.length) rows.push(`<tr><td colspan="5" class="muted">Nenhuma worktree com “${esc(wtFilter)}”.</td></tr>`);
+    return rows.join('');
+  }
+
+  function card(w) {
         const b = esc(w.branch || '');
         const chips = [];
         if (w.bare) chips.push(chip('bare', 'muted'));
-        if (w.prunable) chips.push(chip('pasta sumiu (prunable)', 'bad'));
         if (w.operation) chips.push(chip(`${esc(w.operation)} em andamento`, 'bad'));
-        chips.push(w.changes ? chip(`● ${w.changes} não commitada(s)`, 'warn') : chip('✓ limpa', 'ok'));
-        if (!w.isBase && w.branch) {
+        chips.push(!w.statusKnown ? chip('… lendo status', 'muted') : w.changes ? chip(`● ${w.changes} não commitada(s)`, 'warn') : chip('✓ limpa', 'ok'));
+        if (!w.compareKnown) chips.push(chip('… comparando', 'muted'));
+        else if (!w.isBase && w.branch) {
           if (w.behind === 0 && w.ahead === 0) chips.push(chip(`= ${esc(state.baseRef)}`, 'muted'));
           else chips.push(chip(arrows(w.behind, w.ahead), w.behind ? 'info' : 'muted', `${w.behind} commit(s) da base que faltam aqui · ${w.ahead} commit(s) desta branch que a base não tem`));
           if (w.preview) chips.push(w.preview.conflict ? chip(`⚠ conflita com ${esc(state.base)}`, 'bad', w.preview.files.join('\n')) : chip('merge limpo', 'ok'));
@@ -207,6 +285,7 @@
         const cls = ['card', w.isCurrent ? 'current' : '', w.isBase ? 'base' : '', w.preview?.conflict || w.operation ? 'conflict' : w.changes ? 'dirty' : ''].join(' ');
         return `<div class="${cls}" ${w.branch ? `draggable="true" data-drag="${b}" data-drop="${b}"` : ''} data-menu="${b}">
           <div class="card-head">
+            ${w.isMain ? '' : starBtn(w)}
             <span class="branch">${esc(w.name)}</span>
             ${w.isBase ? '<span class="tag">base</span>' : ''}
             ${w.isMain ? '<span class="tag">principal</span>' : ''}
@@ -217,13 +296,6 @@
           <div class="last" title="${esc(w.subject)}">${esc(w.subject || '—')} <span class="muted">${ago(w.date)}</span></div>
           <div class="actions">${act.join('')}</div>
         </div>`;
-      })
-      .join('');
-    return `<section>
-      <h2>Worktrees <span class="count">${state.worktrees.length}</span>
-        <span class="hint">arraste um card ou branch sobre outro para mesclar · botão direito para mais opções</span></h2>
-      <div class="cards">${cards}</div>
-    </section>`;
   }
 
   function branchesSection() {
@@ -304,6 +376,13 @@
   document.addEventListener('click', e => {
     const t = /** @type {HTMLElement} */ (e.target);
     hideMenu(t);
+    const local = /** @type {HTMLElement|null} */ (t.closest('[data-local]'));
+    if (local && local.dataset.local === 'more') {
+      rowLimit += 60;
+      const body = document.getElementById('wt-rows');
+      if (body) body.innerHTML = tableRows();
+      return;
+    }
     const el = /** @type {HTMLElement|null} */ (t.closest('[data-action]'));
     if (!el || /** @type {HTMLButtonElement} */ (el).disabled) return;
     const { action, ...args } = el.dataset;
@@ -312,6 +391,13 @@
 
   document.addEventListener('input', e => {
     const t = /** @type {HTMLInputElement} */ (e.target);
+    if (t.id === 'wtfilter') {
+      wtFilter = t.value;
+      rowLimit = 60;
+      const body = document.getElementById('wt-rows');
+      if (body) body.innerHTML = tableRows();
+      return;
+    }
     if (t.id !== 'filter') return;
     filter = t.value;
     const q = filter.toLowerCase();
@@ -376,6 +462,7 @@
       if (wt) {
         for (const a of state.agentNames || []) items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
         if ((state.agentNames || []).length) items.push('<hr>');
+        items.push(item('toggleFavorite', wt.favorite ? '★ Desfavoritar' : '☆ Favoritar', { path: wt.path }));
         items.push(item('openWorktree', 'Abrir worktree em nova janela', { path: wt.path }));
         items.push(item('openFile', 'Buscar arquivo nesta worktree…', { path: wt.path }));
         items.push(item('openTerminal', 'Abrir terminal', { path: wt.path }));
