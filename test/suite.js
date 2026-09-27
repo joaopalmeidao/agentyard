@@ -175,7 +175,31 @@ exports.run = async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
     const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-    assert.strictEqual(tab.label, 'Worktree Graph');
+    assert.ok(tab.label.startsWith('Worktree Graph'), tab.label);
+  });
+
+  await check('vários projetos: adicionar, trocar e voltar sem abrir outra janela', async () => {
+    const path = require('path');
+    const first = ctl.repo.root;
+    const second = path.join(first, '..', '..', 'itest2', 'loja-app');
+    const main = await api.projects.addPath(second);
+    assert.ok(main, 'segundo repositório reconhecido');
+    const names = api.projects.list().map(p => p.path.toLowerCase());
+    assert.ok(names.includes(path.normalize(second).toLowerCase()), 'aparece na lista');
+    assert.strictEqual(api.projects.list().find(p => p.active).path.toLowerCase(), path.normalize(first).toLowerCase());
+
+    await vscode.commands.executeCommand('worktreeGraph.switchProject', second);
+    await until(() => ctl.state && ctl.state.root.toLowerCase() === path.normalize(second).toLowerCase());
+    assert.strictEqual(ctl.state.worktrees.length, 5, 'o segundo projeto tem uma worktree a mais');
+    assert.ok(ctl.state.worktrees.some(w => w.branch === 'ai/extra'));
+    const root = await tree.getChildren();
+    assert.ok(root.some(n => n.branch === 'ai/extra'), 'a árvore mostra o projeto novo');
+
+    await vscode.commands.executeCommand('worktreeGraph.switchProject', first);
+    await until(() => ctl.state && ctl.state.root.toLowerCase() === path.normalize(first).toLowerCase());
+    assert.strictEqual(ctl.state.worktrees.length, 4);
+    await api.projects.remove(second);
+    assert.ok(!api.projects.list().some(p => p.path.toLowerCase() === path.normalize(second).toLowerCase()));
   });
 
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);

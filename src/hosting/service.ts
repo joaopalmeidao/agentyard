@@ -16,6 +16,16 @@ export class RequestService {
 
   constructor(private readonly ctl: Controller) {}
 
+  /** Projeto ativo mudou: remoto, credencial e PRs são outros. */
+  reset() {
+    this.byBranch.clear();
+    this.remote = undefined;
+    this.remoteChecked = false;
+    this.connected = false;
+    this.error = undefined;
+    this.lastFetch = 0;
+  }
+
   get label(): 'PR' | 'MR' {
     return this.remote?.kind === 'gitlab' ? 'MR' : 'PR';
   }

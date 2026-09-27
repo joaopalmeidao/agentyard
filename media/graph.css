@@ -216,3 +216,6 @@ table.wts tr.dirty .branch { color: var(--warn); }
 .row.wip .link { font-style: normal; font-size: 11px; }
 
 button.agent.mini { font-size: 11px; padding: 0 6px; margin-left: 2px; }
+/* seletor de projeto na barra */
+button.repo { background: transparent; border: 0; padding: 0 2px; font-size: 15px; font-weight: 600; color: var(--fg); }
+button.repo:hover:not(:disabled) { background: var(--btn-bg); }

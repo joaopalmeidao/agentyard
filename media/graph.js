@@ -136,7 +136,7 @@
   function toolbar() {
     const s = state.autoSync;
     return `<header class="toolbar">
-      <div class="title"><span class="repo">${esc(state.repoName)}</span>
+      <div class="title"><button class="repo" data-action="switchProject" title="${esc(state.root)} · trocar de projeto">${esc(state.repoName)} ▾</button>
         <span class="muted">base</span> <span class="ref ref-base">${esc(state.baseRef)}</span></div>
       <div class="tools">
         <button data-action="createWorktree" class="primary">＋ Nova worktree</button>

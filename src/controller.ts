@@ -34,6 +34,11 @@ export class Controller implements vscode.Disposable {
   private lastFire = 0;
   private fireTimer?: NodeJS.Timeout;
   private loadedOnce = false;
+  /** Watcher do .git do repositório ativo; refeito ao trocar de projeto. */
+  private repoWatch: vscode.Disposable[] = [];
+  private readonly repoChanged = new vscode.EventEmitter<Repo | undefined>();
+  /** Disparado quando o projeto ativo muda (sync, lista de projetos e títulos reagem). */
+  readonly onDidChangeRepo = this.repoChanged.event;
 
   constructor(readonly ctx: vscode.ExtensionContext, readonly out: vscode.OutputChannel) {}
 
@@ -49,18 +54,59 @@ export class Controller implements vscode.Disposable {
     vscode.commands.executeCommand('setContext', 'worktreeGraph.state', state);
   }
 
+  /** Projeto escolhido nesta janela (se ainda existir); senão, o primeiro repositório do workspace. */
+  private async initialRepo(): Promise<Repo | undefined> {
+    const chosen = this.ctx.workspaceState.get<string>('activeProject');
+    if (chosen && fs.existsSync(chosen)) {
+      const r = await Repo.open(chosen);
+      if (r) return r;
+    }
+    return findRepo();
+  }
+
+  /** Watcher, cache persistido e estado do repositório ativo. */
+  private attachRepo() {
+    this.repoWatch.forEach(d => d.dispose());
+    this.repoWatch = [];
+    if (!this.repo) return;
+    this.cache.importCompares(this.ctx.workspaceState.get(this.cacheKey()));
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(this.repo.commonDir), '{HEAD,packed-refs,refs/**,worktrees/*/HEAD,worktrees/*/index}'),
+    );
+    const kick = () => this.scheduleRefresh();
+    this.repoWatch.push(watcher, watcher.onDidChange(kick), watcher.onDidCreate(kick), watcher.onDidDelete(kick));
+  }
+
+  /**
+   * Troca o projeto (repositório) ativo desta janela. Tudo que depende do repositório — árvore,
+   * painel, merges, agentes, PRs, sync — passa a usar o novo.
+   */
+  async setActiveRepo(p: string) {
+    const repo = await Repo.open(p);
+    if (!repo) throw new Error(`${p} não é um repositório git.`);
+    if (this.repo && this.repo.commonDir.toLowerCase() === repo.commonDir.toLowerCase() && this.repo.root.toLowerCase() === repo.root.toLowerCase()) return;
+    this.repo = repo;
+    this.state = undefined;
+    this.statuses.clear();
+    this.cache.compares.clear();
+    this.cache.statuses.clear();
+    this.loadedOnce = false;
+    this.requests.reset();
+    this.attachRepo();
+    await this.ctx.workspaceState.update('activeProject', repo.root);
+    this.log(`Projeto ativo: ${repo.root}`);
+    this.setLoading('loading');
+    this.changed.fire(undefined);
+    this.repoChanged.fire(repo);
+    await this.refresh();
+  }
+
   async init() {
     this.setLoading('loading');
-    this.repo = await findRepo();
+    this.repo = await this.initialRepo();
     if (!this.repo) this.setLoading('noRepo');
-    if (this.repo) {
-      this.cache.importCompares(this.ctx.workspaceState.get(this.cacheKey()));
-      const watcher = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(vscode.Uri.file(this.repo.commonDir), '{HEAD,packed-refs,refs/**,worktrees/*/HEAD,worktrees/*/index}'),
-      );
-      const kick = () => this.scheduleRefresh();
-      this.disposables.push(watcher, watcher.onDidChange(kick), watcher.onDidCreate(kick), watcher.onDidDelete(kick));
-    }
+    this.attachRepo();
+    this.repoChanged.fire(this.repo);
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('worktreeGraph')) {
@@ -69,7 +115,11 @@ export class Controller implements vscode.Disposable {
         }
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
+        // Só adota uma pasta do workspace se ainda não há projeto ativo.
+        if (this.repo) return;
         this.repo = await findRepo();
+        this.attachRepo();
+        this.repoChanged.fire(this.repo);
         this.scheduleRefresh();
       }),
       vscode.window.onDidChangeWindowState(s => s.focused && this.scheduleRefresh()),
@@ -256,14 +306,14 @@ export class Controller implements vscode.Disposable {
   }
 
   paused(): string[] {
-    return this.ctx.workspaceState.get<string[]>('pausedBranches', []);
+    return this.repo ? this.ctx.workspaceState.get<string[]>(`pausedBranches:${this.repo.commonDir.toLowerCase()}`, []) : [];
   }
 
   async setPaused(branch: string, paused: boolean) {
     const set = new Set(this.paused());
     if (paused) set.add(branch);
     else set.delete(branch);
-    await this.ctx.workspaceState.update('pausedBranches', [...set]);
+    if (this.repo) await this.ctx.workspaceState.update(`pausedBranches:${this.repo.commonDir.toLowerCase()}`, [...set]);
   }
 
   /** Guardado por repositório (common dir), e não em settings.json, para não sujar nenhuma worktree. */
@@ -300,6 +350,8 @@ export class Controller implements vscode.Disposable {
     if (this.poll) clearInterval(this.poll);
     if (this.debounce) clearTimeout(this.debounce);
     if (this.fireTimer) clearTimeout(this.fireTimer);
+    this.repoWatch.forEach(d => d.dispose());
+    this.repoChanged.dispose();
     this.disposables.forEach(d => d.dispose());
   }
 }
