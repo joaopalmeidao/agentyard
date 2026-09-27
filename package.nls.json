@@ -319,5 +319,13 @@
   "config.diskUsage.enabled.description": "Calculate each worktree's disk usage in the background.",
   "config.diskUsage.secondsPerWorktree.description": "Maximum time to measure a worktree's disk usage (beyond that, the value is a minimum).",
   "config.report.agentSummary.description": "In the Daily Report, offer \"✦ Draft Summary with the Agent\".",
-  "config.pullRequests.mergeMethod.description": "Method used when merging a PR/MR from the Pull Requests view (GitLab doesn't rebase from here: it uses merge)."
+  "config.pullRequests.mergeMethod.description": "Method used when merging a PR/MR from the Pull Requests view (GitLab doesn't rebase from here: it uses merge).",
+  "command.agents.pickWaiting.title": "Go to a Claude Waiting for You",
+  "command.agents.transcript.title": "View Session Transcript",
+  "command.claude.sendSelection.title": "Send to Claude (@mention)",
+  "config.claude.trackState.markdownDescription": "Opens Claude Code with hooks (via `--settings`, without touching your `settings.json`) so AgentYard knows when each one is working, waiting for your permission, or done with its turn. Hooks run in Claude's shell (Git Bash on Windows).",
+  "config.claude.notify.description": "Notifications from the Claude Code instances opened by AgentYard.",
+  "config.claude.notify.enumDescriptions.0": "When one needs you (permission request or question).",
+  "config.claude.notify.enumDescriptions.1": "Also when one finishes its turn.",
+  "config.claude.notify.enumDescriptions.2": "No notifications (the status bar and the panel still show the state)."
 }

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { agents, AgentTerminals } from './agents';
-import { AgentsTreeProvider, AgentGroupItem, terminalOf } from './agentsView';
+import { AgentsTreeProvider, AgentGroupItem, openAgentOf, terminalOf } from './agentsView';
 import { registerPullRequests } from './prs/view';
 import * as commits from './commits';
 import { pushBranch, pushMany, pushSelected, PushStatus } from './push';
@@ -32,6 +32,8 @@ import { MergePanel } from './mergePanel';
 import { Projects, ProjectsTreeProvider } from './projects';
 import { AutoSync } from './sync';
 import { registerClaudeConfig } from './claude/configView';
+import { registerAgentAttention } from './claude/attention';
+import { registerSendToClaude } from './claude/sendContext';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
 import { t } from './i18n';
@@ -75,9 +77,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const projects = new Projects(ctl);
   ctx.subscriptions.push(projects, vscode.window.createTreeView('worktreeGraph.projects', { treeDataProvider: new ProjectsTreeProvider(projects) }));
   const decorations = new WorktreeDecorations(ctl);
-  const claude = new ClaudeService(ctl);
+  const claude = new ClaudeService(ctl, agentTerms);
   const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
+  registerAgentAttention(ctx, ctl, agentTerms);
+  registerSendToClaude(ctx, ctl, agentTerms);
   /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */
   const claudeTarget = async (arg?: { path?: string; wtPath?: string; branch?: string }): Promise<{ cwd: string; label: string } | undefined> => {
     const p = arg?.wtPath ?? arg?.path;
@@ -391,6 +395,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('agents.pick', (item?: { path?: string }) => agentTerms.pickOpen(item?.path));
   reg('agents.show', node => terminalOf(node)?.show());
   reg('agents.close', node => terminalOf(node)?.dispose());
+  reg('agents.transcript', node => {
+    const id = openAgentOf(node)?.sessionId;
+    return id && claude.transcriptById(id);
+  });
   reg('resolveConflict', (branch?: string | { branch?: string }, opts?: ResolveOptions) => {
     const b = typeof branch === 'string' ? branch : branch?.branch;
     return b && resolveConflict(ctl, agentTerms, b, opts ?? {});
@@ -437,7 +445,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('claude.copySessionId', (item?: SessionItem) => item?.session && actions.copyText(item.session.id));
   reg('claude.newSession', async item => {
     const target = await claudeTarget(item);
-    if (target) claude.newSession(target.cwd, target.label);
+    if (target) claude.newSession(target.cwd);
   });
   reg('claude.commands', async item => {
     const target = await claudeTarget(item);

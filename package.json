@@ -222,6 +222,24 @@
         "icon": "$(close)"
       },
       {
+        "command": "worktreeGraph.agents.pickWaiting",
+        "title": "%command.agents.pickWaiting.title%",
+        "category": "AgentYard",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "worktreeGraph.agents.transcript",
+        "title": "%command.agents.transcript.title%",
+        "category": "AgentYard",
+        "icon": "$(book)"
+      },
+      {
+        "command": "worktreeGraph.claude.sendSelection",
+        "title": "%command.claude.sendSelection.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "worktreeGraph.openFileInWorktree",
         "title": "%command.openFileInWorktree.title%",
         "category": "AgentYard",
@@ -1548,7 +1566,7 @@
         },
         {
           "command": "worktreeGraph.agents.close",
-          "when": "view == worktreeGraph.agents && viewItem == agentTerminal",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal/",
           "group": "inline@0"
         },
         {
@@ -1558,12 +1576,17 @@
         },
         {
           "command": "worktreeGraph.agents.show",
-          "when": "view == worktreeGraph.agents && viewItem == agentTerminal",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal/",
           "group": "1_open@0"
         },
         {
+          "command": "worktreeGraph.agents.transcript",
+          "when": "view == worktreeGraph.agents && viewItem == agentTerminalSession",
+          "group": "1_open@1"
+        },
+        {
           "command": "worktreeGraph.agents.close",
-          "when": "view == worktreeGraph.agents && viewItem == agentTerminal",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal/",
           "group": "9_close@0"
         },
         {
@@ -2274,6 +2297,10 @@
       ],
       "commandPalette": [
         {
+          "command": "worktreeGraph.agents.transcript",
+          "when": "false"
+        },
+        {
           "command": "worktreeGraph.newWorktreeWithTaskFrom",
           "when": "false"
         },
@@ -2507,6 +2534,18 @@
         {
           "command": "worktreeGraph.templates.use",
           "group": "9_worktreeGraph@1"
+        },
+        {
+          "command": "worktreeGraph.claude.sendSelection",
+          "when": "resourceScheme == file",
+          "group": "9_worktreeGraph@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "worktreeGraph.claude.sendSelection",
+          "when": "!explorerResourceIsFolder",
+          "group": "9_worktreeGraph@0"
         }
       ]
     },
@@ -2834,6 +2873,26 @@
           "type": "boolean",
           "default": true,
           "description": "%config.claude.showUsageInStatusBar.description%"
+        },
+        "worktreeGraph.claude.trackState": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.claude.trackState.markdownDescription%"
+        },
+        "worktreeGraph.claude.notify": {
+          "type": "string",
+          "enum": [
+            "waiting",
+            "all",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.claude.notify.enumDescriptions.0%",
+            "%config.claude.notify.enumDescriptions.1%",
+            "%config.claude.notify.enumDescriptions.2%"
+          ],
+          "default": "waiting",
+          "description": "%config.claude.notify.description%"
         },
         "worktreeGraph.claude.sessionBudgetTokens": {
           "type": "number",
@@ -3205,7 +3264,7 @@
     "package": "tsc -p ./ && node scripts/package-dist.js",
     "dist": "node scripts/dist.js",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

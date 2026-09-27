@@ -168,6 +168,38 @@ exports.run = async () => {
     await vscode.workspace.getConfiguration('worktreeGraph').update('agentWhenOpen', undefined, vscode.ConfigurationTarget.Global);
   });
 
+  await check('claude: estado pelos hooks, sessão do terminal e chip do card', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    await cfg.update('claude.notify', 'off', vscode.ConfigurationTarget.Global);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    // "claude --version" sai logo (ou nem existe na máquina); os eventos são escritos aqui como o hook faria
+    const o = await agentTerms.start(wt.path, wt.branch, 'Claude Code', 'claude --version');
+    assert.ok(o.claude);
+    assert.strictEqual(o.state, 'starting');
+    assert.strictEqual(o.terminal.creationOptions.env.WTGRAPH_AGENT_ID, o.id);
+    const settings = JSON.parse(fs.readFileSync(path.join(agentTerms.eventsDir(), 'hooks.settings.json'), 'utf8'));
+    assert.ok(settings.hooks.Stop && settings.hooks.Notification, 'settings com os hooks');
+    const file = path.join(agentTerms.eventsDir(), `${o.id}.jsonl`);
+    const emit = e => fs.appendFileSync(file, JSON.stringify({ session_id: 'sessao-teste', ...e }) + '\n');
+    emit({ hook_event_name: 'SessionStart' });
+    await until(() => o.state === 'idle');
+    assert.strictEqual(agentTerms.findBySession('sessao-teste'), o, 'terminal ligado à sessão');
+    emit({ hook_event_name: 'UserPromptSubmit' });
+    emit({ hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+    await until(() => o.state === 'waiting');
+    await until(() => ctl.state.worktrees.find(w => w.path === wt.path).agentStates?.waiting === 1);
+    assert.strictEqual(ctl.state.worktrees.find(w => w.path === wt.path).agentStates.message, 'Claude needs your permission to use Bash');
+    emit({ hook_event_name: 'PostToolUse' });
+    await until(() => o.state === 'working');
+    emit({ hook_event_name: 'Stop' });
+    await until(() => o.state === 'idle');
+    o.terminal.dispose();
+    await until(() => !fs.existsSync(file));
+    await cfg.update('claude.notify', undefined, vscode.ConfigurationTarget.Global);
+  });
+
   await check('estado detalhado (status e comparação) chega em segundo plano', async () => {
     await until(() => ctl.state && ctl.state.pending === 0, 30000);
     const wt = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
