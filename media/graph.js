@@ -202,6 +202,12 @@
       <span>Detalhando worktrees: ${done} de ${total}</span></div>`;
   }
 
+  function claudeChip(w) {
+    const c = w.claude;
+    return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}</span>`;
+  }
+  const fmtTokens = n => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} mi` : n >= 1e3 ? `${Math.round(n / 1e3)} mil` : String(n));
+
   function requestChip(r) {
     const st = { open: ['aberto', 'info'], draft: ['rascunho', 'muted'], merged: ['mesclado', 'ok'], closed: ['fechado', 'muted'] }[r.state] || [r.state, ''];
     return `<span class="chip ${st[1]} link" data-action="openUrl" data-url="${esc(r.url)}" title="${esc(r.title)} — abrir no navegador">${esc(r.ref)} ${st[0]} ↗</span>`;
@@ -324,6 +330,7 @@
         if (w.branch) chips.push(syncChip(w));
         if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
         if (w.request) chips.push(requestChip(w.request));
+        if (w.claude) chips.push(claudeChip(w));
 
         const agent = state.agentNames && state.agentNames[0];
         const act = [

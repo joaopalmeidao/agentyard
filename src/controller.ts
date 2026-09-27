@@ -26,6 +26,8 @@ export class Controller implements vscode.Disposable {
   private poll?: NodeJS.Timeout;
   readonly cache = new RepoCache();
   readonly requests = new RequestService(this);
+  /** Quem mais enriquece o estado depois da leitura rápida (ex.: sessões do Claude). Deve ser barato. */
+  readonly stateHooks: ((s: GraphState) => void)[] = [];
   private readonly cacheChanged = new vscode.EventEmitter<void>();
   /** Disparado quando chegam status novos (as cores da árvore de arquivos dependem disso). */
   readonly onDidChangeCache = this.cacheChanged.event;
@@ -195,6 +197,7 @@ export class Controller implements vscode.Disposable {
         this.cache,
       );
       this.applyRequests();
+      for (const hook of this.stateHooks) hook(this.state);
       this.requests.refresh();
       const stages = flowStages(this);
       if (stages.length > 1) {
