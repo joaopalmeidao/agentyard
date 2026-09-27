@@ -24,6 +24,7 @@ import { registerDelivery } from './delivery/register';
 import { registerPromotion } from './promotion/register';
 import { registerReview } from './review';
 import { registerGitOps } from './gitops/register';
+import { registerSummary } from './summary/register';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
@@ -421,6 +422,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     issueOf: b => issues.linkOf(b),
   });
   const gitOps = registerGitOps(ctx, ctl, guard);
+  registerSummary(ctx, ctl, guard);
   const env = registerEnv(ctx, ctl, guard);
   actions.worktreeCreatedHooks.push((dir, branch, quiet) => env.afterCreate(dir, branch, quiet));
   const templates = registerTemplates(ctx, ctl, guard, b => issues.linkOf(b)?.key);

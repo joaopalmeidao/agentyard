@@ -127,6 +127,29 @@
     ],
     "commands": [
       {
+        "command": "worktreeGraph.branchSummary",
+        "title": "Resumo: commits e alterações",
+        "category": "AgentYard",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "worktreeGraph.askAgentAboutBranch",
+        "title": "✦ Perguntar ao agente sobre a branch",
+        "category": "AgentYard",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "worktreeGraph.copyBranchContext",
+        "title": "Copiar resumo da branch (para colar no Claude)",
+        "category": "AgentYard",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "worktreeGraph.showCommitSha",
+        "title": "Ver arquivos do commit",
+        "category": "AgentYard"
+      },
+      {
         "command": "worktreeGraph.openGraph",
         "title": "Abrir grafo",
         "category": "AgentYard",
@@ -1425,6 +1448,31 @@
       ],
       "view/item/context": [
         {
+          "command": "worktreeGraph.askAgentAboutBranch",
+          "when": "view == worktreeGraph.worktrees && (viewItem == branch || viewItem == commits)",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.branchSummary",
+          "when": "view == worktreeGraph.worktrees && (viewItem == branch || viewItem == commits)",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.branchSummary",
+          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "group": "0_summary@1"
+        },
+        {
+          "command": "worktreeGraph.askAgentAboutBranch",
+          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "group": "0_summary@2"
+        },
+        {
+          "command": "worktreeGraph.copyBranchContext",
+          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "group": "0_summary@3"
+        },
+        {
           "command": "worktreeGraph.launchAgentNew",
           "when": "view == worktreeGraph.agents && viewItem == agentGroup",
           "group": "inline@0"
@@ -2096,6 +2144,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "worktreeGraph.showCommitSha",
+          "when": "false"
+        },
         {
           "command": "worktreeGraph.agents.show",
           "when": "false"
@@ -2981,7 +3033,7 @@
     "watch": "tsc -watch -p ./",
     "package": "tsc -p ./ && node scripts/package-dist.js",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/summary.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
