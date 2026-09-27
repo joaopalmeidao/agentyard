@@ -1,6 +1,13 @@
 # Changelog
 
 ## Não lançado
+- Painel com visual mais limpo: barra superior em grupos (criar · sync · telas · layout) e ações
+  raras no "⋯"; cards e linhas mostram só as ações do dia a dia, o resto no "⋯" (o mesmo menu do
+  botão direito); ações da tabela aparecem ao passar o mouse; nada de botão desabilitado à toa.
+- Menu de contexto da branch em submenus (Agente, Git, Worktree): tem metade da altura e não sai
+  mais da tela; se ainda faltar espaço, rola.
+- Cores tiradas do tema do VS Code (etiquetas, chips, botões de agente, linhas do grafo): tema claro
+  e alto contraste ficam legíveis. Cabeçalho do histórico em português.
 - Sync local da base agora acontece no push, por padrão: antes de enviar uma branch pela extensão, a
   base é mesclada nela (mesmas regras: worktree limpa, sem conflito previsto, testes). A verificação
   periódica só mostra quem está atrás. Para voltar ao comportamento anterior (mesclar a cada
