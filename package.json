@@ -1,7 +1,7 @@
 {
   "name": "worktree-graph",
-  "displayName": "Worktree Graph",
-  "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
+  "displayName": "AgentYard",
+  "description": "Central para desenvolver com agentes de IA em paralelo: worktrees e branches num grafo, merge e análise de merge, PR/MR com revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Redmine), Claude Code por worktree com sessões e uso, fila e agendamento de tarefas, e a base sempre em dia.",
   "version": "0.9.2",
   "publisher": "worktree-graph",
   "license": "MIT",
@@ -14,18 +14,21 @@
     "AI"
   ],
   "keywords": [
-    "git",
-    "worktree",
-    "git worktree",
-    "graph",
-    "merge",
-    "branch",
-    "ai",
-    "agents",
+    "ai agents",
     "claude code",
+    "git worktree",
+    "worktree",
+    "git graph",
+    "merge",
+    "pull request",
+    "merge request",
+    "github",
+    "gitlab",
+    "ci",
+    "pipelines",
+    "issues",
     "codex",
-    "sync",
-    "github actions"
+    "parallel development"
   ],
   "icon": "media/logo.png",
   "main": "./out/extension.js",
@@ -37,7 +40,7 @@
       "activitybar": [
         {
           "id": "worktreeGraph",
-          "title": "Worktree Graph",
+          "title": "AgentYard",
           "icon": "media/icon.svg"
         }
       ]
@@ -110,693 +113,693 @@
       {
         "command": "worktreeGraph.openGraph",
         "title": "Abrir grafo",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(git-merge)"
       },
       {
         "command": "worktreeGraph.refresh",
         "title": "Atualizar",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.createWorktree",
         "title": "Nova worktree",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.openWorktree",
         "title": "Abrir worktree em nova janela",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(empty-window)"
       },
       {
         "command": "worktreeGraph.launchAgent",
         "title": "Abrir agente (Claude Code, Codex…) na worktree",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.openFileInWorktree",
         "title": "Abrir arquivo de outra worktree…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(go-to-file)"
       },
       {
         "command": "worktreeGraph.openTerminal",
         "title": "Abrir terminal na worktree",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(terminal)"
       },
       {
         "command": "worktreeGraph.mergeBaseInto",
         "title": "Trazer a base para esta branch",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(arrow-down)"
       },
       {
         "command": "worktreeGraph.mergeIntoBase",
         "title": "Mesclar esta branch na base",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(git-merge)"
       },
       {
         "command": "worktreeGraph.mergeInto",
         "title": "Mesclar esta branch em…",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.diffWithBase",
         "title": "Revisar alterações contra a base",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(diff)"
       },
       {
         "command": "worktreeGraph.removeWorktree",
         "title": "Remover worktree",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.deleteBranch",
         "title": "Excluir branch",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.togglePauseSync",
         "title": "Pausar/retomar sync desta branch",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(debug-pause)"
       },
       {
         "command": "worktreeGraph.toggleAutoSync",
         "title": "Ligar/desligar sync automático",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(sync)"
       },
       {
         "command": "worktreeGraph.syncNow",
         "title": "Sincronizar agora",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(sync)"
       },
       {
         "command": "worktreeGraph.generateCiWorkflow",
         "title": "Gerar workflow de CI (GitHub Actions)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(github-action)"
       },
       {
         "command": "worktreeGraph.showLog",
         "title": "Mostrar log",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.chooseSyncWhere",
         "title": "Escolher onde o sync roda (local, GitHub Actions, dividido, ambos)",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.cleanupWorktrees",
         "title": "Limpar worktrees… (remoção em lote)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(clear-all)"
       },
       {
         "command": "worktreeGraph.pruneWorktrees",
         "title": "Remover worktrees órfãs (pasta apagada)",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.toggleFavorite",
         "title": "Favoritar / desfavoritar",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(star-empty)"
       },
       {
         "command": "worktreeGraph.publishRequest",
         "title": "Publicar PR/MR…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(git-pull-request-create)"
       },
       {
         "command": "worktreeGraph.analyzeMerge",
         "title": "Analisar merge…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(git-compare)"
       },
       {
         "command": "worktreeGraph.connectHosting",
         "title": "Conectar ao GitHub/GitLab",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(plug)"
       },
       {
         "command": "worktreeGraph.disconnectHosting",
         "title": "Desconectar do GitHub/GitLab (apagar token)",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.configureFlow",
         "title": "Configurar fluxo de ambientes (dev → QA → homologação → produção)…",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.addToExplorer",
         "title": "Adicionar ao Explorer (workspace multi-root)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(files)"
       },
       {
         "command": "worktreeGraph.openToSide",
         "title": "Abrir ao lado",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.revealInOS",
         "title": "Revelar no sistema de arquivos",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.copyPath",
         "title": "Copiar caminho",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.compareWithBase",
         "title": "Comparar com a base",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.resolveConflict",
         "title": "Resolver conflito com o agente (traz a base e resolve)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.launchAgentWithPrompt",
         "title": "Abrir agente com uma tarefa",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.addProject",
         "title": "Adicionar projeto…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.removeProject",
         "title": "Remover projeto da lista",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(close)"
       },
       {
         "command": "worktreeGraph.switchProject",
         "title": "Trocar projeto…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(arrow-swap)"
       },
       {
         "command": "worktreeGraph.openProjectGraph",
         "title": "Abrir grafo do projeto",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(git-merge)"
       },
       {
         "command": "worktreeGraph.openProjectWindow",
         "title": "Abrir projeto numa nova janela",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(empty-window)"
       },
       {
         "command": "worktreeGraph.issues.refresh",
         "title": "Atualizar issues",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.issues.scopeAll",
         "title": "Issues: mostrando as minhas (clique para ver todas)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(account)"
       },
       {
         "command": "worktreeGraph.issues.scopeMine",
         "title": "Issues: mostrando todas (clique para ver só as minhas)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(organization)"
       },
       {
         "command": "worktreeGraph.issues.start",
         "title": "Começar com Claude",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.issues.createWorktree",
         "title": "Criar worktree sem agente",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.issues.openUrl",
         "title": "Abrir no navegador",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(link-external)"
       },
       {
         "command": "worktreeGraph.issues.copyLink",
         "title": "Copiar link",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.issues.show",
         "title": "Ver issue",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.issues.pick",
         "title": "Começar trabalho numa issue…",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.connectRedmine",
         "title": "Conectar ao Redmine",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(plug)"
       },
       {
         "command": "worktreeGraph.disconnectRedmine",
         "title": "Desconectar do Redmine (apagar chave)",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claude.refreshSessions",
         "title": "Reler sessões do Claude Code",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.claude.resume",
         "title": "Retomar sessão",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(debug-continue)"
       },
       {
         "command": "worktreeGraph.claude.transcript",
         "title": "Ver transcrição",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(book)"
       },
       {
         "command": "worktreeGraph.claude.copySessionId",
         "title": "Copiar id da sessão",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claude.newSession",
         "title": "Nova sessão do Claude aqui",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.claude.commands",
         "title": "Comandos do Claude Code…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(terminal-cmd)"
       },
       {
         "command": "worktreeGraph.claude.usage",
         "title": "Uso do Claude Code (janela de 5 h e semana)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(pulse)"
       },
       {
         "command": "worktreeGraph.claudeConfig.refresh",
         "title": "Claude: atualizar configuração",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.claudeConfig.newSkill",
         "title": "Claude: nova skill…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.claudeConfig.copySkill",
         "title": "Copiar para o outro escopo (usuário ↔ projeto)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(copy)"
       },
       {
         "command": "worktreeGraph.claudeConfig.renameSkill",
         "title": "Renomear…",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claudeConfig.deleteSkill",
         "title": "Excluir…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.claudeConfig.revealSkill",
         "title": "Revelar no sistema de arquivos",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claudeConfig.openFile",
         "title": "Abrir",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claudeConfig.editPermissions",
         "title": "Permissões (allow/ask/deny)…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(shield)"
       },
       {
         "command": "worktreeGraph.claudeConfig.setModel",
         "title": "Modelo padrão…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(symbol-enum)"
       },
       {
         "command": "worktreeGraph.claudeConfig.showHooks",
         "title": "Ver hooks",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claudeConfig.newMemory",
         "title": "Claude: nova memória…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.claudeConfig.deleteMemory",
         "title": "Excluir memória…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.claudeConfig.checkMemoryIndex",
         "title": "Verificar índice MEMORY.md",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(checklist)"
       },
       {
         "command": "worktreeGraph.claudeConfig.revealMemory",
         "title": "Revelar pasta de memória",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pushBranch",
         "title": "Push da branch (enviar para o remoto)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "worktreeGraph.pushMany",
         "title": "Enviar branches com commits pendentes…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "worktreeGraph.issues.create",
         "title": "Nova issue…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.issues.createFromSelection",
         "title": "Criar issue com a seleção",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pipelines.refresh",
         "title": "Atualizar pipelines",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.pipelines.scopeAll",
         "title": "Pipelines: mostrar todas as branches",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(list-flat)"
       },
       {
         "command": "worktreeGraph.pipelines.scopeWorktrees",
         "title": "Pipelines: só branches com worktree",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(filter)"
       },
       {
         "command": "worktreeGraph.pipelines.open",
         "title": "Abrir no navegador",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(link-external)"
       },
       {
         "command": "worktreeGraph.pipelines.log",
         "title": "Ver log",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(output)"
       },
       {
         "command": "worktreeGraph.pipelines.retry",
         "title": "Re-executar pipeline",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(debug-rerun)"
       },
       {
         "command": "worktreeGraph.pipelines.retryFailed",
         "title": "Re-executar só os jobs que falharam",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(debug-rerun)"
       },
       {
         "command": "worktreeGraph.pipelines.cancel",
         "title": "Cancelar pipeline",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(debug-stop)"
       },
       {
         "command": "worktreeGraph.pipelines.trigger",
         "title": "Rodar pipeline numa branch…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(play)"
       },
       {
         "command": "worktreeGraph.pipelines.fix",
         "title": "✦ Corrigir com o agente (log da falha)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.pipelines.play",
         "title": "Iniciar job manual",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(debug-start)"
       },
       {
         "command": "worktreeGraph.connectGitLab",
         "title": "Conectar ao GitLab (URL e token)…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(plug)"
       },
       {
         "command": "worktreeGraph.cleanupReminder",
         "title": "Verificar worktrees mescladas e paradas",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.showChecksOutput",
         "title": "Mostrar saída das checagens",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.reviewWithAgent",
         "title": "✦ Revisar PR/MR com o agente",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(eye)"
       },
       {
         "command": "worktreeGraph.openReview",
         "title": "Abrir a última revisão do agente",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.activity",
         "title": "Atividade (commits, sessões, tokens e custo por tarefa)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(pulse)"
       },
       {
         "command": "worktreeGraph.tasks.add",
         "title": "Adicionar tarefa para o agente…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.tasks.runNow",
         "title": "Rodar agora",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(play)"
       },
       {
         "command": "worktreeGraph.tasks.moveUp",
         "title": "Subir na fila",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(arrow-up)"
       },
       {
         "command": "worktreeGraph.tasks.moveDown",
         "title": "Descer na fila",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(arrow-down)"
       },
       {
         "command": "worktreeGraph.tasks.remove",
         "title": "Remover tarefa",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(close)"
       },
       {
         "command": "worktreeGraph.tasks.markDone",
         "title": "Marcar como pronta",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(pass)"
       },
       {
         "command": "worktreeGraph.tasks.markFailed",
         "title": "Marcar como falhou",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(error)"
       },
       {
         "command": "worktreeGraph.tasks.clearFinished",
         "title": "Limpar tarefas terminadas",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(clear-all)"
       },
       {
         "command": "worktreeGraph.agents.checkReady",
         "title": "Verificar se o agente terminou",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(check)"
       },
       {
         "command": "worktreeGraph.agents.dismissReady",
         "title": "Tirar \"pronto para revisar\"",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.attempts.try",
         "title": "Tentar N abordagens…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(beaker)"
       },
       {
         "command": "worktreeGraph.attempts.fromIssue",
         "title": "Tentar N abordagens para esta issue…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(beaker)"
       },
       {
         "command": "worktreeGraph.attempts.compare",
         "title": "Comparar tentativas…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(split-horizontal)"
       },
       {
         "command": "worktreeGraph.pullBranch",
         "title": "Pull da branch (trazer do remoto)",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(cloud-download)"
       },
       {
         "command": "worktreeGraph.pullMany",
         "title": "Trazer do remoto as branches com novidades…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(cloud-download)"
       },
       {
         "command": "worktreeGraph.fetchNow",
         "title": "Fetch agora",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(repo-fetch)"
       },
       {
         "command": "worktreeGraph.stashCreate",
         "title": "Guardar alterações da worktree (stash)…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(archive)"
       },
       {
         "command": "worktreeGraph.stashApply",
         "title": "Aplicar stash em…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(check)"
       },
       {
         "command": "worktreeGraph.stashPop",
         "title": "Aplicar e remover stash (pop) em…",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.stashShow",
         "title": "Ver diff do stash",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(diff)"
       },
       {
         "command": "worktreeGraph.stashDrop",
         "title": "Apagar stash",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.moveChanges",
         "title": "Mover alterações para outra worktree…",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.cherryPick",
         "title": "Cherry-pick de um commit em…",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.reorganizeCommits",
         "title": "Reorganizar commits (juntar, reordenar, descartar)…",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.undoReorganize",
         "title": "Desfazer a última reorganização de commits",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.compareWith",
         "title": "Comparar com outra branch/worktree…",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(git-compare)"
       },
       {
         "command": "worktreeGraph.connectJira",
         "title": "Conectar ao Jira",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(plug)"
       },
       {
         "command": "worktreeGraph.disconnectJira",
         "title": "Desconectar do Jira (apagar credenciais)",
-        "category": "Worktree Graph"
+        "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.removeMerged",
         "title": "Remover worktrees já mescladas na base",
-        "category": "Worktree Graph",
+        "category": "AgentYard",
         "icon": "$(git-merge)"
       }
     ],
@@ -1697,7 +1700,7 @@
       ]
     },
     "configuration": {
-      "title": "Worktree Graph",
+      "title": "AgentYard",
       "properties": {
         "worktreeGraph.baseBranch": {
           "type": "string",
@@ -2207,11 +2210,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/joaopalmeidao/worktree-graph.git"
+    "url": "https://github.com/joaopalmeidao/agentyard.git"
   },
-  "homepage": "https://github.com/joaopalmeidao/worktree-graph#readme",
+  "homepage": "https://github.com/joaopalmeidao/agentyard#readme",
   "bugs": {
-    "url": "https://github.com/joaopalmeidao/worktree-graph/issues"
+    "url": "https://github.com/joaopalmeidao/agentyard/issues"
   },
   "galleryBanner": {
     "color": "#1f1f1f",

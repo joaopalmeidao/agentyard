@@ -87,7 +87,7 @@ export function generalBody(summary: string, loose: ReviewComment[]): string {
       ...loose.map(c => `- \`${c.path}${c.line ? `:${c.line}` : ''}\` — ${commentText(c)}`),
     );
   }
-  parts.push('', '_Revisão feita por agente, via Worktree Graph._');
+  parts.push('', '_Revisão feita por agente, via AgentYard._');
   return parts.join('\n').trim();
 }
 

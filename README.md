@@ -1,17 +1,16 @@
-# Worktree Graph
+# AgentYard
 
-Extensão do VS Code para quem trabalha com vários agentes de IA em paralelo, cada um na sua
-`git worktree`. Mostra todas as worktrees e branches num painel só, deixa mesclar com um clique
-(ou arrastando uma branch sobre outra) e mantém as branches em dia com a base — localmente, pela
-própria extensão, e no GitHub, por um workflow que ela gera.
+Extensão do VS Code para quem desenvolve com vários agentes de IA em paralelo, cada um na sua `git worktree`. O AgentYard junta num lugar só o grafo de worktrees e branches, merge e análise de merge, PR/MR com o status da revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira e Redmine), o Claude Code (ou outro agente) aberto em cada worktree com sessões e uso de tokens, fila e agendamento de tarefas, e o sync da base local ou no CI.
 
-![Worktree Graph](docs/social-preview.png)
+> Antes se chamava **Worktree Graph**. Os IDs de comandos e configurações (`worktreeGraph.*`) continuam os mesmos.
+
+![AgentYard](docs/social-preview.png)
 
 ![Demonstração](docs/video/worktree-graph.gif)
 
 Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
 
-![VS Code com o Worktree Graph](docs/prints/00-vscode.png)
+![VS Code com o AgentYard](docs/prints/00-vscode.png)
 
 ## O que tem
 
@@ -86,7 +85,7 @@ disputam um lock em `<.git>/worktree-graph-sync.lock`.
 
 ## Onde o sync roda
 
-O botão **onde** do painel (ou *Worktree Graph: Escolher onde o sync roda*) define, por repositório:
+O botão **onde** do painel (ou *AgentYard: Escolher onde o sync roda*) define, por repositório:
 
 | modo | o que acontece |
 |---|---|

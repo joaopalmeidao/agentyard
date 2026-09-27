@@ -1,4 +1,4 @@
-# Gerado pela extensão Worktree Graph.
+# Gerado pela extensão AgentYard.
 #
 # Sempre que __BASE__ recebe commits, este workflow mescla __BASE__ em cada branch remota que casa
 # com BRANCH_PATTERNS, roda a verificação e faz push do resultado. Branch com conflito ou com a

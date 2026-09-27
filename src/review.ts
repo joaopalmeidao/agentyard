@@ -24,7 +24,7 @@ export function ensureExcluded(commonDir: string) {
   }
   if (text.split(/\r?\n/).some(l => l.trim() === `${REVIEW_DIR}/`)) return;
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}# Worktree Graph (revisões de agente)\n${REVIEW_DIR}/\n`);
+  fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}# AgentYard (revisões de agente)\n${REVIEW_DIR}/\n`);
 }
 
 /**
