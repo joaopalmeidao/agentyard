@@ -61,6 +61,10 @@ export interface WorktreeView extends Worktree {
   overlap?: { with: string[]; files: number };
   /** Orçamento de tokens/US$ perto do fim ou estourado (src/coord). */
   budget?: { level: 'warn' | 'over'; pct: number; by?: 'tokens' | 'usd' };
+  /** Espaço em disco (src/env): calculado em segundo plano, sem seguir links. */
+  size?: { bytes: number; complete: boolean };
+  /** Porta base desta worktree (worktreeGraph.env.ports). */
+  port?: number;
   /** PR/MR aberto desta branch. */
   request?: ChangeRequest;
 }

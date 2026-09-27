@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { formatBytes } from './env/core';
+import { bytesOf } from './env/register';
 import { Controller } from './controller';
 import { resolveButton, runResolve } from './conflicts';
 import { gitUri } from './diff';
@@ -196,6 +198,9 @@ export async function mergeInto(ctl: Controller, arg: BranchArg) {
  * `branch`: nome já decidido (sem perguntar); `quiet`: sem a notificação final.
  * Devolve a pasta criada.
  */
+/** Chamados depois de criar uma worktree (src/env: .env, portas e setup). */
+export const worktreeCreatedHooks: ((dir: string, branch: string, quiet: boolean) => Promise<void>)[] = [];
+
 export async function createWorktree(
   ctl: Controller,
   opts: { startPoint?: string; existing?: string; branch?: string; quiet?: boolean } = {},
@@ -233,6 +238,13 @@ export async function createWorktree(
     const t = vscode.window.createTerminal({ name: `${branch}: setup`, cwd: dir });
     t.show(true);
     t.sendText(post);
+  }
+  for (const hook of worktreeCreatedHooks) {
+    try {
+      await hook(dir, branch, !!opts.quiet);
+    } catch (e) {
+      ctl.log(`Depois de criar ${branch}: ${(e as Error).message}`);
+    }
   }
   if (opts.quiet) return dir;
   const pick = await vscode.window.showInformationMessage(`Worktree ${branch} criada em ${dir}.`, 'Abrir em nova janela', 'Abrir terminal');
@@ -455,6 +467,12 @@ export function mergedWorktrees(ctl: Controller) {
 }
 
 /** Um clique: remove as worktrees já mescladas na base (e, se quiser, as branches delas). */
+/** " Libera ~1,2 GB." quando o espaço já foi calculado (src/env). */
+function freed(paths: string[]): string {
+  const b = bytesOf(paths);
+  return b ? ` Libera ~${formatBytes(b)}.` : '';
+}
+
 export async function removeMerged(ctl: Controller) {
   const s = ctl.state;
   if (!s) return;
@@ -480,7 +498,7 @@ export async function removeMerged(ctl: Controller) {
     {
       modal: true,
       detail: [
-        `Todas estão limpas e com a branch inteira em ${s.base}; nada se perde.`,
+        `Todas estão limpas e com a branch inteira em ${s.base}; nada se perde.${freed(removable.map(w => w.path))}`,
         list,
         dirty.length ? `${dirty.length} mesclada(s) com alterações não commitadas ficaram de fora.` : '',
         'Favoritas, com agente aberto e branches protegidas nunca entram.',

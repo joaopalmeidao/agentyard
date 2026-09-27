@@ -738,6 +738,55 @@ exports.run = async () => {
     await cfg.update('batch.maxParallel', undefined, G);
   });
 
+  await check('ambiente: nova worktree ganha .env da principal com a porta dela (fora do git)', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    const root = ctl.repo.root;
+    fs.appendFileSync(path.join(ctl.repo.commonDir, 'info', 'exclude'), '\n.env\n');
+    fs.writeFileSync(path.join(root, '.env'), '# app\nPORT=8000\nDB_URL=sqlite://x\n');
+    await cfg.update('env.ports', { base: 4100, step: 10, vars: ['PORT', 'VITE_PORT'] }, G);
+    try {
+      const dir = await api.actions.createWorktree(ctl, { branch: 'env/teste', quiet: true });
+      const text = fs.readFileSync(path.join(dir, '.env'), 'utf8');
+      assert.ok(/^PORT=41\d0$/m.test(text), text);
+      assert.ok(text.includes('DB_URL=sqlite://x') && text.includes('VITE_PORT='), text);
+      assert.strictEqual(execSync('git status --porcelain', { cwd: dir, encoding: 'utf8' }).trim(), '', '.env fora do git');
+      await ctl.refresh();
+      const port = Number(/^PORT=(\d+)$/m.exec(text)[1]);
+      assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'env/teste').port, port, 'porta no estado');
+      execSync(`git worktree remove --force "${dir}"`, { cwd: root });
+    } finally {
+      await cfg.update('env.ports', undefined, G);
+      fs.unlinkSync(path.join(root, '.env'));
+    }
+  });
+
+  await check('modelo de tarefa: prompt renderizado vai para o agente e para a fila', async () => {
+    const fs = require('fs');
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const all = await api.templates.list();
+    const t = all.find(x => x.id === 'simplify-diff');
+    assert.ok(t && all.length >= 6);
+    await api.templates.send({ path: wt.path, branch: wt.branch }, t, 'now');
+    const text = fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8');
+    assert.ok(text.includes('ai/login-oauth') && text.includes('master') && !text.includes('${'), text);
+    const wt2 = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    await api.templates.send({ path: wt2.path, branch: wt2.branch }, all.find(x => x.id === 'fix-tests'), 'queue');
+    const q = api.agentFlow.tasks.queue(wt2.path);
+    assert.ok(q && q.tasks.some(x => x.text.includes('ai/precos-promo')), 'tarefa na fila');
+  });
+
+  await check('espaço em disco: calculado em segundo plano e no estado', async () => {
+    await api.env.recomputeSizes();
+    await ctl.refresh();
+    const sized = ctl.state.worktrees.filter(w => w.size && w.size.bytes > 0);
+    assert.ok(sized.length >= 3, `${sized.length} com tamanho`);
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));
