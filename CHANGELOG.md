@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1
+- O botão de PRs/MRs do painel não dá mais "command 'worktreeGraph.pullRequests.focus' not found"
+  quando a janela ainda está com uma versão anterior ativa: abre a barra do AgentYard e oferece
+  recarregar a janela.
+
 ## 0.12.0
 - View "Pull requests": grupos Meus, Pedem minha revisão, Abertos e Mesclados (7 dias), com a
   situação da revisão, CI, conflitos, rascunho e se a branch já tem worktree local.
