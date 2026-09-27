@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "AgentYard",
   "description": "Central para desenvolver com agentes de IA em paralelo: worktrees e branches num grafo, merge e análise de merge, PR/MR com revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Redmine), Claude Code por worktree com sessões e uso, fila e agendamento de tarefas, e a base sempre em dia.",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "publisher": "worktree-graph",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
@@ -823,6 +823,12 @@
         "icon": "$(git-merge)"
       },
       {
+        "command": "worktreeGraph.removeMergedBranches",
+        "title": "Excluir branches sem worktree já mescladas na base",
+        "category": "AgentYard",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "worktreeGraph.schedules.new",
         "title": "Novo agendamento…",
         "category": "AgentYard",
@@ -1294,6 +1300,11 @@
           "command": "worktreeGraph.removeMerged",
           "when": "view == worktreeGraph.worktrees",
           "group": "3_cleanup@0"
+        },
+        {
+          "command": "worktreeGraph.removeMergedBranches",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "3_cleanup@1"
         },
         {
           "command": "worktreeGraph.schedules.new",

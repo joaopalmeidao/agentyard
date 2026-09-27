@@ -188,6 +188,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return sync.chooseWhere();
       case 'cleanupWorktrees':
         return actions.cleanupWorktrees(ctl);
+      case 'removeMergedBranches':
+        return actions.removeMergedBranches(ctl);
       case 'toggleFavorite':
         return actions.toggleFavorite(ctl, a.path ? { path: a.path } : a.branch);
       case 'pruneWorktrees':
@@ -339,6 +341,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   );
   reg('cleanupWorktrees', () => actions.cleanupWorktrees(ctl));
   reg('removeMerged', () => actions.removeMerged(ctl));
+  reg('removeMergedBranches', () => actions.removeMergedBranches(ctl));
   reg('toggleFavorite', item => actions.toggleFavorite(ctl, item));
   reg('deleteBranch', item => actions.deleteBranch(ctl, item));
   reg('togglePauseSync', item => item?.branch && handler('togglePause', { branch: item.branch }));
