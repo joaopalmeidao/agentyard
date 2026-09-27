@@ -2,17 +2,26 @@ import * as vscode from 'vscode';
 import { createWorktree } from './actions';
 import { AgentTerminals, agents, fillTemplate } from './agents';
 import { Controller } from './controller';
+import { t } from './i18n';
 
-export const DEFAULT_RESOLVE_PROMPT =
-  'Na branch ${branch}, traga a ${base} (git merge ${base}) e resolva os conflitos em: ${files}. ' +
-  'Preserve a intenção das duas mudanças, rode os testes do projeto e faça o commit do merge. ' +
-  'Se algo for ambíguo, pergunte antes de decidir.';
+/** Tarefa padrão para resolver conflitos (placeholders ${branch}, ${base} e ${files}). */
+export function defaultResolvePrompt(): string {
+  return t(
+    'On branch {0}, bring in {1} (git merge {1}) and resolve the conflicts in: {2}. Preserve the intent of both changes, run the project tests and commit the merge. If anything is ambiguous, ask before deciding.',
+    '${branch}',
+    '${base}',
+    '${files}',
+  );
+}
 
-export const DEFAULT_INTO_BASE_PROMPT =
-  'A branch ${branch} conflita com ${base} e não pode ser mesclada nela ainda. Nesta worktree, traga a ${base} ' +
-  '(git merge ${base}) e resolva os conflitos em: ${files}, preservando a intenção das duas mudanças. Rode os testes ' +
-  'do projeto e faça o commit do merge, para que o merge de ${branch} em ${base} fique limpo. Não faça o merge em ' +
-  '${base} sem me perguntar. Se algo for ambíguo, pergunte antes de decidir.';
+export function defaultIntoBasePrompt(): string {
+  return t(
+    'Branch {0} conflicts with {1} and cannot be merged into it yet. In this worktree, bring in {1} (git merge {1}) and resolve the conflicts in: {2}, preserving the intent of both changes. Run the project tests and commit the merge, so that merging {0} into {1} is clean. Do not merge into {1} without asking me. If anything is ambiguous, ask before deciding.',
+    '${branch}',
+    '${base}',
+    '${files}',
+  );
+}
 
 export interface ResolveOptions {
   /** O que deve ser trazido para `branch`. Padrão: a base do repositório. */
@@ -50,19 +59,19 @@ export async function resolveConflict(ctl: Controller, terms: AgentTerminals, br
 
   const cfg = ctl.cfg();
   const template = opts.intoBase
-    ? cfg.get<string>('prompts.mergeIntoBase', '') || DEFAULT_INTO_BASE_PROMPT
-    : cfg.get<string>('prompts.resolveConflict', '') || DEFAULT_RESOLVE_PROMPT;
+    ? cfg.get<string>('prompts.mergeIntoBase', '') || defaultIntoBasePrompt()
+    : cfg.get<string>('prompts.resolveConflict', '') || defaultResolvePrompt();
   const prompt = fillTemplate(template, {
     branch,
     base: opts.intoBase ? repoBase : base,
-    files: files.length ? files.join(', ') : '(a simulação não listou arquivos; rode o merge para ver)',
+    files: files.length ? files.join(', ') : t('(the simulation listed no files; run the merge to see them)'),
   });
   await terms.launchWithPrompt(wt.path, branch, prompt, resolverName(ctl));
 }
 
 /** Botão de notificação: devolve o rótulo e a ação para "Resolver com <agente>". */
 export function resolveButton(ctl: Controller): string {
-  return `Resolver com ${resolverName(ctl)}`;
+  return t('Resolve with {0}', resolverName(ctl));
 }
 
 export function runResolve(branch: string, opts: ResolveOptions = {}) {

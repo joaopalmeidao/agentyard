@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import { commitDetails } from './commits';
 import { Controller } from './controller';
-import { bundle, locale } from './i18n';
+import { bundle, locale, t } from './i18n';
 
 export type ActionHandler = (action: string, args: Record<string, string>) => Promise<void>;
 
@@ -91,7 +91,7 @@ export class GraphPanel implements vscode.Disposable {
 <title>AgentYard</title>
 </head>
 <body data-vscode-context='{"preventDefaultContextMenuItems": true}'>
-<div id="app"><div class="empty">Carregando…</div></div>
+<div id="app"><div class="empty">${t('Loading…')}</div></div>
 <script nonce="${nonce}">window.__L10N = ${l10n};</script>
 <script nonce="${nonce}" src="${media('graph.js')}"></script>
 </body>

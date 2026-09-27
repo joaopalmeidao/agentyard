@@ -134,7 +134,7 @@ check('descoberta junta fluxo, base, arquivos de CI e configuração, com a orig
   assert.deepStrictEqual(by['release/1.0'], ['.github/workflows/ci.yml', 'azure-pipelines.yml']);
   assert.ok(by['hotfix/x'], 'padrão hotfix/* expandido');
   assert.ok(by.staging && by.master, 'Bitbucket');
-  assert.deepStrictEqual(by['extra-branch'], ['configuração (worktreeGraph.ciBranches)']);
+  assert.deepStrictEqual(by['extra-branch'], ['settings (worktreeGraph.ciBranches)']);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

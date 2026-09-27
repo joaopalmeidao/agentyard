@@ -6,6 +6,7 @@
 import type { Issue, IssueScope, NewIssue } from '../issues/core';
 import { ChangeRequest, HostClient, HostError, NewChangeRequest, RemoteInfo, ReviewStatus, azureReview } from './core';
 import { authHeader, request } from './http';
+import { t } from '../i18n';
 import type { Pipeline, PipelineClient, PipelineJob, PipelineStatus, Workflow } from './pipelines';
 
 type Fetch = typeof fetch;
@@ -37,7 +38,7 @@ abstract class AzureBase {
 
   constructor(protected readonly remote: RemoteInfo, protected readonly token: string, apiBase?: string, protected readonly f: Fetch = fetch) {
     const a = remote.azure;
-    if (!a) throw new HostError(0, 'Remoto do Azure DevOps sem organização/projeto.');
+    if (!a) throw new HostError(0, t('Azure DevOps remote has no organization/project.'));
     this.coll = (apiBase || a.collection).replace(/\/+$/, '');
     this.project = a.project;
     this.repo = a.repo;
@@ -121,7 +122,7 @@ export class AzureDevOpsClient extends AzureBase implements HostClient {
   async whoami() {
     const r = await this.call('GET', '/_apis/connectionData');
     const u = r.authenticatedUser;
-    if (!u || u.providerDisplayName === 'Anonymous') throw new HostError(401, '401: PAT não autenticou nenhum usuário');
+    if (!u || u.providerDisplayName === 'Anonymous') throw new HostError(401, t('401: the PAT did not authenticate any user'));
     return u.providerDisplayName ?? u.customDisplayName ?? u.id;
   }
 
@@ -134,7 +135,7 @@ export class AzureDevOpsClient extends AzureBase implements HostClient {
       title: f['System.Title'] ?? '',
       body: htmlToText(f['System.Description'] ?? ''),
       url: `${this.web}${this.p}/_workitems/edit/${w.id}`,
-      labels: [f['System.WorkItemType'], f['System.State'], ...String(f['System.Tags'] ?? '').split(';').map((t: string) => t.trim())].filter(Boolean),
+      labels: [f['System.WorkItemType'], f['System.State'], ...String(f['System.Tags'] ?? '').split(';').map((tag: string) => tag.trim())].filter(Boolean),
       assignee: f['System.AssignedTo']?.displayName,
       updated: ts(f['System.ChangedDate']),
       project: f['System.TeamProject'],
@@ -240,7 +241,7 @@ export class AzurePipelines extends AzureBase implements PipelineClient {
 
   async log(job: PipelineJob): Promise<string> {
     const build = this.buildOf.get(job.id);
-    if (!build) throw new HostError(0, 'Abra os jobs do build antes de ver o log.');
+    if (!build) throw new HostError(0, t('Open the build jobs before viewing the log.'));
     return this.call('GET', `${this.p}/_apis/build/builds/${build}/logs/${job.id}`, undefined, true);
   }
 
@@ -250,11 +251,11 @@ export class AzurePipelines extends AzureBase implements PipelineClient {
   }
 
   async trigger(branch: string, workflowId?: number) {
-    if (!workflowId) throw new HostError(0, 'Escolha qual pipeline (definição) rodar.');
+    if (!workflowId) throw new HostError(0, t('Choose which pipeline (definition) to run.'));
     await this.call('POST', `${this.p}/_apis/build/builds`, { definition: { id: workflowId }, sourceBranch: `refs/heads/${branch}` });
   }
 
   async play(): Promise<void> {
-    throw new HostError(0, 'Aprovações e etapas manuais do Azure Pipelines são feitas pelo navegador.');
+    throw new HostError(0, t('Azure Pipelines approvals and manual stages are handled in the browser.'));
   }
 }

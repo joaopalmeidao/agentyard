@@ -71,7 +71,7 @@ const now = 1_800_000_000;
     const r1 = await processNext(items, s);
     assert.deepStrictEqual([r1.status, r1.reason], ['failed', 'conflito ao trazer main']);
     const r2 = await processNext(items, s);
-    assert.deepStrictEqual([r2.status, r2.reason], ['failed', 'checagens falharam']);
+    assert.deepStrictEqual([r2.status, r2.reason], ['failed', 'checks failed']);
     assert.ok(!s.log.some(l => l.startsWith('merge')));
   });
 

@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { Controller } from '../controller';
-import { DEFAULT_TEMPLATES, parseTemplateFile, placeholdersOf, renderTemplate, slug, TaskTemplate, templateFileText } from './core';
+import { t } from '../i18n';
+import { defaultTemplates, parseTemplateFile, placeholdersOf, renderTemplate, slug, sourceLabel, TaskTemplate, templateFileText } from './core';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
 type Arg = { path?: string; branch?: string } | undefined;
@@ -22,8 +23,8 @@ export class TemplateService {
     const fromCfg = this.ctl
       .cfg()
       .get<{ name: string; description?: string; prompt: string }[]>('taskTemplates', [])
-      .filter(t => t?.name && t?.prompt)
-      .map((t): TaskTemplate => ({ id: `cfg:${slug(t.name)}`, name: t.name, description: t.description, prompt: t.prompt, source: 'configuração' }));
+      .filter(c => c?.name && c?.prompt)
+      .map((c): TaskTemplate => ({ id: `cfg:${slug(c.name)}`, name: c.name, description: c.description, prompt: c.prompt, source: 'settings' }));
     const fromRepo: TaskTemplate[] = [];
     const main = await this.mainPath();
     if (main) {
@@ -44,7 +45,7 @@ export class TemplateService {
     }
     // repositório > configuração > padrão, pelo nome
     const out = new Map<string, TaskTemplate>();
-    for (const t of [...DEFAULT_TEMPLATES, ...fromCfg, ...fromRepo]) out.set(t.name.toLowerCase(), t);
+    for (const tpl of [...defaultTemplates(), ...fromCfg, ...fromRepo]) out.set(tpl.name.toLowerCase(), tpl);
     return [...out.values()];
   }
 
@@ -62,7 +63,7 @@ export class TemplateService {
       if (own) return { path: own.path, branch: own.branch };
     }
     const pick = await vscode.window.showQuickPick(wts.map(w => ({ label: w.branch ?? path.basename(w.path), description: w.path, w })), {
-      placeHolder: 'Usar o modelo em qual worktree?',
+      placeHolder: t('Use the template in which worktree?'),
     });
     return pick ? { path: pick.w.path, branch: pick.w.branch } : undefined;
   }
@@ -82,11 +83,11 @@ export class TemplateService {
   }
 
   /** Envia o modelo pronto: agente agora (terminal novo) ou fila de tarefas da worktree. */
-  async send(wt: { path: string; branch?: string }, t: TaskTemplate, how: 'now' | 'queue', extra: Record<string, string> = {}) {
-    const prompt = renderTemplate(t.prompt, { ...(await this.vars(wt)), ...extra });
+  async send(wt: { path: string; branch?: string }, tpl: TaskTemplate, how: 'now' | 'queue', extra: Record<string, string> = {}) {
+    const prompt = renderTemplate(tpl.prompt, { ...(await this.vars(wt)), ...extra });
     if (how === 'queue') await vscode.commands.executeCommand('worktreeGraph.tasks.add', { path: wt.path, branch: wt.branch }, prompt);
     else await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: wt.path, branch: wt.branch, prompt });
-    this.ctl.log(`Modelo "${t.name}" enviado para ${wt.branch ?? wt.path} (${how === 'queue' ? 'fila' : 'agente'})`);
+    this.ctl.log(how === 'queue' ? t('Template "{0}" sent to {1} (queue)', tpl.name, wt.branch ?? wt.path) : t('Template "{0}" sent to {1} (agent)', tpl.name, wt.branch ?? wt.path));
     return prompt;
   }
 
@@ -95,59 +96,59 @@ export class TemplateService {
     if (!wt) return;
     const all = await this.list();
     const pick = await vscode.window.showQuickPick(
-      all.map(t => ({ label: t.name, description: t.source, detail: t.description, t })),
-      { title: `✦ Modelo de tarefa para ${wt.branch ?? path.basename(wt.path)}`, matchOnDetail: true },
+      all.map(tpl => ({ label: tpl.name, description: sourceLabel(tpl.source), detail: tpl.description, tpl })),
+      { title: '✦ ' + t('Task template for {0}', wt.branch ?? path.basename(wt.path)), matchOnDetail: true },
     );
     if (!pick) return;
-    const t = pick.t;
+    const tpl = pick.tpl;
     const v = await this.vars(wt);
-    const need = placeholdersOf(t.prompt);
+    const need = placeholdersOf(tpl.prompt);
     if (need.includes('file') && !v.file) {
-      vscode.window.showWarningMessage(`"${t.name}" usa o arquivo aberto: abra o arquivo no editor e tente de novo.`);
+      vscode.window.showWarningMessage(t('"{0}" uses the open file: open the file in the editor and try again.', tpl.name));
       return;
     }
     const extra: Record<string, string> = {};
     if (need.includes('selection') && !v.selection) {
-      const typed = await vscode.window.showInputBox({ title: t.name, prompt: 'Nada selecionado no editor: cole aqui o erro ou o trecho', ignoreFocusOut: true });
+      const typed = await vscode.window.showInputBox({ title: tpl.name, prompt: t('Nothing selected in the editor: paste the error or the snippet here'), ignoreFocusOut: true });
       if (!typed) return;
       extra.selection = typed;
     }
     const how = await vscode.window.showQuickPick(
       [
-        { label: 'Abrir o agente agora', description: 'num terminal novo da worktree', v: 'now' as const },
-        { label: 'Colocar na fila da worktree', description: 'roda quando a tarefa atual ficar pronta', v: 'queue' as const },
+        { label: t('Open the agent now'), description: t('in a new terminal of the worktree'), v: 'now' as const },
+        { label: t('Add to the worktree\'s queue'), description: t('runs when the current task is ready'), v: 'queue' as const },
       ],
-      { title: t.name },
+      { title: tpl.name },
     );
-    if (how) await this.send(wt, t, how.v, extra);
+    if (how) await this.send(wt, tpl, how.v, extra);
   }
 
   async create() {
     const main = await this.mainPath();
     if (!main) return;
-    const name = await vscode.window.showInputBox({ title: 'Novo modelo de tarefa', prompt: 'Nome (ex.: Migrar para a nova API)', ignoreFocusOut: true });
+    const name = await vscode.window.showInputBox({ title: t('New task template'), prompt: t('Name (e.g. Migrate to the new API)'), ignoreFocusOut: true });
     if (!name) return;
-    const description = (await vscode.window.showInputBox({ title: name, prompt: 'Descrição curta (opcional)', ignoreFocusOut: true })) ?? '';
+    const description = (await vscode.window.showInputBox({ title: name, prompt: t('Short description (optional)'), ignoreFocusOut: true })) ?? '';
     const file = path.join(main, TEMPLATE_DIR, `${slug(name)}.md`);
     if (!fs.existsSync(file)) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, templateFileText(name, description, 'Na branch ${branch} (base ${base}), …\n\nPlaceholders: ${branch}, ${base}, ${file}, ${selection}, ${issue}'));
+      fs.writeFileSync(file, templateFileText(name, description, t('On branch {0} (base {1}), …', '${branch}', '${base}') + '\n\nPlaceholders: ${branch}, ${base}, ${file}, ${selection}, ${issue}'));
     }
     await vscode.window.showTextDocument(vscode.Uri.file(file));
-    vscode.window.showInformationMessage(`Modelo em ${path.relative(main, file)}: faça commit para compartilhar com o time.`);
+    vscode.window.showInformationMessage(t('Template at {0}: commit it to share with the team.', path.relative(main, file)));
   }
 
   /** Modelos do repositório abrem direto; os padrões e da configuração viram um .md para editar. */
   async edit() {
     const main = await this.mainPath();
     if (!main) return;
-    const pick = await vscode.window.showQuickPick((await this.list()).map(t => ({ label: t.name, description: t.source, t })), { title: 'Editar qual modelo?' });
+    const pick = await vscode.window.showQuickPick((await this.list()).map(tpl => ({ label: tpl.name, description: sourceLabel(tpl.source), tpl })), { title: t('Edit which template?') });
     if (!pick) return;
-    let file = pick.t.file;
+    let file = pick.tpl.file;
     if (!file) {
-      file = path.join(main, TEMPLATE_DIR, `${slug(pick.t.name)}.md`);
+      file = path.join(main, TEMPLATE_DIR, `${slug(pick.tpl.name)}.md`);
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      if (!fs.existsSync(file)) fs.writeFileSync(file, templateFileText(pick.t.name, pick.t.description ?? '', pick.t.prompt));
+      if (!fs.existsSync(file)) fs.writeFileSync(file, templateFileText(pick.tpl.name, pick.tpl.description ?? '', pick.tpl.prompt));
     }
     await vscode.window.showTextDocument(vscode.Uri.file(file));
   }

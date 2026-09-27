@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import type { AgentFlow } from '../agentFlow/register';
 import type { Controller } from '../controller';
 import { ensureExcluded } from '../review';
+import { locale, t } from '../i18n';
 
 const DIR = '.worktree-graph';
 const FILE = 'summary.md';
@@ -65,9 +66,9 @@ export class ReadySummaryService implements vscode.Disposable {
     if (this.ctl.repo) ensureExcluded(this.ctl.repo.commonDir);
     const { base } = this.ctl.state ?? (await this.ctl.base());
     const prompt = [
-      `Resuma o trabalho da branch ${branch} em relação a ${base} (git log e git diff ${base}...HEAD).`,
-      `Escreva em ${DIR}/${FILE}, em markdown, com três seções: "O que mudou", "Riscos" e "O que testar".`,
-      'Não altere nenhum outro arquivo e não faça commit.',
+      t('Summarize the work on branch {0} compared to {1} (git log and git diff {1}...HEAD).', branch, base),
+      t('Write it to {0}, in markdown, with three sections: "What changed", "Risks" and "What to test".', `${DIR}/${FILE}`),
+      t('Don\'t change any other file and don\'t commit.'),
     ].join('\n');
     await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: wtPath, branch, prompt });
     const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(wtPath), `${DIR}/${FILE}`));
@@ -81,7 +82,7 @@ export class ReadySummaryService implements vscode.Disposable {
     const s = (this.last = await this.build(wtPath, branch));
     if (maybeAskAgent && !s.agentText && this.ctl.cfg().get<boolean>('readySummary.useAgent', false)) void this.askAgent(wtPath, branch);
     if (!this.panel) {
-      this.panel = vscode.window.createWebviewPanel('worktreeGraph.readySummary', `Pronto: ${branch}`, vscode.ViewColumn.Active, {
+      this.panel = vscode.window.createWebviewPanel('worktreeGraph.readySummary', t('Ready: {0}', branch), vscode.ViewColumn.Active, {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.joinPath(this.ctl.ctx.extensionUri, 'media')],
       });
@@ -94,7 +95,7 @@ export class ReadySummaryService implements vscode.Disposable {
         if (m.action === 'askAgent') await this.askAgent(cur.path, cur.branch);
       });
     }
-    this.panel.title = `Pronto: ${branch}`;
+    this.panel.title = t('Ready: {0}', branch);
     this.panel.webview.html = this.html(s);
     this.panel.reveal(undefined, true);
   }
@@ -103,21 +104,21 @@ export class ReadySummaryService implements vscode.Disposable {
     const w = this.panel!.webview;
     const nonce = crypto.randomBytes(16).toString('base64');
     const css = w.asWebviewUri(vscode.Uri.joinPath(this.ctl.ctx.extensionUri, 'media', 'graph.css'));
-    const e = (t: string) => t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+    const e = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
     const add = s.files.reduce((n, f) => n + f.added, 0);
     const del = s.files.reduce((n, f) => n + f.deleted, 0);
     const L = this.ctl.requests.label;
-    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    return `<!DOCTYPE html><html lang="${locale()}"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${w.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${css}"></head><body class="attempts-page">
-<header class="toolbar"><div class="title"><span class="repo">✓ Pronto para revisar</span> <span class="ref ref-head">${e(s.branch)}</span></div>
-<div class="tools"><button class="primary" data-action="review">Revisar</button><button data-action="analyze">Analisar merge</button><button data-action="publish">Publicar ${L}</button>
-${s.agentText ? '' : '<button class="agent" data-action="askAgent">✦ Pedir resumo ao agente</button>'}</div></header>
-<div class="stats"><div><b>${s.commits.length}</b><span>commits desde ${e(s.base)}</span></div><div><b>${s.files.length}</b><span>arquivos</span></div>
-<div><b><span class="add">+${add}</span> <span class="del">−${del}</span></b><span>linhas</span></div></div>
-${s.agentText ? `<section><h2>Resumo do agente</h2><pre style="white-space:pre-wrap;font-family:var(--font)">${e(s.agentText)}</pre></section>` : ''}
+<header class="toolbar"><div class="title"><span class="repo">✓ ${t('Ready for review')}</span> <span class="ref ref-head">${e(s.branch)}</span></div>
+<div class="tools"><button class="primary" data-action="review">${t('Review')}</button><button data-action="analyze">${t('Analyze merge')}</button><button data-action="publish">${e(t('Publish {0}', L))}</button>
+${s.agentText ? '' : `<button class="agent" data-action="askAgent">✦ ${t('Ask the agent for a summary')}</button>`}</div></header>
+<div class="stats"><div><b>${s.commits.length}</b><span>${e(t('commits since {0}', s.base))}</span></div><div><b>${s.files.length}</b><span>${t('files')}</span></div>
+<div><b><span class="add">+${add}</span> <span class="del">−${del}</span></b><span>${t('lines')}</span></div></div>
+${s.agentText ? `<section><h2>${t('Agent\'s summary')}</h2><pre style="white-space:pre-wrap;font-family:var(--font)">${e(s.agentText)}</pre></section>` : ''}
 <section><h2>Commits</h2><table class="files">${s.commits.map(c => `<tr><td class="sha">${e(c.sha)}</td><td class="p">${e(c.subject)}</td></tr>`).join('')}</table></section>
-<section><h2>Arquivos</h2><table class="files">${s.files.map(f => `<tr><td class="p">${e(f.path)}</td><td class="num"><span class="add">+${f.added}</span> <span class="del">−${f.deleted}</span></td></tr>`).join('')}</table></section>
+<section><h2>${t('Files')}</h2><table class="files">${s.files.map(f => `<tr><td class="p">${e(f.path)}</td><td class="num"><span class="add">+${f.added}</span> <span class="del">−${f.deleted}</span></td></tr>`).join('')}</table></section>
 <script nonce="${nonce}">const vscode = acquireVsCodeApi();
 document.addEventListener('click', ev => { const el = ev.target.closest('[data-action]'); if (el) vscode.postMessage({ action: el.dataset.action }); });</script>
 </body></html>`;

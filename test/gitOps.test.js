@@ -19,11 +19,11 @@ const check = (name, fn) => {
 };
 
 check('validatePlan: squash no primeiro, tudo descartado, reword sem mensagem', () => {
-  assert.match(validatePlan([{ sha: 'a', subject: 'A', action: 'squash' }]), /anterior/);
-  assert.match(validatePlan([{ sha: 'a', subject: 'A', action: 'drop' }]), /descarta todos/);
-  assert.match(validatePlan([{ sha: 'a', subject: 'A', action: 'reword', message: ' ' }]), /mensagem/);
+  assert.match(validatePlan([{ sha: 'a', subject: 'A', action: 'squash' }]), /earlier commit/);
+  assert.match(validatePlan([{ sha: 'a', subject: 'A', action: 'drop' }]), /drops every commit/);
+  assert.match(validatePlan([{ sha: 'a', subject: 'A', action: 'reword', message: ' ' }]), /new message/);
   // drop no primeiro e squash no segundo: o squash junta com... nada. Inválido.
-  assert.match(validatePlan([{ sha: 'a', subject: 'A', action: 'drop' }, { sha: 'b', subject: 'B', action: 'fixup' }]), /anterior/);
+  assert.match(validatePlan([{ sha: 'a', subject: 'A', action: 'drop' }, { sha: 'b', subject: 'B', action: 'fixup' }]), /earlier commit/);
   assert.strictEqual(validatePlan([{ sha: 'a', subject: 'A', action: 'pick' }, { sha: 'b', subject: 'B', action: 'fixup' }]), undefined);
 });
 
@@ -114,11 +114,11 @@ check('não commitadas: tipo, letra e efeito do descarte', () => {
   const num = parseNumstat('3\t1\tsrc/a.ts\0-\t-\timg.png\0');
   assert.deepStrictEqual(num.get('src/a.ts'), { added: 3, deleted: 1, binary: false });
   assert.strictEqual(num.get('img.png').binary, true);
-  assert.strictEqual(discardEffect({ path: 'a', letter: 'M', kind: 'unstaged', added: 3, deleted: 1 }), 'volta ao último commit (+3 −1)');
-  assert.match(discardEffect({ path: 'a', letter: '?', kind: 'untracked', added: 20 }), /apagado \(arquivo novo, 20 linha/);
-  assert.match(discardEffect({ path: 'a', letter: 'D', kind: 'unstaged' }), /volta a existir/);
+  assert.strictEqual(discardEffect({ path: 'a', letter: 'M', kind: 'unstaged', added: 3, deleted: 1 }), 'back to the last commit (+3 −1)');
+  assert.match(discardEffect({ path: 'a', letter: '?', kind: 'untracked', added: 20 }), /deleted \(new file, 20 line/);
+  assert.match(discardEffect({ path: 'a', letter: 'D', kind: 'unstaged' }), /comes back/);
   const many = Array.from({ length: 20 }, (_, i) => ({ path: `f${i}`, letter: 'M', kind: 'unstaged' }));
-  assert.match(discardSummary(many, 5), /… e mais 15 arquivo/);
+  assert.match(discardSummary(many, 5), /… and 15 more file/);
 });
 
 check('descarte parcial (git real): stash push -u -- <arquivos> tira só os escolhidos e o apply devolve', () => {

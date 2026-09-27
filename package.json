@@ -626,13 +626,13 @@
       },
       {
         "command": "worktreeGraph.launchAgentHere",
-        "title": "Abrir agente na worktree desta janela",
+        "title": "%command.launchAgentHere.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.pushSelected",
-        "title": "Push das branches selecionadas (base e CI já marcadas)…",
+        "title": "%command.pushSelected.title%",
         "category": "AgentYard",
         "icon": "$(cloud-upload)"
       },
@@ -3051,17 +3051,17 @@
         "worktreeGraph.pushStatusBar": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Mostra o botão **☁ Push** na barra de status: faz push das branches escolhidas numa lista em que a base e as branches de CI (as mesmas do filtro **CI**, incluindo `#worktreeGraph.ciBranches#`) já vêm marcadas. O número ao lado é quantas delas têm commits a enviar."
+          "markdownDescription": "%config.pushStatusBar.markdownDescription%"
         },
         "worktreeGraph.agentStatusBar": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Mostra na barra de status o botão **✦ agente** (o primeiro de `#worktreeGraph.agents#`), que abre o agente num terminal na worktree desta janela."
+          "markdownDescription": "%config.agentStatusBar.markdownDescription%"
         },
         "worktreeGraph.worktreeStatusBar": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Mostra na barra de status em qual worktree (pasta) e branch esta janela está. Clique para abrir o painel."
+          "markdownDescription": "%config.worktreeStatusBar.markdownDescription%"
         },
         "worktreeGraph.mergeQueue.pushBase": {
           "type": "boolean",

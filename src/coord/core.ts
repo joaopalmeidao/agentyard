@@ -3,6 +3,8 @@
  * merge, tarefa em lote e orçamento. Testadas em test/coord.test.js.
  */
 
+import { t } from '../i18n';
+
 export interface ActiveInput {
   agents: string[];
   favorite: boolean;
@@ -115,10 +117,10 @@ export async function processNext(items: MergeItem[], steps: MergeSteps, now = D
   };
   const sync = await steps.syncTarget(item);
   if (sync) return fail(sync);
-  if (!(await steps.checks(item))) return fail('checagens falharam');
+  if (!(await steps.checks(item))) return fail(t('checks failed'));
   if (steps.requiresPr(item)) {
     item.status = 'awaiting-pr';
-    item.reason = `${item.target} exige PR/MR: a fila espera ele ser mesclado`;
+    item.reason = t('{0} requires a PR/MR: the queue waits for it to be merged', item.target);
     return item;
   }
   const merged = await steps.merge(item);

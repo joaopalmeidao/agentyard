@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { Controller } from '../controller';
+import { t } from '../i18n';
 import { showCommit } from '../commits';
-import { ASK_PRESETS, askPrompt, BranchFacts, LOG_FORMAT, parseLog, summaryMarkdown } from './core';
+import { askPresets, askPrompt, BranchFacts, LOG_FORMAT, parseLog, summaryMarkdown } from './core';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
 /** Item da árvore (worktree, branch, "Commits × base") ou nome de branch. */
@@ -28,9 +29,9 @@ export async function branchFacts(ctl: Controller, a: Arg): Promise<BranchFacts 
     wt ? repo.exec(['status', '--short'], wt.path) : Promise.resolve(''),
   ]);
   return {
-    label: branch ?? `HEAD destacado (${wt ? wt.path : ''})`,
+    label: branch ?? t('Detached HEAD ({0})', wt ? wt.path : ''),
     ref,
-    baseRef: isBase ? `${ref} (a própria base; últimos 30 commits)` : baseRef,
+    baseRef: isBase ? t('{0} (the base itself; last 30 commits)', ref) : baseRef,
     path: wt?.path,
     commits: parseLog(log),
     behind: Number(String(behind).trim()) || 0,
@@ -46,12 +47,12 @@ async function pickTarget(ctl: Controller): Promise<{ branch?: string; path?: st
   const branches = (await repo.refs()).filter(r => r.kind === 'head' && !withWt.has(r.name)).sort((x, y) => y.date - x.date);
   const pick = await vscode.window.showQuickPick(
     [
-      ...wts.map(w => ({ label: `$(folder) ${w.branch ?? 'HEAD destacado'}`, description: w.path, t: { branch: w.branch, path: w.path } })),
-      ...branches.map(r => ({ label: `$(git-branch) ${r.name}`, description: 'sem worktree', detail: r.subject, t: { branch: r.name } as { branch?: string; path?: string } })),
+      ...wts.map(w => ({ label: `$(folder) ${w.branch ?? t('Detached HEAD')}`, description: w.path, target: { branch: w.branch, path: w.path } })),
+      ...branches.map(r => ({ label: `$(git-branch) ${r.name}`, description: t('no worktree'), detail: r.subject, target: { branch: r.name } as { branch?: string; path?: string } })),
     ],
-    { placeHolder: 'Qual worktree ou branch?', matchOnDescription: true },
+    { placeHolder: t('Which worktree or branch?'), matchOnDescription: true },
   );
-  return pick?.t;
+  return pick?.target;
 }
 
 /** Resumo, pergunta ao agente e cópia do contexto de uma branch/worktree (menu da view Worktrees). */
@@ -69,17 +70,17 @@ export function registerSummary(ctx: vscode.ExtensionContext, ctl: Controller, g
     const f = await branchFacts(ctl, a);
     if (!f) return;
     await vscode.env.clipboard.writeText(summaryMarkdown(f));
-    vscode.window.setStatusBarMessage(`$(clippy) Resumo de ${f.label} copiado (${f.commits.length} commit(s))`, 3000);
+    vscode.window.setStatusBarMessage('$(clippy) ' + t('Summary of {0} copied ({1} commit(s))', f.label, f.commits.length), 3000);
   });
 
   reg('askAgentAboutBranch', async (a: Arg) => {
     const f = await branchFacts(ctl, a);
     if (!f) return;
-    const pick = await vscode.window.showQuickPick(ASK_PRESETS, { placeHolder: `O que perguntar ao agente sobre ${f.label}? (${f.commits.length} commit(s) × base)` });
+    const pick = await vscode.window.showQuickPick(askPresets(), { placeHolder: t('What to ask the agent about {0}? ({1} commit(s) × base)', f.label, f.commits.length) });
     if (!pick) return;
     let question: string | undefined;
     if (pick.ask === 'free') {
-      question = await vscode.window.showInputBox({ title: `Pergunta sobre ${f.label}`, prompt: 'O agente recebe junto a lista de commits e arquivos alterados.', ignoreFocusOut: true });
+      question = await vscode.window.showInputBox({ title: t('Question about {0}', f.label), prompt: t('The agent also gets the list of commits and changed files.'), ignoreFocusOut: true });
       if (!question?.trim()) return;
     }
     // Branch sem worktree: o agente abre na worktree da base e lê a branch pelo git, sem checkout.

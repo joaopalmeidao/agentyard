@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { t } from './i18n';
 
 /**
  * Descobre quais branches o CI do repositório usa, lendo os arquivos de configuração (GitHub
@@ -28,27 +29,27 @@ function stripComment(line: string): string {
 }
 
 function scalar(v: string): Yaml {
-  const t = v.trim();
-  if (t === '' || t === '~' || t === 'null') return null;
-  if (t.startsWith('[') && t.endsWith(']')) {
-    const inner = t.slice(1, -1).trim();
+  const s = v.trim();
+  if (s === '' || s === '~' || s === 'null') return null;
+  if (s.startsWith('[') && s.endsWith(']')) {
+    const inner = s.slice(1, -1).trim();
     return inner ? splitInline(inner).map(scalar) : [];
   }
-  if (t.startsWith('{') && t.endsWith('}')) {
+  if (s.startsWith('{') && s.endsWith('}')) {
     const out: { [k: string]: Yaml } = {};
-    for (const part of splitInline(t.slice(1, -1))) {
+    for (const part of splitInline(s.slice(1, -1))) {
       const i = part.indexOf(':');
       if (i > 0) out[unquote(part.slice(0, i))] = scalar(part.slice(i + 1));
     }
     return out;
   }
-  return unquote(t);
+  return unquote(s);
 }
 
-function unquote(s: string): string {
-  const t = s.trim();
-  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) return t.slice(1, -1);
-  return t;
+function unquote(str: string): string {
+  const s = str.trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) return s.slice(1, -1);
+  return s;
 }
 
 /** Divide "a, 'b, c', [d]" respeitando aspas e colchetes. */
@@ -114,9 +115,9 @@ export function parseYaml(text: string): Yaml {
     }
     const obj: { [k: string]: Yaml } = {};
     while (i < lines.length && indentOf(lines[i]) === indent) {
-      const t = lines[i].trimStart();
-      if (t.startsWith('- ')) break;
-      const m = /^("[^"]*"|'[^']*'|[^:]+?):(\s+|$)(.*)$/.exec(t);
+      const line = lines[i].trimStart();
+      if (line.startsWith('- ')) break;
+      const m = /^("[^"]*"|'[^']*'|[^:]+?):(\s+|$)(.*)$/.exec(line);
       i++;
       if (!m) continue;
       const key = unquote(m[1]);
@@ -183,9 +184,9 @@ export function fromAzure(text: string): string[] {
   const doc = asObj(parseYaml(text));
   const out: string[] = [];
   for (const key of ['trigger', 'pr']) {
-    const t = doc[key];
-    if (Array.isArray(t)) out.push(...asList(t));
-    else out.push(...asList(asObj(asObj(t).branches).include));
+    const v = doc[key];
+    if (Array.isArray(v)) out.push(...asList(v));
+    else out.push(...asList(asObj(asObj(v).branches).include));
   }
   return out.map(b => b.replace(/^refs\/heads\//, ''));
 }
@@ -222,8 +223,8 @@ export function discoverCiBranches(root: string, o: DiscoverOptions): CiBranch[]
       found.get(n)!.add(source);
     }
   };
-  for (const b of o.flow ?? []) add(b, 'fluxo de ambientes');
-  if (o.base) add(o.base, 'base');
+  for (const b of o.flow ?? []) add(b, t('environment flow'));
+  if (o.base) add(o.base, t('base'));
   const read = (rel: string) => {
     try {
       return fs.readFileSync(path.join(root, rel), 'utf8');
@@ -239,19 +240,19 @@ export function discoverCiBranches(root: string, o: DiscoverOptions): CiBranch[]
     }
   };
   for (const f of list('.github/workflows')) {
-    const t = read(`.github/workflows/${f}`);
-    if (t) for (const b of fromGithubWorkflow(t)) add(b, `.github/workflows/${f}`);
+    const text = read(`.github/workflows/${f}`);
+    if (text) for (const b of fromGithubWorkflow(text)) add(b, `.github/workflows/${f}`);
   }
   for (const rel of ['.gitlab-ci.yml', ...list('.gitlab').map(f => `.gitlab/${f}`)]) {
-    const t = read(rel);
-    if (t) for (const b of fromGitlabCi(t)) add(b, rel);
+    const text = read(rel);
+    if (text) for (const b of fromGitlabCi(text)) add(b, rel);
   }
   const bb = read('bitbucket-pipelines.yml');
   if (bb) for (const b of fromBitbucket(bb)) add(b, 'bitbucket-pipelines.yml');
   for (const rel of ['azure-pipelines.yml', '.azure-pipelines.yml']) {
-    const t = read(rel);
-    if (t) for (const b of fromAzure(t)) add(b, rel);
+    const text = read(rel);
+    if (text) for (const b of fromAzure(text)) add(b, rel);
   }
-  for (const b of o.extras ?? []) add(b, 'configuração (worktreeGraph.ciBranches)');
+  for (const b of o.extras ?? []) add(b, t('settings (worktreeGraph.ciBranches)'));
   return [...found].map(([name, s]) => ({ name, sources: [...s] }));
 }

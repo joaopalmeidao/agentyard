@@ -3,6 +3,8 @@
  * (test/gitOps.test.js).
  */
 
+import { t } from '../i18n';
+
 export type RebaseAction = 'pick' | 'squash' | 'fixup' | 'drop' | 'reword';
 
 export interface PlanStep {
@@ -16,10 +18,10 @@ export interface PlanStep {
 /** Erro de plano legível, ou undefined se o plano pode ser executado. */
 export function validatePlan(plan: PlanStep[]): string | undefined {
   const kept = plan.filter(s => s.action !== 'drop');
-  if (!kept.length) return 'O plano descarta todos os commits; use "Remover worktree" ou reset se for isso.';
-  if (kept[0].action === 'squash' || kept[0].action === 'fixup') return `"${kept[0].subject}" não tem um commit anterior para juntar.`;
+  if (!kept.length) return t('The plan drops every commit; use "Remove worktree" or a reset if that is what you want.');
+  if (kept[0].action === 'squash' || kept[0].action === 'fixup') return t('"{0}" has no earlier commit to combine with.', kept[0].subject);
   const empty = plan.find(s => s.action === 'reword' && !s.message?.trim());
-  if (empty) return `Informe a nova mensagem de "${empty.subject}".`;
+  if (empty) return t('Enter the new message for "{0}".', empty.subject);
   return undefined;
 }
 
@@ -149,26 +151,35 @@ export function parseNumstat(out: string): Map<string, { added: number; deleted:
   return m;
 }
 
+// getters: o texto é traduzido na hora do uso, não quando o módulo carrega
 export const KIND_LABEL: Record<UncommittedKind, string> = {
-  untracked: 'novo, não rastreado',
-  conflict: 'em conflito',
-  staged: 'no stage',
+  get untracked() {
+    return t('new, untracked');
+  },
+  get conflict() {
+    return t('in conflict');
+  },
+  get staged() {
+    return t('staged');
+  },
   unstaged: '',
-  mixed: 'parte no stage',
+  get mixed() {
+    return t('partly staged');
+  },
 };
 
 /** O que o descarte faz com o arquivo, em linguagem clara: "volta ao último commit (+3 −1)". */
 export function discardEffect(u: Uncommitted): string {
-  const lines = (n?: number) => (u.binary ? 'binário' : `${n ?? 0} linha(s)`);
-  if (u.letter === '?') return `apagado (arquivo novo, ${lines(u.added)})`;
-  if (u.letter === 'A') return `apagado (adicionado no stage, ${lines(u.added)})`;
-  if (u.letter === 'D') return 'volta a existir (tinha sido removido)';
-  return `volta ao último commit (${u.binary ? 'binário' : `+${u.added ?? 0} −${u.deleted ?? 0}`})`;
+  const lines = (n?: number) => (u.binary ? t('binary') : t('{0} line(s)', n ?? 0));
+  if (u.letter === '?') return t('deleted (new file, {0})', lines(u.added));
+  if (u.letter === 'A') return t('deleted (added to stage, {0})', lines(u.added));
+  if (u.letter === 'D') return t('comes back (it had been removed)');
+  return t('back to the last commit ({0})', u.binary ? t('binary') : `+${u.added ?? 0} −${u.deleted ?? 0}`);
 }
 
 /** Lista para a confirmação do descarte, cortada em `max` linhas. */
 export function discardSummary(items: Uncommitted[], max = 15): string {
   const shown = items.slice(0, max).map(u => `${u.letter}  ${u.path} — ${discardEffect(u)}`);
-  if (items.length > max) shown.push(`… e mais ${items.length - max} arquivo(s)`);
+  if (items.length > max) shown.push(t('… and {0} more file(s)', items.length - max));
   return shown.join('\n');
 }

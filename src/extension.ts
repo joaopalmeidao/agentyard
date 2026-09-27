@@ -34,6 +34,7 @@ import { AutoSync } from './sync';
 import { registerClaudeConfig } from './claude/configView';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
+import { t } from './i18n';
 
 export async function activate(ctx: vscode.ExtensionContext) {
   const out = vscode.window.createOutputChannel('AgentYard');
@@ -47,7 +48,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const agentsView = vscode.window.createTreeView('worktreeGraph.agents', { treeDataProvider: agentsTree });
   const agentsBadge = () => {
     const n = agentsTree.count();
-    agentsView.badge = n ? { value: n, tooltip: `${n} terminal(is) de agente aberto(s)` } : undefined;
+    agentsView.badge = n ? { value: n, tooltip: t('{0} open agent terminal(s)', n) } : undefined;
   };
   ctx.subscriptions.push(agentsTree, agentsView, agentTerms.onDidChange(agentsBadge));
   const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
@@ -63,7 +64,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (!wtPath && branch) wtPath = wts.find(w => w.branch === branch)?.path;
     if (wtPath && !branch) branch = wts.find(w => w.path.toLowerCase() === wtPath!.toLowerCase())?.branch;
     if (!wtPath) {
-      const picked = await actions.pickBranch(ctl, undefined, 'Abrir agente em qual worktree?', true);
+      const picked = await actions.pickBranch(ctl, undefined, t('Open an agent in which worktree?'), true);
       if (!picked) return;
       branch = picked;
       wtPath = wts.find(w => w.branch === picked)?.path;
@@ -85,8 +86,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (found) return { cwd: found.path, label: found.name };
     if (p) return { cwd: p, label: require('path').basename(p) };
     const pick = await vscode.window.showQuickPick(
-      wts.map(w => ({ label: w.name, description: w.claude ? `${w.claude.sessions} sessão(ões)` : '', detail: w.path, w })),
-      { placeHolder: 'Em qual worktree?' },
+      wts.map(w => ({ label: w.name, description: w.claude ? t('{0} session(s)', w.claude.sessions) : '', detail: w.path, w })),
+      { placeHolder: t('In which worktree?') },
     );
     return pick && { cwd: pick.w.path, label: pick.w.name };
   };
@@ -100,8 +101,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctl.onDidChange(s => {
     if (s) treeView.description = s.repoName;
     const n = s?.pending ?? 0;
-    treeView.message = n > 0 ? `Detalhando ${n} de ${s!.worktrees.filter(w => !w.prunable && !w.bare).length} worktrees…` : undefined;
-    treeView.badge = n > 0 ? { value: n, tooltip: `${n} worktrees sendo detalhadas` } : undefined;
+    treeView.message = n > 0 ? t('Loading details of {0} of {1} worktrees…', n, s!.worktrees.filter(w => !w.prunable && !w.bare).length) : undefined;
+    treeView.badge = n > 0 ? { value: n, tooltip: t('Loading details of {0} worktrees', n) } : undefined;
   });
   ctx.subscriptions.push(sync);
   ctx.subscriptions.push(
@@ -112,14 +113,14 @@ export async function activate(ctx: vscode.ExtensionContext) {
   );
 
   const analyzeMerge = async (source?: string, target?: string) => {
-    const src = source ?? (await actions.pickBranch(ctl, undefined, 'Analisar o merge de qual branch?'));
+    const src = source ?? (await actions.pickBranch(ctl, undefined, t('Analyze the merge of which branch?')));
     if (!src) return;
     const dst = target ?? (await ctl.base()).base;
     await MergePanel.show(
       ctl,
       src,
       dst,
-      async (s, t) => void (await actions.mergeBranches(ctl, s, t)),
+      async (x, y) => void (await actions.mergeBranches(ctl, x, y)),
       b => ctl.requests.publish(b),
     );
   };
@@ -148,8 +149,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
     } catch {
       await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph').then(undefined, () => undefined);
       const pick = await vscode.window.showWarningMessage(
-        `A view "${name}" ainda não está disponível nesta janela. Isso acontece quando uma versão anterior do AgentYard continua ativa depois de atualizar.`,
-        'Recarregar janela',
+        t('The "{0}" view is not available in this window yet. This happens when a previous version of AgentYard is still active after an update.', name),
+        t('Reload window'),
       );
       if (pick) await vscode.commands.executeCommand('workbench.action.reloadWindow');
     }
@@ -221,7 +222,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
         await vscode.commands.executeCommand('worktreeGraph.promotionMap');
         return;
       case 'promote':
-        await promote(ctl, a.from, a.to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t));
+        await promote(ctl, a.from, a.to, (x, y) => actions.mergeBranches(ctl, x, y), (x, y) => analyzeMerge(x, y));
         return;
       case 'push':
         await pushBranch(ctl, a.branch);
@@ -291,8 +292,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
         await vscode.commands.executeCommand('worktreeGraph.activity');
         return;
       case 'claudeCommands': {
-        const t = await claudeTarget({ path: a.path });
-        if (t) await claude.commands(t.cwd, t.label);
+        const target = await claudeTarget({ path: a.path });
+        if (target) await claude.commands(target.cwd, target.label);
         return;
       }
       case 'copy':
@@ -342,19 +343,21 @@ export async function activate(ctx: vscode.ExtensionContext) {
     return launchAgent(dir ? { path: dir, branch: w?.branch } : undefined, agents(ctl)[0]?.name, mode);
   });
   const agentStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 47);
-  agentStatus.name = 'Abrir agente nesta worktree';
+  agentStatus.name = t('Open agent in this worktree');
   agentStatus.command = 'worktreeGraph.launchAgentHere';
   const updateAgentStatus = () => {
     const a = agents(ctl)[0];
     if (!a || !ctl.repo || !ctl.cfg().get<boolean>('agentStatusBar', true)) return agentStatus.hide();
     const w = here();
     agentStatus.text = `$(sparkle) ${a.name}`;
-    agentStatus.tooltip = `Abrir ${a.name} num terminal ${w ? `na worktree ${w.name}` : 'nesta pasta'}` + (w?.agents?.length ? ` (já há ${w.agents.length} aberto(s))` : '');
+    agentStatus.tooltip =
+      (w ? t('Open {0} in a terminal in the {1} worktree', a.name, w.name) : t('Open {0} in a terminal in this folder', a.name)) +
+      (w?.agents?.length ? ' ' + t('({0} already open)', w.agents.length) : '');
     agentStatus.show();
   };
   // onde estamos: pasta da worktree e branch desta janela; clique abre o painel
   const whereStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 52);
-  whereStatus.name = 'Worktree e branch desta janela';
+  whereStatus.name = t('Worktree and branch of this window');
   whereStatus.command = 'worktreeGraph.openGraph';
   const updateWhereStatus = () => {
     const w = here();
@@ -362,13 +365,14 @@ export async function activate(ctx: vscode.ExtensionContext) {
     const folder = require('path').basename(w.path);
     const branch = w.branch ?? `(${w.head.slice(0, 7)})`;
     whereStatus.text = `$(repo) ${folder} $(git-branch) ${branch}`;
-    const kind = w.isMain ? 'worktree principal' : 'worktree';
+    const kind = w.isMain ? t('main worktree') : 'worktree';
     whereStatus.tooltip = new vscode.MarkdownString(
       `**${ctl.state!.repoName}** · ${kind}\n\n` +
-        `Pasta: \`${w.path}\`\n\nBranch: \`${branch}\`${w.isBase ? ' (base)' : ''}` +
-        (w.changes ? `\n\n● ${w.changes} alteração(ões) não commitada(s)` : '') +
-        (w.compareKnown && !w.isBase ? `\n\n↓${w.behind} ↑${w.ahead} em relação a \`${ctl.state!.baseRef}\`` : '') +
-        '\n\nClique para abrir o painel do AgentYard.',
+        t('Folder: {0}', `\`${w.path}\``) +
+        `\n\nBranch: \`${branch}\`${w.isBase ? ' (base)' : ''}` +
+        (w.changes ? '\n\n● ' + t('{0} uncommitted change(s)', w.changes) : '') +
+        (w.compareKnown && !w.isBase ? '\n\n' + t('↓{0} ↑{1} compared to {2}', w.behind, w.ahead, `\`${ctl.state!.baseRef}\``) : '') +
+        '\n\n' + t('Click to open the AgentYard panel.'),
     );
     whereStatus.show();
   };
@@ -399,7 +403,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (!p && branch) p = wts.find(w => w.branch === branch && !w.prunable)?.path;
     if (p && !branch) branch = wts.find(w => w.path.toLowerCase() === p!.toLowerCase())?.branch;
     if (!p) {
-      vscode.window.showWarningMessage(`Nenhuma worktree para ${branch ?? 'a tarefa'}.`);
+      vscode.window.showWarningMessage(branch ? t('No worktree for {0}.', branch) : t('No worktree for the task.'));
       return;
     }
     await agentTerms.launchWithPrompt(p, branch, a.prompt, a.agent);
@@ -432,22 +436,22 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('claude.transcript', (item?: SessionItem) => item?.session && claude.transcript(item.session));
   reg('claude.copySessionId', (item?: SessionItem) => item?.session && actions.copyText(item.session.id));
   reg('claude.newSession', async item => {
-    const t = await claudeTarget(item);
-    if (t) claude.newSession(t.cwd, t.label);
+    const target = await claudeTarget(item);
+    if (target) claude.newSession(target.cwd, target.label);
   });
   reg('claude.commands', async item => {
-    const t = await claudeTarget(item);
-    if (t) await claude.commands(t.cwd, t.label);
+    const target = await claudeTarget(item);
+    if (target) await claude.commands(target.cwd, target.label);
   });
   reg('claude.usage', () => claude.usagePanel());
   reg('publishRequest', async item => {
-    const b = await actions.pickBranch(ctl, item, 'Publicar PR/MR de qual branch?');
+    const b = await actions.pickBranch(ctl, item, t('Publish a PR/MR for which branch?'));
     if (b) await ctl.requests.publish(b);
   });
   reg('connectHosting', () => ctl.requests.connect());
   reg('connectGitLab', () => ctl.requests.connectGitLab());
   reg('pushBranch', async item => {
-    const b = await actions.pickBranch(ctl, item, 'Enviar qual branch?');
+    const b = await actions.pickBranch(ctl, item, t('Push which branch?'));
     if (b) await pushBranch(ctl, b);
   });
   reg('pushMany', () => pushMany(ctl));
@@ -486,8 +490,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(readySummary);
   const delivery = registerDelivery(ctx, ctl, guard, { activity, pipelines: () => pipelines.pipelines, issueOf: b => issues.linkOf(b) });
   const promotion = registerPromotion(ctx, ctl, guard, {
-    promote: (from, to) => promote(ctl, from, to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t)),
-    merge: (s, t) => actions.mergeBranches(ctl, s, t),
+    promote: (from, to) => promote(ctl, from, to, (x, y) => actions.mergeBranches(ctl, x, y), (x, y) => analyzeMerge(x, y)),
+    merge: (x, y) => actions.mergeBranches(ctl, x, y),
     showCommit: sha => commits.showCommit(ctl, sha),
   });
 

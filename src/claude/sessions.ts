@@ -12,6 +12,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { locale, t } from '../i18n';
 
 export interface TokenUsage {
   input: number;
@@ -101,8 +102,8 @@ function textOf(content: unknown): string | undefined {
 
 /** Mensagens que não são algo que a pessoa digitou (comandos internos, lembretes do sistema). */
 function isNoise(text: string): boolean {
-  const t = text.trimStart();
-  return t.startsWith('<command-') || t.startsWith('<local-command') || t.startsWith('<system-reminder>') || t.startsWith('Caveat:') || t.startsWith('[Request interrupted');
+  const s = text.trimStart();
+  return s.startsWith('<command-') || s.startsWith('<local-command') || s.startsWith('<system-reminder>') || s.startsWith('Caveat:') || s.startsWith('[Request interrupted');
 }
 
 function newInfo(id: string, file: string): SessionInfo {
@@ -386,9 +387,9 @@ export function dailyTotals(sessions: SessionInfo[], days: number, now = Date.no
 }
 
 export function formatTokens(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)} bi`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} mi`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)} mil`;
+  if (n >= 1e9) return t('{0}B', (n / 1e9).toFixed(1));
+  if (n >= 1e6) return t('{0}M', (n / 1e6).toFixed(1));
+  if (n >= 1e3) return t('{0}K', Math.round(n / 1e3));
   return String(n);
 }
 
@@ -397,8 +398,8 @@ export function formatTokens(n: number): string {
  * uma linha curta; resultados de ferramenta são omitidos.
  */
 export async function renderTranscript(s: SessionInfo, maxChars = 4000): Promise<string> {
-  const lines: string[] = [`# ${sessionTitle(s)}`, '', `Sessão \`${s.id}\` · ${s.cwd ?? ''}${s.gitBranch ? ` · ${s.gitBranch}` : ''}`, ''];
-  const clip = (t: string) => (t.length > maxChars ? `${t.slice(0, maxChars)}\n\n… (${t.length - maxChars} caracteres omitidos)` : t);
+  const lines: string[] = [`# ${sessionTitle(s)}`, '', `${t('Session {0}', `\`${s.id}\``)} · ${s.cwd ?? ''}${s.gitBranch ? ` · ${s.gitBranch}` : ''}`, ''];
+  const clip = (s: string) => (s.length > maxChars ? `${s.slice(0, maxChars)}\n\n… (${t('{0} characters omitted', s.length - maxChars)})` : s);
   let lastId: string | undefined;
   const stream = fs.createReadStream(s.file, { encoding: 'utf8', highWaterMark: 1 << 20 });
   let leftover = '';
@@ -410,12 +411,12 @@ export async function renderTranscript(s: SessionInfo, maxChars = 4000): Promise
     } catch {
       return;
     }
-    const when = o.timestamp ? new Date(o.timestamp).toLocaleString('pt-BR') : '';
+    const when = o.timestamp ? new Date(o.timestamp).toLocaleString(locale()) : '';
     if (o.type === 'user') {
       if (o.toolUseResult !== undefined || o.isMeta) return;
-      const t = textOf(o.message?.content);
-      if (!t || isNoise(t)) return;
-      lines.push(`## Você · ${when}`, '', clip(t), '');
+      const text = textOf(o.message?.content);
+      if (!text || isNoise(text)) return;
+      lines.push(`## ${t('You')} · ${when}`, '', clip(text), '');
       return;
     }
     const msg = o.message ?? {};
@@ -453,7 +454,7 @@ export interface ClaudeCommand {
   /** "/nome" como se digita no Claude Code. */
   name: string;
   description: string;
-  source: 'projeto' | 'usuário' | 'skill' | 'embutido';
+  source: 'project' | 'user' | 'skill' | 'builtin';
 }
 
 function frontmatterDescription(file: string): string {
@@ -518,25 +519,27 @@ function listSkills(dir: string, depth = 3): ClaudeCommand[] {
   return out;
 }
 
-export const BUILTIN_COMMANDS: ClaudeCommand[] = [
-  { name: '/resume', description: 'Escolher uma conversa anterior para continuar', source: 'embutido' },
-  { name: '/compact', description: 'Resumir a conversa para liberar contexto', source: 'embutido' },
-  { name: '/clear', description: 'Começar do zero nesta sessão', source: 'embutido' },
-  { name: '/usage', description: 'Uso do plano e limites', source: 'embutido' },
-  { name: '/review', description: 'Revisar as alterações', source: 'embutido' },
-  { name: '/init', description: 'Criar o CLAUDE.md do projeto', source: 'embutido' },
-  { name: '/memory', description: 'Editar memórias e CLAUDE.md', source: 'embutido' },
-  { name: '/model', description: 'Trocar o modelo', source: 'embutido' },
-];
+export function builtinCommands(): ClaudeCommand[] {
+  return [
+    { name: '/resume', description: t('Pick a previous conversation to continue'), source: 'builtin' },
+    { name: '/compact', description: t('Summarize the conversation to free up context'), source: 'builtin' },
+    { name: '/clear', description: t('Start over in this session'), source: 'builtin' },
+    { name: '/usage', description: t('Plan usage and limits'), source: 'builtin' },
+    { name: '/review', description: t('Review the changes'), source: 'builtin' },
+    { name: '/init', description: t('Create the project\'s CLAUDE.md'), source: 'builtin' },
+    { name: '/memory', description: t('Edit memories and CLAUDE.md'), source: 'builtin' },
+    { name: '/model', description: t('Switch the model'), source: 'builtin' },
+  ];
+}
 
 /** Comandos de barra e skills disponíveis para uma pasta de projeto. */
 export function listClaudeCommands(projectDir: string | undefined, claudeDir: string): ClaudeCommand[] {
   const all = [
-    ...(projectDir ? listCommandDir(path.join(projectDir, '.claude', 'commands'), 'projeto') : []),
+    ...(projectDir ? listCommandDir(path.join(projectDir, '.claude', 'commands'), 'project') : []),
     ...(projectDir ? listSkills(path.join(projectDir, '.claude', 'skills')) : []),
-    ...listCommandDir(path.join(claudeDir, 'commands'), 'usuário'),
+    ...listCommandDir(path.join(claudeDir, 'commands'), 'user'),
     ...listSkills(path.join(claudeDir, 'skills')),
-    ...BUILTIN_COMMANDS,
+    ...builtinCommands(),
   ];
   const seen = new Set<string>();
   return all.filter(c => (seen.has(c.name) ? false : (seen.add(c.name), true)));

@@ -5,6 +5,7 @@
  */
 import type { RemoteInfo } from './core';
 import { HostError } from './core';
+import { t } from '../i18n';
 
 export type Severity = 'bug' | 'risco' | 'sugestao' | 'nit';
 
@@ -35,9 +36,9 @@ export function parseReviewFile(text: string): ReviewFile {
   try {
     raw = JSON.parse(cleaned);
   } catch (e) {
-    throw new Error(`review.json não é um JSON válido: ${(e as Error).message}`);
+    throw new Error(t('review.json is not valid JSON: {0}', (e as Error).message));
   }
-  if (!raw || typeof raw !== 'object') throw new Error('review.json precisa ser um objeto { summary, comments }.');
+  if (!raw || typeof raw !== 'object') throw new Error(t('review.json must be an object {0}.', '{ summary, comments }'));
   const comments: ReviewComment[] = (Array.isArray(raw.comments) ? raw.comments : [])
     .filter((c: any) => c && typeof c.body === 'string' && c.body.trim())
     .map((c: any) => ({
@@ -70,10 +71,13 @@ export function newSideLines(patch: string): Set<number> {
   return out;
 }
 
-const SEV_LABEL: Record<string, string> = { bug: '🐞 bug', risco: '⚠ risco', sugestao: '💡 sugestão', nit: 'nit' };
+function sevLabel(s: string): string | undefined {
+  const labels: Record<string, string> = { bug: '🐞 bug', risco: t('⚠ risk'), sugestao: t('💡 suggestion'), nit: 'nit' };
+  return labels[s];
+}
 
 export function commentText(c: ReviewComment): string {
-  const sev = c.severity ? `**${SEV_LABEL[c.severity] ?? c.severity}** ` : '';
+  const sev = c.severity ? `**${sevLabel(c.severity) ?? c.severity}** ` : '';
   return `${sev}${c.body}`;
 }
 
@@ -83,11 +87,11 @@ export function generalBody(summary: string, loose: ReviewComment[]): string {
   if (loose.length) {
     parts.push(
       '',
-      '**Comentários fora das linhas alteradas:**',
+      t('**Comments outside the changed lines:**'),
       ...loose.map(c => `- \`${c.path}${c.line ? `:${c.line}` : ''}\` — ${commentText(c)}`),
     );
   }
-  parts.push('', '_Revisão feita por agente, via AgentYard._');
+  parts.push('', t('_Review by an agent, via AgentYard._'));
   return parts.join('\n').trim();
 }
 
@@ -98,7 +102,7 @@ async function req(f: Fetch, url: string, init: RequestInit): Promise<any> {
   try {
     res = await f(url, init);
   } catch (e) {
-    throw new HostError(0, `Não consegui falar com ${new URL(url).host}: ${(e as Error).message}`);
+    throw new HostError(0, t('Could not reach {0}: {1}', new URL(url).host, (e as Error).message));
   }
   const text = await res.text();
   let body: any;
@@ -219,17 +223,18 @@ export function reviewPoster(remote: RemoteInfo, token: string, apiBase?: string
   return remote.kind === 'gitlab' ? new GitLabReviewPoster(remote, token, apiBase, f) : new GitHubReviewPoster(remote, token, apiBase, f);
 }
 
+/** Montado ao carregar o módulo (o bundle de tradução do VS Code já está disponível na ativação). */
 export const DEFAULT_REVIEW_PROMPT = [
-  'Revise o ${kind} "${title}" (${url}): a branch ${branch} contra ${base}.',
+  t('Review the {0} "{1}" ({2}): branch {3} against {4}.', '${kind}', '${title}', '${url}', '${branch}', '${base}'),
   '',
-  'Arquivos alterados:',
+  t('Changed files:'),
   '${diffStat}',
   '',
-  'Veja o diff com `git diff ${base}...${branch}`. Foque em bugs e riscos reais: lógica errada, casos de borda,',
-  'erros não tratados, concorrência, segurança, quebra de compatibilidade e testes faltando para o que mudou.',
-  'Ignore estilo e preferências pessoais, a menos que escondam um bug.',
+  t('See the diff with {0}. Focus on real bugs and risks: wrong logic, edge cases,', '`git diff ${base}...${branch}`'),
+  t('unhandled errors, concurrency, security, broken compatibility and missing tests for what changed.'),
+  t('Ignore style and personal preferences, unless they hide a bug.'),
   '',
-  'Não altere nenhum arquivo do projeto. Escreva o resultado em `.worktree-graph/review.json`, exatamente neste formato:',
-  '{ "summary": "resumo em 2-4 frases", "comments": [ { "path": "caminho/relativo.ts", "line": 42, "severity": "bug|risco|sugestao|nit", "body": "o que está errado e como corrigir" } ] }',
-  '"line" é a linha no arquivo novo (lado direito do diff). Sem comentários, use "comments": [].',
+  t('Do not change any project file. Write the result to {0}, exactly in this format:', '`.worktree-graph/review.json`'),
+  `{ "summary": "${t('summary in 2-4 sentences')}", "comments": [ { "path": "${t('relative/path.ts')}", "line": 42, "severity": "bug|risco|sugestao|nit", "body": "${t('what is wrong and how to fix it')}" } ] }`,
+  t('"line" is the line in the new file (right side of the diff). With no comments, use {0}.', '"comments": []'),
 ].join('\n');

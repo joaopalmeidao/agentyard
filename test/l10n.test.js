@@ -11,7 +11,7 @@ const walk = d => {
   for (const e of fs.readdirSync(path.join(root, d), { withFileTypes: true })) {
     const rel = path.join(d, e.name);
     if (e.isDirectory()) walk(rel);
-    else if (/\.ts$/.test(e.name)) files.push(rel);
+    else if (/\.ts$/.test(e.name) && e.name !== 'i18n.ts') files.push(rel);
   }
 };
 walk('src');

@@ -4,6 +4,7 @@ import type { Controller } from '../controller';
 import { hostLabel } from '../hosting/platforms';
 import { DEFAULT_ISSUE_PROMPT, Issue, IssueProvider, IssueScope, issueBranch, issueTrailer, RedmineClient, renderPrompt } from './core';
 import { JiraAuth, JiraClient } from './jira';
+import { t } from '../i18n';
 
 const REFRESH_MS = 180_000;
 const MAX_BODY = 6000;
@@ -113,34 +114,44 @@ export class IssueService implements vscode.Disposable {
 
   async connectJira() {
     const url = await vscode.window.showInputBox({
-      title: 'Conectar ao Jira',
-      prompt: 'Endereço do Jira (ex.: https://empresa.atlassian.net ou https://jira.empresa.com)',
+      title: t('Connect to Jira'),
+      prompt: t('Jira address (e.g. https://company.atlassian.net or https://jira.company.com)'),
       value: this.jiraUrl() || 'https://',
       ignoreFocusOut: true,
-      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : 'Informe um endereço http(s)://'),
+      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : t('Enter an http(s):// address')),
     });
     if (!url) return;
     const base = url.trim().replace(/\/+$/, '');
     const cloudGuess = /\.atlassian\.net$/i.test(new URL(base).hostname);
     const kinds = [
-      { label: 'Jira Cloud', detail: 'E-mail da conta Atlassian + API token (id.atlassian.com → Segurança → Tokens de API)', flavor: 'cloud' as const },
-      { label: 'Jira Server / Data Center', detail: 'Personal Access Token (Perfil → Personal Access Tokens)', flavor: 'server' as const },
+      { label: 'Jira Cloud', detail: t('Atlassian account email + API token (id.atlassian.com → Security → API tokens)'), flavor: 'cloud' as const },
+      { label: 'Jira Server / Data Center', detail: t('Personal Access Token (Profile → Personal Access Tokens)'), flavor: 'server' as const },
     ];
     if (!cloudGuess) kinds.reverse();
-    const kind = await vscode.window.showQuickPick(kinds, { title: `Jira em ${base}: tipo de instalação` });
+    const kind = await vscode.window.showQuickPick(kinds, { title: t('Jira at {0}: installation type', base) });
     if (!kind) return;
     let auth: JiraAuth;
     if (kind.flavor === 'cloud') {
-      const email = await vscode.window.showInputBox({ title: 'E-mail da conta Atlassian', ignoreFocusOut: true, validateInput: v => (/.+@.+/.test(v) ? undefined : 'Informe o e-mail.') });
+      const email = await vscode.window.showInputBox({
+        title: t('Atlassian account email'),
+        ignoreFocusOut: true,
+        validateInput: v => (/.+@.+/.test(v) ? undefined : t('Enter the email.')),
+      });
       if (!email) return;
-      const open = await vscode.window.showInformationMessage('API token do Jira Cloud', { modal: true, detail: 'O token fica no cofre de segredos do VS Code.' }, 'Abrir página de tokens', 'Já tenho o token');
+      const openTokens = t('Open tokens page');
+      const open = await vscode.window.showInformationMessage(
+        t('Jira Cloud API token'),
+        { modal: true, detail: t('The token is kept in the VS Code secret storage.') },
+        openTokens,
+        t('I already have the token'),
+      );
       if (!open) return;
-      if (open === 'Abrir página de tokens') await vscode.env.openExternal(vscode.Uri.parse('https://id.atlassian.com/manage-profile/security/api-tokens'));
-      const token = await vscode.window.showInputBox({ title: 'API token do Jira Cloud', password: true, ignoreFocusOut: true });
+      if (open === openTokens) await vscode.env.openExternal(vscode.Uri.parse('https://id.atlassian.com/manage-profile/security/api-tokens'));
+      const token = await vscode.window.showInputBox({ title: t('Jira Cloud API token'), password: true, ignoreFocusOut: true });
       if (!token) return;
       auth = { kind: 'cloud', email: email.trim(), token: token.trim() };
     } else {
-      const token = await vscode.window.showInputBox({ title: 'Personal Access Token do Jira', password: true, ignoreFocusOut: true });
+      const token = await vscode.window.showInputBox({ title: t('Jira Personal Access Token'), password: true, ignoreFocusOut: true });
       if (!token) return;
       auth = { kind: 'server', token: token.trim() };
     }
@@ -149,7 +160,7 @@ export class IssueService implements vscode.Disposable {
     try {
       user = await client.whoami();
     } catch (e) {
-      vscode.window.showErrorMessage(`As credenciais não funcionaram em ${base}: ${(e as Error).message}`);
+      vscode.window.showErrorMessage(t('The credentials did not work on {0}: {1}', base, (e as Error).message));
       return;
     }
     await this.ctl.ctx.secrets.store(this.jiraSecret(base), JSON.stringify(auth));
@@ -158,8 +169,8 @@ export class IssueService implements vscode.Disposable {
       const projects = await client.projects();
       if (projects.length) {
         const pick = await vscode.window.showQuickPick(
-          [{ label: 'Todos os projetos', key: '' }, ...projects.map(p => ({ label: p.name, description: p.key, key: p.key }))],
-          { title: 'Jira: issues de qual projeto?' },
+          [{ label: t('All projects'), key: '' }, ...projects.map(p => ({ label: p.name, description: p.key, key: p.key }))],
+          { title: t('Jira: issues from which project?') },
         );
         // por repositório e fora do settings.json, para não deixar a worktree com alteração
         if (pick) await this.ctl.ctx.workspaceState.update(this.jiraProjectKey(), pick.key);
@@ -167,7 +178,7 @@ export class IssueService implements vscode.Disposable {
     } catch {
       // listar projetos é opcional
     }
-    vscode.window.showInformationMessage(`Conectado ao Jira como ${user}.`);
+    vscode.window.showInformationMessage(t('Connected to Jira as {0}.', user));
     await this.refresh(true);
   }
 
@@ -175,7 +186,7 @@ export class IssueService implements vscode.Disposable {
     const url = this.jiraUrl();
     if (!url) return;
     await this.ctl.ctx.secrets.delete(this.jiraSecret(url));
-    vscode.window.showInformationMessage(`Credenciais do Jira (${url}) removidas.`);
+    vscode.window.showInformationMessage(t('Jira credentials ({0}) removed.', url));
     await this.refresh(true);
   }
 
@@ -271,30 +282,36 @@ export class IssueService implements vscode.Disposable {
 
   async connectRedmine() {
     const url = await vscode.window.showInputBox({
-      title: 'Conectar ao Redmine',
-      prompt: 'Endereço do Redmine (ex.: https://redmine.empresa.com)',
+      title: t('Connect to Redmine'),
+      prompt: t('Redmine address (e.g. https://redmine.company.com)'),
       value: this.redmineUrl() || 'https://',
       ignoreFocusOut: true,
-      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : 'Informe um endereço http(s)://'),
+      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : t('Enter an http(s):// address')),
     });
     if (!url) return;
     const base = url.trim().replace(/\/+$/, '');
+    const openAccount = t('Open my account');
     const open = await vscode.window.showInformationMessage(
-      `Chave de API do Redmine em ${base}`,
-      { modal: true, detail: 'Fica em "Minha conta" → "Chave de acesso à API" (a API REST precisa estar habilitada na administração). A chave vai para o cofre de segredos do VS Code.' },
-      'Abrir minha conta',
-      'Já tenho a chave',
+      t('Redmine API key at {0}', base),
+      {
+        modal: true,
+        detail: t(
+          'It is under "My account" → "API access key" (the REST API must be enabled in the administration). The key goes to the VS Code secret storage.',
+        ),
+      },
+      openAccount,
+      t('I already have the key'),
     );
     if (!open) return;
-    if (open === 'Abrir minha conta') await vscode.env.openExternal(vscode.Uri.parse(`${base}/my/account`));
-    const key = await vscode.window.showInputBox({ title: 'Chave de API do Redmine', password: true, ignoreFocusOut: true });
+    if (open === openAccount) await vscode.env.openExternal(vscode.Uri.parse(`${base}/my/account`));
+    const key = await vscode.window.showInputBox({ title: t('Redmine API key'), password: true, ignoreFocusOut: true });
     if (!key) return;
     const client = new RedmineClient(base, key.trim());
     let user: string;
     try {
       user = await client.whoami();
     } catch (e) {
-      vscode.window.showErrorMessage(`A chave não funcionou em ${base}: ${(e as Error).message}`);
+      vscode.window.showErrorMessage(t('The key did not work on {0}: {1}', base, (e as Error).message));
       return;
     }
     await this.ctl.ctx.secrets.store(this.redmineSecret(base), key.trim());
@@ -305,8 +322,8 @@ export class IssueService implements vscode.Disposable {
       const projects = await client.projects();
       if (projects.length > 1) {
         const pick = await vscode.window.showQuickPick(
-          [{ label: 'Todos os projetos', id: '' }, ...projects.map(p => ({ label: p.name, description: p.identifier, id: p.identifier }))],
-          { title: 'Redmine: issues de qual projeto?' },
+          [{ label: t('All projects'), id: '' }, ...projects.map(p => ({ label: p.name, description: p.identifier, id: p.identifier }))],
+          { title: t('Redmine: issues from which project?') },
         );
         // por repositório e fora do settings.json, para não deixar a worktree com alteração
         if (pick) await this.ctl.ctx.workspaceState.update(this.redmineProjectKey(), pick.id);
@@ -314,7 +331,7 @@ export class IssueService implements vscode.Disposable {
     } catch {
       // listar projetos é opcional
     }
-    vscode.window.showInformationMessage(`Conectado ao Redmine como ${user}.`);
+    vscode.window.showInformationMessage(t('Connected to Redmine as {0}.', user));
     await this.refresh(true);
   }
 
@@ -322,7 +339,7 @@ export class IssueService implements vscode.Disposable {
     const url = this.redmineUrl();
     if (!url) return;
     await this.ctl.ctx.secrets.delete(this.redmineSecret(url));
-    vscode.window.showInformationMessage(`Chave do Redmine (${url}) removida.`);
+    vscode.window.showInformationMessage(t('Redmine key ({0}) removed.', url));
     await this.refresh(true);
   }
 
@@ -364,25 +381,35 @@ export class IssueService implements vscode.Disposable {
     if (this.redmineUrl()) targets.push({ label: 'Redmine', description: this.redmineUrl(), where: 'redmine' });
     if (this.jiraUrl()) targets.push({ label: 'Jira', description: this.jiraUrl(), where: 'jira' });
     if (!targets.length) {
+      const jira = t('Connect to Jira');
+      const redmine = t('Connect to Redmine');
+      const remoteOpt = t('Connect to the remote');
       const go = await vscode.window.showWarningMessage(
-        'Nenhum lugar para criar issues: o remoto não tem issues reconhecidas e nem Redmine nem Jira estão configurados.',
-        'Conectar ao Jira',
-        'Conectar ao Redmine',
-        'Conectar ao remoto',
+        t('Nowhere to create issues: the remote has no recognized issues and neither Redmine nor Jira is configured.'),
+        jira,
+        redmine,
+        remoteOpt,
       );
-      if (go === 'Conectar ao Jira') await this.connectJira();
-      if (go === 'Conectar ao Redmine') await this.connectRedmine();
-      if (go === 'Conectar ao remoto') await this.ctl.requests.connect();
+      if (go === jira) await this.connectJira();
+      if (go === redmine) await this.connectRedmine();
+      if (go === remoteOpt) await this.ctl.requests.connect();
       return;
     }
-    const target = targets.length === 1 ? targets[0] : await vscode.window.showQuickPick(targets, { title: 'Nova issue: onde?' });
+    const target = targets.length === 1 ? targets[0] : await vscode.window.showQuickPick(targets, { title: t('New issue: where?') });
     if (!target) return;
 
-    const title = await vscode.window.showInputBox({ title: `Nova issue no ${target.label}`, prompt: 'Título', ignoreFocusOut: true, validateInput: v => (v.trim() ? undefined : 'Informe um título.') });
+    const title = await vscode.window.showInputBox({
+      title: t('New issue on {0}', target.label),
+      prompt: t('Title'),
+      ignoreFocusOut: true,
+      validateInput: v => (v.trim() ? undefined : t('Enter a title.')),
+    });
     if (!title) return;
     const text = await vscode.window.showInputBox({
-      title: `Nova issue: ${title}`,
-      prompt: context ? 'Descrição (o trecho selecionado entra logo abaixo). Enter vazio para só o trecho.' : 'Descrição (opcional; dá para completar depois no navegador)',
+      title: t('New issue: {0}', title),
+      prompt: context
+        ? t('Description (the selected snippet goes right below). Press Enter with it empty to use only the snippet.')
+        : t('Description (optional; you can complete it later in the browser)'),
       ignoreFocusOut: true,
     });
     if (text === undefined) return;
@@ -393,25 +420,25 @@ export class IssueService implements vscode.Disposable {
       if (target.where === 'host') {
         const client = await this.ctl.requests.client(true);
         if (!client) return;
-        const labelsRaw = await vscode.window.showInputBox({ title: `Nova issue: ${title}`, prompt: 'Labels separadas por vírgula (opcional)', ignoreFocusOut: true });
+        const labelsRaw = await vscode.window.showInputBox({ title: t('New issue: {0}', title), prompt: t('Comma-separated labels (optional)'), ignoreFocusOut: true });
         if (labelsRaw === undefined) return;
         const labels = labelsRaw.split(',').map(l => l.trim()).filter(Boolean);
-        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Criando issue…' }, () => client.createIssue({ title: title.trim(), body, labels }));
+        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating issue…') }, () => client.createIssue({ title: title.trim(), body, labels }));
       } else if (target.where === 'jira') {
         const client = await this.jiraClient();
         if (!client) return this.connectJira();
         let projectKey = this.jiraProject();
         if (!projectKey) {
           const projects = await client.projects();
-          const pick = await vscode.window.showQuickPick(projects.map(p => ({ label: p.name, description: p.key, key: p.key })), { title: 'Jira: em qual projeto?' });
+          const pick = await vscode.window.showQuickPick(projects.map(p => ({ label: p.name, description: p.key, key: p.key })), { title: t('Jira: in which project?') });
           if (!pick) return;
           projectKey = pick.key;
         }
-        const labelsRaw = await vscode.window.showInputBox({ title: `Nova issue: ${title}`, prompt: 'Labels separadas por vírgula (opcional)', ignoreFocusOut: true });
+        const labelsRaw = await vscode.window.showInputBox({ title: t('New issue: {0}', title), prompt: t('Comma-separated labels (optional)'), ignoreFocusOut: true });
         if (labelsRaw === undefined) return;
         const labels = labelsRaw.split(',').map(l => l.trim()).filter(Boolean);
         const issueType = this.ctl.cfg().get<string>('jira.issueType', 'Task');
-        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Criando issue…' }, () =>
+        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating issue…') }, () =>
           client.createIssue({ projectKey: projectKey!, issueType, title: title.trim(), body, labels }),
         );
       } else {
@@ -420,29 +447,32 @@ export class IssueService implements vscode.Disposable {
         let projectId = this.redmineProject();
         if (!projectId) {
           const projects = await client.projects();
-          const pick = await vscode.window.showQuickPick(projects.map(p => ({ label: p.name, description: p.identifier, id: p.identifier })), { title: 'Redmine: em qual projeto?' });
+          const pick = await vscode.window.showQuickPick(projects.map(p => ({ label: p.name, description: p.identifier, id: p.identifier })), { title: t('Redmine: in which project?') });
           if (!pick) return;
           projectId = pick.id;
         }
-        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Criando issue…' }, () =>
+        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating issue…') }, () =>
           client.createIssue({ projectId: projectId!, title: title.trim(), body }),
         );
       }
     } catch (e) {
-      vscode.window.showErrorMessage(`Não consegui criar a issue: ${(e as Error).message}`);
+      vscode.window.showErrorMessage(t('Could not create the issue: {0}', (e as Error).message));
       return;
     }
-    this.ctl.log(`Issue ${created.key} criada: ${created.url}`);
+    this.ctl.log(t('Issue {0} created: {1}', created.key, created.url));
     void this.refresh(true);
-    const go = await vscode.window.showInformationMessage(`Issue ${created.key} criada: ${created.title}`, '✦ Começar com Claude', 'Abrir no navegador', 'Copiar link');
-    if (go === '✦ Começar com Claude') await this.start(created, true);
-    if (go === 'Abrir no navegador') vscode.env.openExternal(vscode.Uri.parse(created.url));
-    if (go === 'Copiar link') vscode.env.clipboard.writeText(created.url);
+    const startClaude = t('✦ Start with Claude');
+    const openBrowser = t('Open in browser');
+    const copyLink = t('Copy link');
+    const go = await vscode.window.showInformationMessage(t('Issue {0} created: {1}', created.key, created.title), startClaude, openBrowser, copyLink);
+    if (go === startClaude) await this.start(created, true);
+    if (go === openBrowser) vscode.env.openExternal(vscode.Uri.parse(created.url));
+    if (go === copyLink) vscode.env.clipboard.writeText(created.url);
   }
 
   async start(issue: Issue, withAgent: boolean) {
     const repo = this.ctl.repo;
-    if (!repo) throw new Error('Nenhum repositório git aberto.');
+    if (!repo) throw new Error(t('No git repository open.'));
     const { base } = await this.ctl.base();
     const branch = this.branchOf(issue) ?? issueBranch(issue, this.ctl.cfg().get<string>('issues.branchPrefix', 'issue'));
     const wts = await repo.worktreesFast();
@@ -459,13 +489,13 @@ export class IssueService implements vscode.Disposable {
     });
     this.ctl.scheduleRefresh(50);
     if (!withAgent) {
-      vscode.window.showInformationMessage(`Worktree ${branch} pronta para ${issue.key}.`);
+      vscode.window.showInformationMessage(t('Worktree {0} ready for {1}.', branch, issue.key));
       return;
     }
 
-    const body = issue.body.length > MAX_BODY ? `${issue.body.slice(0, MAX_BODY)}\n\n[… descrição cortada; veja o link]` : issue.body;
+    const body = issue.body.length > MAX_BODY ? `${issue.body.slice(0, MAX_BODY)}\n\n${t('[… description truncated; see the link]')}` : issue.body;
     const template = this.ctl.cfg().get<string>('prompts.issue', '') || DEFAULT_ISSUE_PROMPT;
-    const prompt = renderPrompt(template, { key: issue.key, title: issue.title, body: body || '(sem descrição)', url: issue.url, branch, base });
+    const prompt = renderPrompt(template, { key: issue.key, title: issue.title, body: body || t('(no description)'), url: issue.url, branch, base });
     await launchWithPrompt(this.ctl, { path: wt.path, branch, prompt });
   }
 
@@ -488,5 +518,7 @@ export async function launchWithPrompt(ctl: Controller, args: { path: string; br
   await openTerminal(ctl, { path: args.path });
   const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: args.prompt });
   await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
-  vscode.window.showInformationMessage('Prompt da issue aberto ao lado; o terminal já está na worktree.', 'Copiar prompt').then(p => p && vscode.env.clipboard.writeText(args.prompt));
+  vscode.window.showInformationMessage(t('Issue prompt opened to the side; the terminal is already in the worktree.'), t('Copy prompt')).then(p => {
+    if (p) void vscode.env.clipboard.writeText(args.prompt);
+  });
 }

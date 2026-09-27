@@ -6,6 +6,7 @@ import { computeFlow, flowStages } from './flow';
 import { hostLabel } from './hosting/platforms';
 import { RequestService } from './hosting/service';
 import { Repo } from './git';
+import { t } from './i18n';
 import { applyCache, buildState, enrich, GraphState, RepoCache, resolveBase, SyncStatus, SyncWhere, GraphFilter } from './model';
 
 /** Dono do repositório aberto e do estado mostrado na árvore e no grafo. */
@@ -90,7 +91,7 @@ export class Controller implements vscode.Disposable {
    */
   async setActiveRepo(p: string) {
     const repo = await Repo.open(p);
-    if (!repo) throw new Error(`${p} não é um repositório git.`);
+    if (!repo) throw new Error(t('{0} is not a git repository.', p));
     if (this.repo && this.repo.commonDir.toLowerCase() === repo.commonDir.toLowerCase() && this.repo.root.toLowerCase() === repo.root.toLowerCase()) return;
     this.repo = repo;
     this.state = undefined;
@@ -101,7 +102,7 @@ export class Controller implements vscode.Disposable {
     this.requests.reset();
     this.attachRepo();
     await this.ctx.workspaceState.update('activeProject', repo.root);
-    this.log(`Projeto ativo: ${repo.root}`);
+    this.log(t('Active project: {0}', repo.root));
     this.setLoading('loading');
     this.changed.fire(undefined);
     this.repoChanged.fire(repo);
@@ -216,9 +217,9 @@ export class Controller implements vscode.Disposable {
         ];
         this.state.flow = await computeFlow(this.repo, stages, refs);
       }
-      if (!this.loadedOnce) this.log(`Leitura rápida: ${this.state.worktrees.length} worktrees em ${Date.now() - t0} ms`);
+      if (!this.loadedOnce) this.log(t('Quick read: {0} worktrees in {1} ms', this.state.worktrees.length, Date.now() - t0));
     } catch (e) {
-      this.log(`Falha ao ler o repositório: ${(e as Error).message}`);
+      this.log(t('Failed to read the repository: {0}', (e as Error).message));
       if (this.state) this.state.error = (e as Error).message;
     }
     this.setLoading('ready');
@@ -248,7 +249,7 @@ export class Controller implements vscode.Disposable {
         });
         if (!this.loadedOnce && state.pending > 0) {
           await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Window, title: `AgentYard: detalhando ${state.pending} worktrees` },
+            { location: vscode.ProgressLocation.Window, title: t('AgentYard: loading details of {0} worktrees', state.pending) },
             () => run,
           );
         } else {
@@ -257,7 +258,7 @@ export class Controller implements vscode.Disposable {
         if (this.state) applyCache(this.state, this.cache);
         this.changed.fire(this.state);
         this.cacheChanged.fire();
-        if (!this.loadedOnce) this.log(`Detalhamento completo em ${Date.now() - t0} ms`);
+        if (!this.loadedOnce) this.log(t('Details loaded in {0} ms', Date.now() - t0));
         this.loadedOnce = true;
         await this.ctx.workspaceState.update(this.cacheKey(), this.cache.exportCompares());
       } while (this.enrichAgain);
@@ -291,7 +292,7 @@ export class Controller implements vscode.Disposable {
   }
 
   async base(): Promise<{ base: string; baseRef: string }> {
-    if (!this.repo) throw new Error('Nenhum repositório git aberto.');
+    if (!this.repo) throw new Error(t('No git repository open.'));
     const c = this.cfg();
     return resolveBase(this.repo, await this.repo.refs(), this.configuredBase(), c.get('autoSync.fetchRemote', false));
   }

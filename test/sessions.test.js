@@ -110,7 +110,7 @@ const u = (i, o, cr = 0, cc = 0) => ({ input_tokens: i, output_tokens: o, cache_
     const d = S.dailyTotals(sessions, 4, now);
     assert.strictEqual(d.length, 4);
     assert.strictEqual(d.reduce((s, x) => s + x.tokens, 0), 3177);
-    assert.strictEqual(S.formatTokens(1234567), '1.2 mi');
+    assert.strictEqual(S.formatTokens(1234567), '1.2M');
   });
 
   await check('transcrição: texto sem resultados de ferramenta', async () => {
@@ -131,7 +131,7 @@ const u = (i, o, cr = 0, cc = 0) => ({ input_tokens: i, output_tokens: o, cache_
     const cmds = S.listClaudeCommands(projDir, root);
     const by = Object.fromEntries(cmds.map(c => [c.name, c]));
     assert.strictEqual(by['/git:pr'].description, 'Abre um PR');
-    assert.strictEqual(by['/git:pr'].source, 'projeto');
+    assert.strictEqual(by['/git:pr'].source, 'project');
     assert.strictEqual(by['/revisar'].source, 'skill');
     assert.ok(by['/resume']);
   });

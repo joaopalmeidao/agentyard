@@ -6,6 +6,7 @@ import { AzureDevOpsClient } from './azure';
 import { bitbucketClient } from './bitbucket';
 import { ChangeRequest, GitHubClient, GitLabClient, HostClient, HostError, parseRemote, RemoteInfo, suggestBody, suggestTitle } from './core';
 import { hostLabel } from './platforms';
+import { t } from '../i18n';
 
 const REFRESH_MS = 120_000;
 
@@ -106,9 +107,9 @@ export class RequestService {
   async client(interactive: boolean): Promise<HostClient | undefined> {
     const r = await this.detectRemote();
     if (!r) return undefined;
-    const t = await this.token(r, interactive);
-    this.connected = !!t;
-    return t ? this.makeClient(r, t) : undefined;
+    const tok = await this.token(r, interactive);
+    this.connected = !!tok;
+    return tok ? this.makeClient(r, tok) : undefined;
   }
 
   /** Cliente sem perguntar nada (para atualizações em segundo plano). */
@@ -132,19 +133,20 @@ export class RequestService {
   /** Pede um token de acesso pessoal, valida e guarda no cofre do VS Code. */
   async askToken(r: RemoteInfo): Promise<string | undefined> {
     const h = tokenHelp(r);
+    const openTokens = t('Open tokens page');
     const open = await vscode.window.showInformationMessage(
-      `Conectar ao ${hostLabel(r.kind)} em ${r.webBase}`,
+      t('Connect to {0} at {1}', hostLabel(r.kind), r.webBase),
       {
         modal: true,
-        detail: `${h.detail} Ele fica guardado no cofre de segredos do VS Code, não em arquivos.`,
+        detail: t('{0} It is kept in the VS Code secret storage, not in files.', h.detail),
       },
-      'Abrir página de tokens',
-      'Já tenho um token',
+      openTokens,
+      t('I already have a token'),
     );
     if (!open) return undefined;
-    if (open === 'Abrir página de tokens') await vscode.env.openExternal(vscode.Uri.parse(h.url));
+    if (open === openTokens) await vscode.env.openExternal(vscode.Uri.parse(h.url));
     const token = await vscode.window.showInputBox({
-      title: `Token de ${r.host}`,
+      title: t('Token for {0}', r.host),
       prompt: h.prompt,
       password: true,
       ignoreFocusOut: true,
@@ -153,11 +155,11 @@ export class RequestService {
     try {
       const user = await this.makeClient(r, token.trim()).whoami();
       await this.ctl.ctx.secrets.store(this.secretKey(r), token.trim());
-      vscode.window.showInformationMessage(`Conectado a ${r.host} como ${user}.`);
+      vscode.window.showInformationMessage(t('Connected to {0} as {1}.', r.host, user));
       this.connected = true;
       return token.trim();
     } catch (e) {
-      vscode.window.showErrorMessage(`O token não funcionou em ${r.host}: ${(e as Error).message}`);
+      vscode.window.showErrorMessage(t('The token did not work on {0}: {1}', r.host, (e as Error).message));
       return undefined;
     }
   }
@@ -169,11 +171,11 @@ export class RequestService {
   async connectGitLab() {
     const current = await this.detectRemote(true);
     const url = await vscode.window.showInputBox({
-      title: 'Conectar ao GitLab',
-      prompt: 'Endereço do GitLab (ex.: https://gitlab.empresa.com ou https://empresa.com/gitlab)',
+      title: t('Connect to GitLab'),
+      prompt: t('GitLab address (e.g. https://gitlab.company.com or https://company.com/gitlab)'),
       value: current?.kind === 'gitlab' ? current.webBase : 'https://',
       ignoreFocusOut: true,
-      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : 'Informe um endereço http(s)://'),
+      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : t('Enter an http(s):// address')),
     });
     if (!url) return;
     const base = url.trim().replace(/\/+$/, '');
@@ -190,7 +192,12 @@ export class RequestService {
     const r = await this.detectRemote(true);
     if (!r || r.kind !== 'gitlab' || r.host !== host) {
       vscode.window.showWarningMessage(
-        `Salvei ${base}, mas o remoto "${this.cfg().get('remote', 'origin')}" deste repositório não aponta para ${host}. Os PRs/MRs, issues e pipelines usam o remoto do repositório.`,
+        t(
+          'Saved {0}, but this repository\'s remote "{1}" does not point to {2}. PRs/MRs, issues and pipelines use the repository\'s remote.',
+          base,
+          this.cfg().get<string>('remote', 'origin'),
+          host,
+        ),
       );
       return;
     }
@@ -201,19 +208,23 @@ export class RequestService {
   async connect() {
     const r = await this.detectRemote(true);
     if (!r) {
+      const enterUrl = t('Enter GitLab URL');
+      const openSettings = t('Open settings');
       const pick = await vscode.window.showWarningMessage(
-        'O remoto não foi reconhecido como GitHub, GitLab, Bitbucket nem Azure DevOps. Se for um GitLab próprio, informe o endereço; para outras instalações próprias, adicione o host em worktreeGraph.bitbucket.hosts, azureDevOps.hosts ou github.hosts.',
-        'Informar URL do GitLab',
-        'Abrir configuração',
+        t(
+          'The remote was not recognized as GitHub, GitLab, Bitbucket or Azure DevOps. If it is a self-hosted GitLab, enter its address; for other self-hosted installations, add the host to worktreeGraph.bitbucket.hosts, azureDevOps.hosts or github.hosts.',
+        ),
+        enterUrl,
+        openSettings,
       );
-      if (pick === 'Informar URL do GitLab') return this.connectGitLab();
-      if (pick === 'Abrir configuração') vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.gitlab.hosts');
+      if (pick === enterUrl) return this.connectGitLab();
+      if (pick === openSettings) vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.gitlab.hosts');
       return;
     }
     if (r.kind === 'gitlab') return this.connectGitLab();
     if (r.kind === 'github' && r.host === 'github.com') {
       const s = await vscode.authentication.getSession('github', ['repo'], { createIfNone: true });
-      if (s) vscode.window.showInformationMessage(`Conectado ao GitHub como ${s.account.label}.`);
+      if (s) vscode.window.showInformationMessage(t('Connected to GitHub as {0}.', s.account.label));
     } else {
       await this.askToken(r);
     }
@@ -226,7 +237,7 @@ export class RequestService {
     await this.ctl.ctx.secrets.delete(this.secretKey(r));
     this.connected = false;
     this.byBranch.clear();
-    vscode.window.showInformationMessage(`Token de ${r.host} removido.`);
+    vscode.window.showInformationMessage(t('Token for {0} removed.', r.host));
     this.ctl.scheduleRefresh(20);
   }
 
@@ -289,13 +300,15 @@ export class RequestService {
     try {
       existing = await client.findForBranch(branch);
     } catch (e) {
-      vscode.window.showErrorMessage(`Não consegui consultar ${r.host}: ${(e as Error).message}`);
+      vscode.window.showErrorMessage(t('Could not query {0}: {1}', r.host, (e as Error).message));
       return;
     }
     if (existing && (existing.state === 'open' || existing.state === 'draft') && (!fixedTarget || existing.target === fixedTarget)) {
-      const go = await vscode.window.showInformationMessage(`${branch} já tem o ${L} ${existing.ref}: ${existing.title}`, 'Abrir no navegador', 'Enviar commits novos');
-      if (go === 'Abrir no navegador') vscode.env.openExternal(vscode.Uri.parse(existing.url));
-      if (go === 'Enviar commits novos') await this.push(branch);
+      const openBrowser = t('Open in browser');
+      const pushNew = t('Push new commits');
+      const go = await vscode.window.showInformationMessage(t('{0} already has {1} {2}: {3}', branch, L, existing.ref, existing.title), openBrowser, pushNew);
+      if (go === openBrowser) vscode.env.openExternal(vscode.Uri.parse(existing.url));
+      if (go === pushNew) await this.push(branch);
       return;
     }
 
@@ -304,22 +317,22 @@ export class RequestService {
     const target = fixedTarget
       ? { label: fixedTarget }
       : await vscode.window.showQuickPick(
-          targets.map((t, i) => ({ label: t, description: i === 0 ? 'base' : '' })),
-          { title: `${L} de ${branch} para…`, placeHolder: base },
+          targets.map((tgt, i) => ({ label: tgt, description: i === 0 ? 'base' : '' })),
+          { title: t('{0} from {1} to…', L, branch), placeHolder: base },
         );
     if (!target) return;
 
     const subjects = (await repo.exec(['log', '--reverse', '--format=%s', `${target.label}..${branch}`])).split(/\r?\n/).filter(Boolean);
     if (!subjects.length) {
-      vscode.window.showInformationMessage(`${branch} não tem commits que ${target.label} não tenha.`);
+      vscode.window.showInformationMessage(t('{0} has no commits that {1} does not have.', branch, target.label));
       return;
     }
-    const title = await vscode.window.showInputBox({ title: `Título do ${L}`, value: suggestTitle(branch, subjects), ignoreFocusOut: true });
+    const title = await vscode.window.showInputBox({ title: t('{0} title', L), value: suggestTitle(branch, subjects), ignoreFocusOut: true });
     if (!title) return;
     const kind = await vscode.window.showQuickPick(
       [
-        { label: `Criar ${L}`, draft: false, detail: `${subjects.length} commit(s) de ${branch} para ${target.label}` },
-        { label: `Criar ${L} como rascunho`, draft: true, detail: 'Não pede revisão ainda' },
+        { label: t('Create {0}', L), draft: false, detail: t('{0} commit(s) from {1} to {2}', subjects.length, branch, target.label) },
+        { label: t('Create {0} as draft', L), draft: true, detail: t('Does not request review yet') },
       ],
       { title: `${L}: ${title}` },
     );
@@ -329,18 +342,23 @@ export class RequestService {
     if (!(await guardChecks('push', branch))) return;
     if (!(await this.push(branch))) return;
     try {
-      const created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Criando ${L}…` }, () =>
+      const created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating {0}…', L) }, () =>
         client.create({ source: branch, target: target.label, title, body: suggestBody(subjects, L, this.issueTrailers(branch)), draft: kind.draft }),
       );
       this.byBranch.set(branch, created);
-      this.ctl.log(`${L} ${created.ref} criado: ${created.url}`);
+      this.ctl.log(t('{0} {1} created: {2}', L, created.ref, created.url));
       this.ctl.scheduleRefresh(20);
-      const go = await vscode.window.showInformationMessage(`${L} ${created.ref} criado: ${created.title}`, 'Abrir no navegador', 'Copiar link');
-      if (go === 'Abrir no navegador') vscode.env.openExternal(vscode.Uri.parse(created.url));
-      if (go === 'Copiar link') vscode.env.clipboard.writeText(created.url);
+      const openBrowser = t('Open in browser');
+      const copyLink = t('Copy link');
+      const go = await vscode.window.showInformationMessage(t('{0} {1} created: {2}', L, created.ref, created.title), openBrowser, copyLink);
+      if (go === openBrowser) vscode.env.openExternal(vscode.Uri.parse(created.url));
+      if (go === copyLink) vscode.env.clipboard.writeText(created.url);
     } catch (e) {
-      const msg = e instanceof HostError && e.status === 422 ? `${(e as Error).message} (a branch pode já ter um ${L}, ou não ter diferença para o destino)` : (e as Error).message;
-      vscode.window.showErrorMessage(`Não consegui criar o ${L}: ${msg}`);
+      const msg =
+        e instanceof HostError && e.status === 422
+          ? t('{0} (the branch may already have a {1}, or have no difference from the target)', (e as Error).message, L)
+          : (e as Error).message;
+      vscode.window.showErrorMessage(t('Could not create the {0}: {1}', L, msg));
     }
   }
 
@@ -358,28 +376,34 @@ function tokenHelp(r: RemoteInfo): { url: string; prompt: string; detail: string
     case 'gitlab':
       return {
         url: `${r.webBase}/-/user_settings/personal_access_tokens?name=Worktree%20Graph&scopes=api`,
-        prompt: 'Escopo api',
-        detail: 'Crie um token de acesso pessoal com o escopo "api" e cole na próxima tela.',
+        prompt: t('Scope {0}', 'api'),
+        detail: t('Create a personal access token with the "{0}" scope and paste it on the next screen.', 'api'),
       };
     case 'bitbucket':
       return r.flavor === 'cloud'
         ? {
             url: 'https://bitbucket.org/account/settings/app-passwords/',
-            prompt: 'usuario:app-password (ou e-mail:API token), ou um access token do repositório',
-            detail: 'Use "usuario:app password" (ou "e-mail:API token") com permissão de leitura e escrita em Pull requests, Issues e Pipelines, ou um access token do repositório.',
+            prompt: t('username:app-password (or email:API token), or a repository access token'),
+            detail: t(
+              'Use "username:app password" (or "email:API token") with read and write permission on Pull requests, Issues and Pipelines, or a repository access token.',
+            ),
           }
         : {
             url: `${r.webBase}/plugins/servlet/access-tokens/manage`,
-            prompt: 'HTTP access token (projeto/repositório: escrita)',
-            detail: 'Crie um HTTP access token pessoal com permissão de escrita no repositório.',
+            prompt: t('HTTP access token (project/repository: write)'),
+            detail: t('Create a personal HTTP access token with write permission on the repository.'),
           };
     case 'azure':
       return {
         url: `${r.azure?.collection ?? r.webBase}/_usersSettings/tokens`,
-        prompt: 'PAT com Code (leitura e escrita), Work Items (leitura e escrita) e Build (leitura e execução)',
-        detail: 'Crie um Personal Access Token com os escopos Code (Read & write), Work Items (Read & write) e Build (Read & execute).',
+        prompt: t('PAT with Code (read and write), Work Items (read and write) and Build (read and execute)'),
+        detail: t('Create a Personal Access Token with the scopes Code (Read & write), Work Items (Read & write) and Build (Read & execute).'),
       };
     default:
-      return { url: `${r.webBase}/settings/tokens`, prompt: 'Escopo repo', detail: 'Crie um token de acesso pessoal com o escopo "repo" e cole na próxima tela.' };
+      return {
+        url: `${r.webBase}/settings/tokens`,
+        prompt: t('Scope {0}', 'repo'),
+        detail: t('Create a personal access token with the "{0}" scope and paste it on the next screen.', 'repo'),
+      };
   }
 }
