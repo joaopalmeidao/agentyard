@@ -160,3 +160,61 @@ export async function copyMessage(ctl: Controller, sha: string) {
   await vscode.env.clipboard.writeText(c.body ? `${c.subject}\n\n${c.body}` : c.subject);
   vscode.window.setStatusBarMessage('Mensagem do commit copiada', 2500);
 }
+
+export interface CommitDetails {
+  sha: string;
+  parents: string[];
+  author: string;
+  authorEmail: string;
+  authorDate: number;
+  committer: string;
+  committerEmail: string;
+  committerDate: number;
+  message: string;
+  /** Arquivos alterados em relação ao primeiro pai, com +/− (binário: -1). */
+  files: { path: string; status: string; added: number; deleted: number }[];
+}
+
+/** Detalhes para o painel expandido do histórico (estilo Git Graph): dois processos git, sob demanda. */
+export async function commitDetails(ctl: Controller, sha: string): Promise<CommitDetails> {
+  const repo = ctl.repo!;
+  const [meta, numstat, names] = await Promise.all([
+    repo.exec(['show', '-s', '--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ce%x1f%ct%x1f%B', sha]),
+    repo.exec(['show', '--format=', '--numstat', '--no-renames', '-m', '--first-parent', sha]),
+    repo.exec(['show', '--format=', '--name-status', '--no-renames', '-m', '--first-parent', sha]),
+  ]);
+  const [full, parents, an, ae, at, cn, ce, ct, ...msg] = meta.split('\x1f');
+  const status = new Map<string, string>();
+  for (const l of names.split(/\r?\n/)) {
+    const [st, ...rest] = l.split('\t');
+    if (st && rest.length) status.set(rest.join('\t'), st[0]);
+  }
+  const files = numstat
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map(l => {
+      const [a, d, ...rest] = l.split('\t');
+      const p = rest.join('\t');
+      return { path: p, status: status.get(p) ?? 'M', added: a === '-' ? -1 : Number(a), deleted: d === '-' ? -1 : Number(d) };
+    });
+  return {
+    sha: full.trim(),
+    parents: parents ? parents.trim().split(' ').filter(Boolean) : [],
+    author: an,
+    authorEmail: ae,
+    authorDate: Number(at),
+    committer: cn,
+    committerEmail: ce,
+    committerDate: Number(ct),
+    message: msg.join('\x1f').trim(),
+    files,
+  };
+}
+
+/** Diff de um arquivo do commit contra o pai (clique na lista do painel de detalhes). */
+export async function openCommitFile(ctl: Controller, sha: string, parent: string | undefined, file: string, status: string) {
+  const root = ctl.repo!.root;
+  const left = !parent || status === 'A' ? gitUri(root, '__empty__', file) : gitUri(root, parent, file);
+  const right = status === 'D' ? gitUri(root, '__empty__', file) : gitUri(root, sha, file);
+  await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(file)} (${sha.slice(0, 7)})`, { preview: true });
+}

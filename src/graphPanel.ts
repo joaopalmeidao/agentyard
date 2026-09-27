@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
+import { commitDetails } from './commits';
 import { Controller } from './controller';
 
 export type ActionHandler = (action: string, args: Record<string, string>) => Promise<void>;
@@ -37,6 +38,15 @@ export class GraphPanel implements vscode.Disposable {
       }),
       panel.onDidChangeViewState(e => e.webviewPanel.visible && ctl.scheduleRefresh(50)),
       panel.webview.onDidReceiveMessage(async msg => {
+        if (msg.type === 'commitDetails') {
+          try {
+            const details = await commitDetails(ctl, msg.sha);
+            panel.webview.postMessage({ type: 'commitDetails', sha: msg.sha, details });
+          } catch (e) {
+            panel.webview.postMessage({ type: 'commitDetails', sha: msg.sha, error: (e as Error).message });
+          }
+          return;
+        }
         if (msg.type === 'saveUi') {
           await ctl.ctx.globalState.update('panelUi', msg.ui);
           return;
