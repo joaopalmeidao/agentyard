@@ -236,7 +236,7 @@ body.attempts-page { overflow: auto; padding: 0 16px 24px; }
 /* troca de filtro: resposta imediata enquanto o estado novo não chega */
 .graph-scroll.loading { opacity: .35; pointer-events: none; transition: opacity .15s; }
 
-/* ---------- histórico: estilo Git Graph ---------- */
+/* ---------- histórico: colunas e detalhes do commit ---------- */
 .pane-b .graph-head-wrap { position: sticky; top: 0; z-index: 3; background: var(--bg); padding-top: 10px; }
 .pane-b .graph-head-wrap .graph-head { position: static; padding-top: 0; }
 .graph-head .seg + .seg { margin-left: 4px; }

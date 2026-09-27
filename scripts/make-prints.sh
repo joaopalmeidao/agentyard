@@ -20,9 +20,8 @@ shot 02-menu-branch.png menu 1440 700
 shot 03-arrastar-para-mesclar.png drag 1440 560
 shot 06-menu-commit.png menu-commit 1440 760
 node scripts/commit-details.js "$DEMO/loja-app" 3
-shot 07-estilo-git-graph.png gitgraph 1440 620
-shot 08-git-graph-detalhes.png gitgraph-expand 1440 760
-shot 09-historico-compacto.png compact 1440 560
+shot 07-historico.png historico 1440 620
+shot 08-historico-detalhes.png historico-detalhes 1440 760
 mkdir -p "$DEMO/loja-app/.github/workflows"
 printf 'on:
   push:

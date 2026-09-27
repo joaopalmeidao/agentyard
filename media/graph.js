@@ -11,8 +11,8 @@
   let filter = '';
   /** Layout do painel (fica guardado pelo VS Code entre recargas do webview). */
   // Padrão: abas, abrindo no Histórico. A escolha do usuário fica no VS Code (mensagem 'saveUi').
-  // histMode: 'gitgraph' (tabela no estilo da extensão Git Graph) ou 'compact' (o modo antigo)
-  const ui = Object.assign({ layout: 'tabs', split: 46, tab: 'b', histMode: 'gitgraph' }, (vscode.getState() || {}).ui);
+  const ui = Object.assign({ layout: 'tabs', split: 46, tab: 'b' }, (vscode.getState() || {}).ui);
+  delete ui.histMode; // havia dois modos de histórico; agora é um só
   const saveUi = () => {
     vscode.setState({ ...(vscode.getState() || {}), ui });
     vscode.postMessage({ type: 'saveUi', ui: { ...ui } });
@@ -137,7 +137,6 @@
       Math.floor(Date.now() / 60000),
       filter,
       state.graphFilter,
-      ui.histMode,
       expanded ? expanded.sha : '',
       state.graphBranches || [],
       state.showRemotes,
@@ -623,7 +622,6 @@
   function graphHeader(n, extra = '') {
     const f = state.graphFilter;
     const sel = state.graphBranches || [];
-    const gg = ui.histMode === 'gitgraph';
     const controls = `<div class="hist-controls">
         ${f === 'all' ? `<button class="branch-picker-btn" data-local="branchPicker" title="Escolher quais branches o histórico mostra">Branches: <b>${sel.length ? (sel.length === 1 ? esc(sel[0]) : `${sel.length} escolhidas`) : 'Mostrar todas'}</b> ▾</button>` : ''}
         ${f === 'all' ? `<label class="check"><input type="checkbox" data-local="showRemotes" ${state.showRemotes ? 'checked' : ''}> Mostrar branches remotas</label>` : ''}
@@ -635,10 +633,6 @@
         <button data-action="setGraphFilter" data-value="all" class="${f === 'all' ? 'on' : ''}">Tudo</button>
         <button data-action="setGraphFilter" data-value="unmerged" class="${f === 'unmerged' ? 'on' : ''}" title="Só commits de branches e worktrees que ainda não entraram em ${esc(state.base)}">Não mescladas <b>${state.unmerged.length}</b></button>
         <button data-action="setGraphFilter" data-value="ci" class="${f === 'ci' ? 'on' : ''}" title="Só as branches que o CI usa: fluxo de ambientes, base, arquivos de CI e worktreeGraph.ciBranches">CI</button>
-      </span>
-      <span class="seg" title="Como o histórico é desenhado">
-        <button data-local="histMode" data-mode="gitgraph" class="${gg ? 'on' : ''}" title="Tabela com Graph, Description, Date, Author e Commit; clique num commit para ver os detalhes">Estilo Git Graph</button>
-        <button data-local="histMode" data-mode="compact" class="${gg ? '' : 'on'}" title="O modo compacto de antes">Compacto</button>
       </span></h2>${controls}${f === 'ci' ? ciStrip() : ''}${extra}</div>`;
   }
 
@@ -663,61 +657,10 @@
   }
 
   function graphSection() {
-    if (ui.histMode === 'gitgraph') return gitGraphSection();
-    let commits = state.commits;
-    const head = graphHeader(commits.length);
-    if (!commits.length)
-      return `<section class="graph-section">${head}<div class="empty">${state.graphFilter === 'unmerged' ? `Tudo já está mesclado em ${esc(state.base)}.` : 'Sem commits.'}</div></section>`;
-    const wip = [];
-    state.worktrees.forEach((w, i) => {
-      if (!w.changes || !w.head) return;
-      const at = commits.findIndex(c => c.sha === w.head);
-      if (at >= 0) wip.push({ at, c: { sha: `wip-${i}`, parents: [w.head], author: '', date: Date.now() / 1000, subject: `Alterações não commitadas em ${w.name}: ${w.changes} arquivo(s)`, refs: [], wip: true, branch: w.branch, path: w.path } });
-    });
-    if (wip.length) {
-      commits = commits.slice();
-      wip.sort((a, b) => b.at - a.at).forEach(x => commits.splice(x.at, 0, x.c));
-    }
-    const { edges, width } = layout(commits);
-    const W = width * COL + 8;
-    const H = commits.length * ROW;
-    const paths = edges
-      .map(e => `<path d="${edgePath(e)}" stroke="${COLORS[(e.merge ? e.lane : e.x) % COLORS.length]}" />`)
-      .join('');
-    const dots = commits
-      .map(c => {
-        const color = COLORS[c.x % COLORS.length];
-        const isMerge = c.parents.length > 1;
-        if (c.wip) return `<circle cx="${X(c.x)}" cy="${defaultY(c.y)}" r="${DOT}" fill="var(--bg)" stroke="var(--warn)" stroke-width="2" stroke-dasharray="2 2"/>`;
-        return `<circle cx="${X(c.x)}" cy="${defaultY(c.y)}" r="${isMerge ? DOT - 1 : DOT}" fill="${isMerge ? 'var(--bg)' : color}" stroke="${color}" stroke-width="2"/>`;
-      })
-      .join('');
-    const q = filter.toLowerCase();
-    const rows = commits
-      .map(c => {
-        const hide = q && !(c.subject.toLowerCase().includes(q) || c.author.toLowerCase().includes(q) || c.sha.startsWith(q) || c.refs.some(r => r.name.toLowerCase().includes(q)));
-        if (c.wip)
-          return `<div class="row wip ${hide ? 'dim' : ''}" data-menu="${esc(c.branch || '')}" style="padding-left:${W}px">
-            <span class="desc"><span class="subject">● ${esc(c.subject)}</span>
-            <button class="link" data-action="diffWithBase" data-branch="${esc(c.branch || '')}">revisar</button></span>
-            <span class="author"></span><span class="date">agora</span><span class="sha"></span></div>`;
-        return `<div class="row ${hide ? 'dim' : ''} ${c.boundary ? 'boundary' : ''}" data-sha="${c.sha}" ${c.boundary ? '' : `draggable="true" data-drag-commit="${c.sha}" `}style="padding-left:${W}px" ${c.boundary ? `title="Ponto de ${esc(state.base)} de onde branches pendentes saíram"` : ''}>
-          <span class="desc">${c.refs.map(badge).join('')}<span class="subject">${esc(c.subject)}</span></span>
-          <span class="author">${esc(c.author)}</span>
-          <span class="date">${ago(c.date)}</span>
-          <span class="sha">${c.sha.slice(0, 7)}</span>
-        </div>`;
-      })
-      .join('');
-    return `<section class="graph-section">${head}
-      <div class="graph-scroll"><div class="graph" style="height:${H}px">
-        <svg class="lanes" width="${W}" height="${H}" fill="none" stroke-width="2">${paths}${dots}</svg>
-        ${rows}
-      </div></div>
-    </section>`;
+    return historySection();
   }
 
-  // ---------- estilo Git Graph ----------
+  // ---------- histórico: colunas e detalhes do commit ao clicar ----------
   /** Commit com o painel de detalhes aberto: { sha, details?, error? }. */
   let expanded = null;
   const GAP = 250;
@@ -739,7 +682,7 @@
   const fullDate = unix =>
     new Date(unix * 1000).toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  /** Como o Git Graph: "main" e "origin/main" no mesmo commit viram uma etiqueta só. */
+  /** "main" e "origin/main" no mesmo commit viram uma etiqueta só. */
   function groupedBadges(refs) {
     const heads = refs.filter(r => r.kind === 'head');
     const used = new Set();
@@ -754,7 +697,7 @@
     return heads.length || out.length ? out.join('') : '';
   }
 
-  function gitGraphSection() {
+  function historySection() {
     const commits = withWip(state.commits);
     if (!commits.length)
       return `<section class="graph-section gg">${graphHeader(0)}<div class="empty">${state.graphFilter === 'unmerged' ? `Tudo já está mesclado em ${esc(state.base)}.` : 'Sem commits.'}</div></section>`;
@@ -882,12 +825,6 @@
       render();
       return;
     }
-    if (local && local.dataset.local === 'histMode') {
-      ui.histMode = local.dataset.mode === 'compact' ? 'compact' : 'gitgraph';
-      saveUi();
-      render();
-      return;
-    }
     if (local && local.dataset.local === 'branchPicker') {
       if (picker.style.display === 'block') closePicker();
       else openPicker(local);
@@ -923,7 +860,7 @@
       return;
     }
     if (!picker.contains(t) && !t.closest('[data-local="branchPicker"]')) closePicker();
-    if (ui.histMode === 'gitgraph' && !t.closest('[data-action], .ref, button, input, a, .commit-details')) {
+    if (!t.closest('[data-action], .ref, button, input, a, .commit-details')) {
       const row = /** @type {HTMLElement|null} */ (t.closest('.gg-row[data-sha]'));
       if (row && !row.classList.contains('boundary')) {
         toggleDetails(row.dataset.sha);
@@ -1009,11 +946,6 @@
     const target = /** @type {HTMLElement} */ (el).dataset.drop;
     if (target && dragging.startsWith('commit:')) send('cherryPick', { sha: dragging.slice(7), target });
     else if (target && target !== dragging) send('mergeBranches', { source: dragging, target });
-  });
-
-  document.addEventListener('dblclick', e => {
-    const row = /** @type {HTMLElement} */ (e.target).closest?.('.row[data-sha]');
-    if (row && ui.histMode !== 'gitgraph') send('showCommit', { sha: /** @type {HTMLElement} */ (row).dataset.sha });
   });
 
   // divisor entre worktrees e histórico

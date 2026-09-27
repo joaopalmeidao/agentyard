@@ -145,7 +145,7 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
       else if (pick) await createWorktree(ctl, { existing: target });
       return false;
     } finally {
-      await repo.run(['worktree', 'remove', '--force', tmp]);
+      await repo.removeWorktree(tmp, true);
     }
   } finally {
     ctl.scheduleRefresh(100);
@@ -290,7 +290,7 @@ export async function removeWorktree(ctl: Controller, arg: BranchArg, opts: { al
   const actions = opts.alsoBranch ? ['Remover worktree e branch'] : ['Remover worktree', 'Remover worktree e branch'];
   const pick = await vscode.window.showWarningMessage(`Remover a worktree de ${branch}?`, { modal: true, detail }, ...actions);
   if (!pick) return;
-  const r = await repo.run(['worktree', 'remove', ...(st.changes ? ['--force'] : []), wt.path], repo.root, 120_000);
+  const r = await repo.removeWorktree(wt.path, st.changes > 0);
   if (r.code !== 0) {
     vscode.window.showErrorMessage(`Não consegui remover: ${r.stderr.trim()}`);
     return;
@@ -521,7 +521,7 @@ export async function removeMerged(ctl: Controller) {
       if (token.isCancellationRequested) break;
       progress.report({ message: `${w.name} (${removed + failed.length + 1}/${removable.length})`, increment: 100 / removable.length });
       // sem --force: se aparecer alteração no meio do caminho, o git recusa e a pasta fica
-      const r = await repo.run(['worktree', 'remove', w.path], repo.root, 120_000);
+      const r = await repo.removeWorktree(w.path);
       if (r.code !== 0) {
         failed.push(`${w.name}: ${r.stderr.trim()}`);
         continue;
@@ -600,7 +600,7 @@ export async function cleanupWorktrees(ctl: Controller, preselected?: string[]) 
       for (const w of chosen) {
         if (token.isCancellationRequested) break;
         progress.report({ message: `${w.name} (${removed + failed.length + 1}/${chosen.length})`, increment: 100 / chosen.length });
-        const r = await repo.run(['worktree', 'remove', '--force', w.path], repo.root, 120_000);
+        const r = await repo.removeWorktree(w.path, true);
         if (r.code !== 0) {
           failed.push(`${w.name}: ${r.stderr.trim()}`);
           continue;
