@@ -10,8 +10,12 @@
   let state = null;
   let filter = '';
   /** Layout do painel (fica guardado pelo VS Code entre recargas do webview). */
-  const ui = Object.assign({ layout: 'rows', split: 46, tab: 'a' }, (vscode.getState() || {}).ui);
-  const saveUi = () => vscode.setState({ ...(vscode.getState() || {}), ui });
+  // Padrão: abas, abrindo no Histórico. A escolha do usuário fica no VS Code (mensagem 'saveUi').
+  const ui = Object.assign({ layout: 'tabs', split: 46, tab: 'b' }, (vscode.getState() || {}).ui);
+  const saveUi = () => {
+    vscode.setState({ ...(vscode.getState() || {}), ui });
+    vscode.postMessage({ type: 'saveUi', ui: { ...ui } });
+  };
   const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
   const send = (action, args = {}) => vscode.postMessage({ type: 'action', action, args });
@@ -32,6 +36,12 @@
     if (m.type === 'state') {
       state = m.state;
       render();
+    } else if (m.type === 'ui') {
+      if (m.ui) {
+        Object.assign(ui, m.ui);
+        vscode.setState({ ...(vscode.getState() || {}), ui });
+        if (state) render();
+      }
     } else if (m.type === 'demo') {
       demo(m);
     } else if (m.type === 'busy') {
@@ -642,6 +652,11 @@
     if (target && target !== dragging) send('mergeBranches', { source: dragging, target });
   });
 
+  document.addEventListener('dblclick', e => {
+    const row = /** @type {HTMLElement} */ (e.target).closest?.('.row[data-sha]');
+    if (row) send('showCommit', { sha: /** @type {HTMLElement} */ (row).dataset.sha });
+  });
+
   // divisor entre worktrees e histórico
   document.addEventListener('mousedown', e => {
     const sp = /** @type {HTMLElement} */ (e.target).closest?.('.splitter');
@@ -719,8 +734,19 @@
     } else if (row && row.dataset.sha) {
       const sha = row.dataset.sha;
       items.push(`<div class="menu-title">${sha.slice(0, 10)}</div>`);
+      items.push(item('showCommit', 'Ver alterações do commit', { sha }));
+      if (state.agentNames && state.agentNames[0]) items.push(item('explainCommit', `✦ Explicar com ${state.agentNames[0]}`, { sha }, 'agent'));
+      if (state.hosting) items.push(item('openCommitOnWeb', `Abrir no ${state.hosting.kind === 'gitlab' ? 'GitLab' : 'GitHub'}`, { sha }));
+      items.push('<hr>');
       items.push(item('copy', 'Copiar hash', { text: sha }));
+      items.push(item('copyMessage', 'Copiar mensagem', { sha }));
+      items.push('<hr>');
       items.push(item('createWorktree', 'Nova branch + worktree a partir deste commit', { startPoint: sha }));
+      items.push(item('branchAt', 'Criar branch aqui (sem worktree)…', { sha }));
+      items.push(item('tagAt', 'Criar tag aqui…', { sha }));
+      items.push('<hr>');
+      items.push(item('revertCommit', 'Reverter este commit em…', { sha }));
+      items.push(item('resetTo', 'Voltar uma branch até aqui…', { sha }, 'danger'));
     }
     if (!items.length) return;
     e.preventDefault();

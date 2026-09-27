@@ -315,6 +315,12 @@ exports.run = async () => {
     assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').remote.ahead, 0, 'enviado');
   });
 
+  await check('commits: URL no GitHub/GitLab e branch criada num commit', async () => {
+    const { commitUrl } = require('../out/commits');
+    assert.strictEqual(commitUrl({ kind: 'github', webBase: 'https://github.com', projectPath: 'a/b' }, 'abc'), 'https://github.com/a/b/commit/abc');
+    assert.strictEqual(commitUrl({ kind: 'gitlab', webBase: 'https://git.x:8443', projectPath: 'g/s/p' }, 'abc'), 'https://git.x:8443/g/s/p/-/commit/abc');
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));

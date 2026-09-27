@@ -14,6 +14,9 @@
 <script src="../docs/.tmp/state.js"></script>
 <script>
   const scene = location.hash.slice(1);
+  const later = f => setTimeout(f, 50);
+  // cenas de cards usam o layout empilhado; as de histórico, o padrão (abas no Histórico)
+  if (!['menu-commit', 'graph'].includes(scene)) window.postMessage({ type: 'ui', ui: { layout: 'rows', tab: 'a' } }, '*');
   window.__wtgraphSetState(window.__STATE);
   const fire = (el, type, x, y) => el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y }));
   if (scene === 'menu') {

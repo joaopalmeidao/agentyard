@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { AgentTerminals } from './agents';
+import * as commits from './commits';
 import { pushBranch, pushMany } from './push';
 import { resolveConflict, ResolveOptions } from './conflicts';
 import { generateCiWorkflow } from './ciTemplate';
@@ -171,6 +172,22 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return;
       case 'pushMany':
         return pushMany(ctl);
+      case 'showCommit':
+        return commits.showCommit(ctl, a.sha);
+      case 'copyMessage':
+        return commits.copyMessage(ctl, a.sha);
+      case 'branchAt':
+        return commits.branchAt(ctl, a.sha);
+      case 'tagAt':
+        return commits.tagAt(ctl, a.sha);
+      case 'revertCommit':
+        return commits.revertCommit(ctl, a.sha);
+      case 'resetTo':
+        return commits.resetTo(ctl, a.sha);
+      case 'openCommitOnWeb':
+        return commits.openCommitOnWeb(ctl, a.sha);
+      case 'explainCommit':
+        return commits.explainCommit(ctl, a.sha);
       case 'setGraphFilter':
         await ctx.workspaceState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
         return ctl.refresh();
