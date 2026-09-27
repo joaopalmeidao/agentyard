@@ -332,6 +332,16 @@
     }[v.state] || ['aberto', 'info', 'aberto'];
   }
 
+  function overlapChip(w) {
+    const o = w.overlap;
+    return `<span class="chip warn link" data-action="showOverlaps" data-path="${esc(w.path)}" title="Arquivos em comum com: ${esc(o.with.join(', '))}">⚠ sobrepõe com ${esc(o.with[0])}${o.with.length > 1 ? ` +${o.with.length - 1}` : ''} (${o.files})</span>`;
+  }
+
+  function budgetChip(w) {
+    const b = w.budget;
+    return `<span class="chip ${b.level === 'over' ? 'bad' : 'warn'}" title="Orçamento por worktree (${b.by === 'usd' ? 'US$' : 'tokens'})">${b.level === 'over' ? 'orçamento estourado' : `orçamento ${b.pct}%`}</span>`;
+  }
+
   function requestChip(r) {
     const [txt, cls, tip] = reviewInfo(r);
     return `<span class="chip ${cls} link" data-action="openUrl" data-url="${esc(r.url)}" title="${esc(r.ref)} ${esc(r.title)} — ${esc(tip)}. Clique para abrir no navegador.">${esc(r.ref)} ${txt}</span>`;
@@ -436,7 +446,7 @@
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
-        <td class="c-chips">${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="c-chips">${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.overlap ? overlapChip(w) : ''}${w.budget ? budgetChip(w) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
@@ -475,6 +485,8 @@
         if (w.review) chips.push(reviewChip(w));
         if (w.tasks) chips.push(tasksChip(w));
         if (w.request) chips.push(requestChip(w.request));
+        if (w.overlap) chips.push(overlapChip(w));
+        if (w.budget) chips.push(budgetChip(w));
         if (w.branch && pipelineFor(w.branch)) chips.push(pipelineChip(pipelineFor(w.branch)));
         if (w.claude) chips.push(claudeChip(w));
 
@@ -784,6 +796,8 @@
         items.push(item('mergeIntoBase', `↑ Mesclar em ${state.base}`, { branch: b }));
       }
       items.push(item('mergeInto', 'Mesclar em…', { branch: b }));
+      if (!isBase) items.push(item('mergeQueueAdd', `Pôr na fila de merge → ${state.base}`, { branch: b }));
+      if (wt && wt.overlap) items.push(item('showOverlaps', `⚠ Ver sobreposição (${wt.overlap.files} arquivo(s))`, { path: wt.path }));
       if (wt) items.push(item('addTask', '☰ Adicionar tarefa para o agente…', { path: wt.path, branch: b }));
       items.push(item('push', 'Push (enviar para o remoto)', { branch: b }));
       items.push(item('pullBranch', 'Pull (trazer do remoto)', { branch: b }));
