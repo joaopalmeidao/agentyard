@@ -46,6 +46,16 @@ exports.run = async () => {
     assert.ok(s.agentNames.includes('Claude Code'));
   });
 
+  await check('uma mensagem de boas-vindas por view e condição', async () => {
+    // o VS Code mostra todas as entradas que casam, então duplicatas aparecem repetidas na view
+    const seen = new Set();
+    for (const w of ext.packageJSON.contributes.viewsWelcome) {
+      const k = `${w.view}|${w.when || ''}`;
+      assert.ok(!seen.has(k), `viewsWelcome duplicado: ${k}`);
+      seen.add(k);
+    }
+  });
+
   await check('comandos registrados', async () => {
     const all = await vscode.commands.getCommands(true);
     for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
