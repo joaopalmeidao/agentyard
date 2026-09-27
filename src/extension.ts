@@ -20,6 +20,7 @@ import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
 import { registerDelivery } from './delivery/register';
+import { registerPromotion } from './promotion/register';
 import { registerReview } from './review';
 import { registerGitOps } from './gitops/register';
 import { WorktreeDecorations } from './decorations';
@@ -200,6 +201,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return generateCiWorkflow(ctl);
       case 'configureFlow':
         return configureFlow(ctl);
+      case 'promotionMap':
+        await vscode.commands.executeCommand('worktreeGraph.promotionMap');
+        return;
       case 'promote':
         await promote(ctl, a.from, a.to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t));
         return;
@@ -407,6 +411,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const readySummary = new ReadySummaryService(ctl, agentFlow);
   ctx.subscriptions.push(readySummary);
   const delivery = registerDelivery(ctx, ctl, guard, { activity, pipelines: () => pipelines.pipelines, issueOf: b => issues.linkOf(b) });
+  const promotion = registerPromotion(ctx, ctl, guard, {
+    promote: (from, to) => promote(ctl, from, to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t)),
+    merge: (s, t) => actions.mergeBranches(ctl, s, t),
+    showCommit: sha => commits.showCommit(ctl, sha),
+  });
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -419,7 +428,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion };
 }
 
 export function deactivate() {}

@@ -285,3 +285,41 @@ body.attempts-page { overflow: auto; padding: 0 16px 24px; }
 .ci-arrow b { color: var(--info); }
 .ci-arrow .warn { color: var(--warn); }
 .ci-sep { color: var(--muted); }
+
+/* mapa de promoção */
+.promotion-page #pmfilter { width: 240px; background: var(--vscode-input-background, #3c3c3c); color: var(--vscode-input-foreground, #ccc); border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; padding: 3px 6px; font: inherit; }
+.pm-strip { display: flex; align-items: stretch; overflow-x: auto; margin-top: 12px; padding-bottom: 4px; }
+.pm-stage { flex: none; display: flex; flex-direction: column; gap: 3px; padding: 8px 12px; border: 1px solid var(--border); border-top: 3px solid var(--info); border-radius: 4px; background: var(--card); min-width: 130px; }
+.pm-arrow { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px 10px; min-width: 140px; color: var(--muted); text-decoration: none; }
+.pm-arrow > span:first-child { font-size: 18px; line-height: 1; }
+.pm-arrow:hover .chip { text-decoration: underline; }
+.pm-tabs { margin-top: 16px; }
+.pm-tabs button { font-size: 12px; padding: 3px 14px; }
+.pm-step h2 .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.pm-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.pm-cols h3 { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 0 0 6px; }
+.pm-cols h3 .count { background: var(--btn-bg); border-radius: 8px; padding: 0 6px; font-size: 11px; font-weight: 400; }
+.pm-none { padding: 6px 0; }
+.pm-item { border: 1px solid var(--border); border-radius: 4px; background: var(--card); margin-bottom: 4px; }
+.pm-item > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 8px; }
+.pm-item > summary:hover { background: var(--hover); }
+.pm-item[open] > summary { border-bottom: 1px solid var(--border); }
+.pm-item table.files td { padding: 2px 8px; }
+.pm-kind { width: 14px; text-align: center; color: var(--info); }
+.pm-kind.direct { color: var(--warn); }
+.pm-name { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.pm-title { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-meta { font-size: 11px; }
+.pm-actions { margin-left: auto; display: flex; gap: 4px; }
+.pm-actions button, .pm-row-actions button, .pm-step h2 button { font-size: 11px; padding: 1px 8px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+tr.pm-commit { cursor: pointer; }
+.pm-legend { margin: 10px 0 4px; font-size: 11px; }
+.pm-group { margin-top: 14px; }
+.pm-matrix td.pm-cell { width: 70px; text-align: center; font-family: var(--mono); font-size: 12px; }
+.pm-matrix td.pm-cell.ok { color: var(--ok); }
+.pm-matrix td.pm-cell.next { color: var(--info); font-weight: 700; }
+.pm-matrix td.pm-cell.no { color: var(--muted); }
+.pm-matrix td.pm-cell.na { color: var(--muted); opacity: .5; }
+.pm-matrix td.pm-branch { white-space: normal; width: 100%; }
+.pm-sub { font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px; }
+.pm-row-actions { text-align: right; }

@@ -267,7 +267,7 @@
              </span>`}
       </div>${stage(s.to, s.toDate)}`;
     }
-    return `<section class="flow"><h2>Fluxo de ambientes <button class="link" data-action="configureFlow">editar</button></h2><div class="flow-strip">${html}</div></section>`;
+    return `<section class="flow"><h2>Fluxo de ambientes <button class="link" data-action="promotionMap" title="O que falta subir entre os ambientes, por etapa e por branch">ver mapa de promoção</button> <button class="link" data-action="configureFlow">editar</button></h2><div class="flow-strip">${html}</div></section>`;
   }
 
   /** Progresso do detalhamento: some quando todas as worktrees têm status e comparação. */
