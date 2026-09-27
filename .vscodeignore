@@ -8,3 +8,4 @@ tsconfig.json
 scripts/**
 test/**
 site/**
+dist/**
