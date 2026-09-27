@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0
+- View "Pull requests": grupos Meus, Pedem minha revisão, Abertos e Mesclados (7 dias), com a
+  situação da revisão, CI, conflitos, rascunho e se a branch já tem worktree local.
+- Ao expandir um PR/MR: comentários recentes e checks. Ações: abrir no navegador, trazer para uma
+  worktree (inclusive PR de fork no GitHub, como `pr/N`), revisar arquivos, ✦ revisar com o agente,
+  analisar merge, mesclar pela API (com confirmação), sair/entrar em rascunho e copiar link.
+- Botão de PRs/MRs na barra do painel; o chip de PR abre o PR na view (Ctrl/Alt+clique abre no navegador).
+- GitHub e GitLab (inclusive self-hosted) completos; Bitbucket e Azure DevOps com listagem.
+
 ## 0.11.0
 **Correção importante**
 - Remover uma worktree que tinha um atalho (junction/symlink) para fora dela — como o `node_modules`
