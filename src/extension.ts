@@ -1,14 +1,20 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { AgentTerminals } from './agents';
+import * as commits from './commits';
 import { pushBranch, pushMany } from './push';
 import { resolveConflict, ResolveOptions } from './conflicts';
 import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
 import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
+import { registerGuards } from './guards';
+import { registerAgentFlow } from './agentFlow/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
+import { registerActivity } from './activityPanel';
+import { registerReview } from './review';
+import { registerGitOps } from './gitops/register';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
@@ -26,6 +32,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const agentTerms = new AgentTerminals(ctl);
   ctl.agentsRunning = () => agentTerms.running();
   ctx.subscriptions.push(agentTerms);
+  const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
 
   /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
   const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
@@ -110,6 +117,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   /** Ações vindas do webview: mesmos nomes dos comandos, argumentos simples. */
   const handler = async (action: string, a: Record<string, string>) => {
+    if (await agentFlow.handle(action, a)) return;
     switch (action) {
       case 'refresh':
         return ctl.refresh();
@@ -171,6 +179,22 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return;
       case 'pushMany':
         return pushMany(ctl);
+      case 'showCommit':
+        return commits.showCommit(ctl, a.sha);
+      case 'copyMessage':
+        return commits.copyMessage(ctl, a.sha);
+      case 'branchAt':
+        return commits.branchAt(ctl, a.sha);
+      case 'tagAt':
+        return commits.tagAt(ctl, a.sha);
+      case 'revertCommit':
+        return commits.revertCommit(ctl, a.sha);
+      case 'resetTo':
+        return commits.resetTo(ctl, a.sha);
+      case 'openCommitOnWeb':
+        return commits.openCommitOnWeb(ctl, a.sha);
+      case 'explainCommit':
+        return commits.explainCommit(ctl, a.sha);
       case 'setGraphFilter':
         await ctx.workspaceState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
         return ctl.refresh();
@@ -191,6 +215,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
         if (s) claude.resume(s);
         return;
       }
+      case 'reviewWithAgent':
+        await vscode.commands.executeCommand('worktreeGraph.reviewWithAgent', a.branch);
+        return;
+      case 'activity':
+        await vscode.commands.executeCommand('worktreeGraph.activity');
+        return;
       case 'claudeCommands': {
         const t = await claudeTarget({ path: a.path });
         if (t) await claude.commands(t.cwd, t.label);
@@ -200,6 +230,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return actions.copyText(a.text);
       case 'showLog':
         return out.show();
+      default:
+        // ações de módulos registrados à parte (ex.: src/gitops): mesmo nome do comando
+        return vscode.commands.executeCommand(`worktreeGraph.${action}`, a) as Promise<void>;
     }
   };
 
@@ -258,6 +291,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       : actions.removeWorktree(ctl, item),
   );
   reg('cleanupWorktrees', () => actions.cleanupWorktrees(ctl));
+  reg('removeMerged', () => actions.removeMerged(ctl));
   reg('toggleFavorite', item => actions.toggleFavorite(ctl, item));
   reg('deleteBranch', item => actions.deleteBranch(ctl, item));
   reg('togglePauseSync', item => item?.branch && handler('togglePause', { branch: item.branch }));
@@ -285,6 +319,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (b) await ctl.requests.publish(b);
   });
   reg('connectHosting', () => ctl.requests.connect());
+  reg('connectGitLab', () => ctl.requests.connectGitLab());
   reg('pushBranch', async item => {
     const b = await actions.pickBranch(ctl, item, 'Enviar qual branch?');
     if (b) await pushBranch(ctl, b);
@@ -308,6 +343,13 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const issues = registerIssues(ctx, ctl, guard);
   const pipelines = registerPipelines(ctx, ctl, guard);
+  const review = registerReview(ctx, ctl, guard);
+  const activity = registerActivity(ctx, ctl, guard, {
+    claude,
+    pipelines: () => pipelines.pipelines,
+    issueOf: b => issues.linkOf(b),
+  });
+  const gitOps = registerGitOps(ctx, ctl, guard);
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -318,7 +360,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Usado pelos testes de integração (test/).
   const claudeConfig = registerClaudeConfig(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines };
+  const guards = registerGuards(ctx, ctl);
+
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps };
 }
 
 export function deactivate() {}

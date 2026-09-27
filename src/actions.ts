@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { Controller } from './controller';
 import { resolveButton, runResolve } from './conflicts';
 import { gitUri } from './diff';
+import { guardMerge } from './guards';
 import { Repo, Worktree } from './git';
 
 type BranchArg = string | { branch?: string } | undefined;
@@ -66,6 +67,9 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
     }
     if (ok !== 'Mesclar') return false;
   }
+
+  // branch protegida e checagens (src/guards.ts)
+  if (!(await guardMerge(ctl, source, target))) return false;
 
   const noFf = target === base && ctl.cfg().get('noFastForwardIntoBase', true);
   const args = ['merge', '--no-edit', ...(noFf ? ['--no-ff'] : []), source];
@@ -430,6 +434,94 @@ export async function pruneWorktrees(ctl: Controller) {
  * Remoção em lote. Sem `preselected`, abre uma lista com as worktrees já marcadas quando estão
  * mescladas na base, limpas e sem agente aberto.
  */
+/**
+ * Worktrees que dá para apagar sem perder nada: a branch já está inteira na base e a pasta está
+ * limpa. Ficam de fora a principal, a base, favoritas, com agente aberto, protegidas e a desta janela.
+ */
+export function mergedWorktrees(ctl: Controller) {
+  const s = ctl.state;
+  if (!s) return { removable: [], dirty: [] };
+  const open = new Set((vscode.workspace.workspaceFolders ?? []).map(f => path.normalize(f.uri.fsPath).toLowerCase()));
+  const prot = new Set(s.protectedBranches ?? []);
+  const merged = s.worktrees.filter(
+    w =>
+      !w.isMain && !w.isBase && !w.bare && !w.prunable && w.branch && !prot.has(w.branch) &&
+      !open.has(w.path.toLowerCase()) && w.compareKnown && w.ahead === 0 && !w.favorite && !w.agents.length,
+  );
+  return {
+    removable: merged.filter(w => w.statusKnown && w.changes === 0 && !w.operation),
+    dirty: merged.filter(w => !w.statusKnown || w.changes > 0 || !!w.operation),
+  };
+}
+
+/** Um clique: remove as worktrees já mescladas na base (e, se quiser, as branches delas). */
+export async function removeMerged(ctl: Controller) {
+  const s = ctl.state;
+  if (!s) return;
+  if (s.pending > 0) {
+    const go = await vscode.window.showInformationMessage(
+      `Ainda estou comparando ${s.pending} worktree(s) com ${s.base}; algumas mescladas podem não aparecer agora.`,
+      'Continuar assim',
+    );
+    if (!go) return;
+  }
+  const { removable, dirty } = mergedWorktrees(ctl);
+  if (!removable.length) {
+    vscode.window.showInformationMessage(
+      dirty.length
+        ? `Nenhuma worktree mesclada e limpa. ${dirty.length} mesclada(s) têm alterações não commitadas e ficaram de fora.`
+        : `Nenhuma worktree com branch já mesclada em ${s.base}.`,
+    );
+    return;
+  }
+  const list = removable.slice(0, 15).map(w => `• ${w.name}`).join('\n') + (removable.length > 15 ? `\n… e mais ${removable.length - 15}` : '');
+  const pick = await vscode.window.showWarningMessage(
+    `Remover ${removable.length} worktree(s) já mesclada(s) em ${s.base}?`,
+    {
+      modal: true,
+      detail: [
+        `Todas estão limpas e com a branch inteira em ${s.base}; nada se perde.`,
+        list,
+        dirty.length ? `${dirty.length} mesclada(s) com alterações não commitadas ficaram de fora.` : '',
+        'Favoritas, com agente aberto e branches protegidas nunca entram.',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    },
+    'Remover worktrees e branches',
+    'Remover só as worktrees',
+    'Escolher na lista…',
+  );
+  if (!pick) return;
+  if (pick === 'Escolher na lista…') return cleanupWorktrees(ctl);
+  const alsoBranch = pick === 'Remover worktrees e branches';
+  const repo = repoOf(ctl);
+  let removed = 0;
+  const failed: string[] = [];
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Removendo worktrees mescladas', cancellable: true }, async (progress, token) => {
+    for (const w of removable) {
+      if (token.isCancellationRequested) break;
+      progress.report({ message: `${w.name} (${removed + failed.length + 1}/${removable.length})`, increment: 100 / removable.length });
+      // sem --force: se aparecer alteração no meio do caminho, o git recusa e a pasta fica
+      const r = await repo.run(['worktree', 'remove', w.path], repo.root, 120_000);
+      if (r.code !== 0) {
+        failed.push(`${w.name}: ${r.stderr.trim()}`);
+        continue;
+      }
+      removed++;
+      if (alsoBranch && w.branch) await repo.run(['branch', '-d', w.branch]);
+    }
+  });
+  ctl.log(`Remover mescladas: ${removed} removida(s).${failed.length ? `\n${failed.join('\n')}` : ''}`);
+  if (failed.length) {
+    const see = await vscode.window.showWarningMessage(`${removed} removida(s); ${failed.length} não (veja o log).`, 'Ver log');
+    if (see) ctl.out.show();
+  } else {
+    vscode.window.showInformationMessage(`${removed} worktree(s) mesclada(s) removida(s)${alsoBranch ? ', com as branches' : ''}.`);
+  }
+  ctl.scheduleRefresh(50);
+}
+
 export async function cleanupWorktrees(ctl: Controller, preselected?: string[]) {
   const repo = repoOf(ctl);
   const s = ctl.state;

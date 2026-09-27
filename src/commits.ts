@@ -1,0 +1,162 @@
+import * as path from 'path';
+import * as vscode from 'vscode';
+import { createWorktree, pickBranch } from './actions';
+import type { Controller } from './controller';
+import { gitUri } from './diff';
+
+/** Ações sobre um commit do histórico (botão direito ou duplo clique numa linha do grafo). */
+
+async function info(ctl: Controller, sha: string) {
+  const out = await ctl.repo!.exec(['show', '-s', '--format=%H%x1f%s%x1f%b%x1f%an%x1f%P', sha]);
+  const [full, subject, body, author, parents] = out.trim().split('\x1f');
+  return { full, subject, body: body?.trim() ?? '', author, parents: parents ? parents.split(' ') : [] };
+}
+
+/** Arquivos alterados no commit; Enter abre o diff contra o pai, e a lista continua aberta. */
+export async function showCommit(ctl: Controller, sha: string) {
+  const repo = ctl.repo!;
+  const c = await info(ctl, sha);
+  const parent = c.parents[0];
+  const files = (await repo.exec(['show', '--format=', '--name-status', '--no-renames', '-m', '--first-parent', sha]))
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map(l => {
+      const [st, ...rest] = l.split('\t');
+      return { status: st[0], file: rest.join('\t') };
+    });
+  const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { file: string; status: string }>();
+  qp.title = `${sha.slice(0, 7)} ${c.subject} — ${c.author}`;
+  qp.placeholder = files.length ? `${files.length} arquivo(s); Enter abre o diff` : 'Commit sem alterações de arquivo';
+  qp.ignoreFocusOut = true;
+  const label: Record<string, string> = { A: 'adicionado', M: 'modificado', D: 'removido', T: 'tipo alterado' };
+  qp.items = files.map(f => ({ label: path.basename(f.file), description: `${path.dirname(f.file) === '.' ? '' : path.dirname(f.file)}  ${label[f.status] ?? f.status}`, file: f.file, status: f.status }));
+  qp.onDidAccept(() => {
+    const it = qp.selectedItems[0];
+    if (!it) return;
+    const left = !parent || it.status === 'A' ? gitUri(repo.root, '__empty__', it.file) : gitUri(repo.root, parent, it.file);
+    const right = it.status === 'D' ? gitUri(repo.root, '__empty__', it.file) : gitUri(repo.root, sha, it.file);
+    vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(it.file)} (${sha.slice(0, 7)})`, { preview: true, preserveFocus: true });
+  });
+  qp.onDidHide(() => qp.dispose());
+  qp.show();
+}
+
+/** Worktree onde aplicar algo "na branch": pergunta entre as worktrees com branch. */
+async function pickWorktree(ctl: Controller, title: string) {
+  const wts = (await ctl.repo!.worktreesFast()).filter(w => w.branch && !w.prunable);
+  const pick = await vscode.window.showQuickPick(
+    wts.map(w => ({ label: w.branch!, description: w.path, wt: w })),
+    { title },
+  );
+  return pick?.wt;
+}
+
+export async function revertCommit(ctl: Controller, sha: string) {
+  const c = await info(ctl, sha);
+  const wt = await pickWorktree(ctl, `Reverter ${sha.slice(0, 7)} "${c.subject}" em qual branch?`);
+  if (!wt) return;
+  const st = await ctl.repo!.status(wt.path);
+  if (st.changes || st.operation) {
+    vscode.window.showWarningMessage(`A worktree de ${wt.branch} tem alterações ou operação em andamento; faça commit ou stash antes.`);
+    return;
+  }
+  const args = ['revert', '--no-edit', ...(c.parents.length > 1 ? ['-m', '1'] : []), sha];
+  const r = await ctl.repo!.run(args, wt.path, 120_000);
+  if (r.code === 0) {
+    vscode.window.showInformationMessage(`Commit ${sha.slice(0, 7)} revertido em ${wt.branch}.`);
+  } else {
+    const conflicts = await ctl.repo!.conflictedFiles(wt.path);
+    const pick = await vscode.window.showWarningMessage(
+      conflicts.length ? `Conflito ao reverter em ${wt.branch} (${conflicts.length} arquivo(s)); o revert ficou em andamento.` : `Revert falhou: ${(r.stderr || r.stdout).trim()}`,
+      ...(conflicts.length ? ['Abrir arquivos', 'Abortar revert'] : []),
+    );
+    if (pick === 'Abrir arquivos') for (const f of conflicts.slice(0, 20)) await vscode.window.showTextDocument(vscode.Uri.file(path.join(wt.path, f)), { preview: false });
+    if (pick === 'Abortar revert') await ctl.repo!.run(['revert', '--abort'], wt.path);
+  }
+  ctl.scheduleRefresh(50);
+}
+
+/** Volta a branch até o commit. --keep preserva alterações não commitadas que não conflitam. */
+export async function resetTo(ctl: Controller, sha: string) {
+  const repo = ctl.repo!;
+  const wt = await pickWorktree(ctl, `Voltar qual branch até ${sha.slice(0, 7)}?`);
+  if (!wt?.branch) return;
+  const contains = (await repo.run(['merge-base', '--is-ancestor', sha, wt.branch])).code === 0;
+  if (!contains) {
+    vscode.window.showWarningMessage(`${sha.slice(0, 7)} não faz parte de ${wt.branch}.`);
+    return;
+  }
+  const lost = (await repo.exec(['rev-list', '--count', `${sha}..${wt.branch}`])).trim();
+  const backup = `refs/worktree-graph/backup/${wt.branch}/${Date.now()}`;
+  const typed = await vscode.window.showInputBox({
+    title: `Voltar ${wt.branch} até ${sha.slice(0, 7)}`,
+    prompt: `${lost} commit(s) saem da branch (fica um backup em ${backup}). Digite o nome da branch para confirmar.`,
+    ignoreFocusOut: true,
+    validateInput: v => (v === wt.branch ? undefined : `Digite ${wt.branch}`),
+  });
+  if (typed !== wt.branch) return;
+  await repo.exec(['update-ref', backup, wt.branch]);
+  const r = await repo.run(['reset', '--keep', sha], wt.path);
+  if (r.code !== 0) {
+    vscode.window.showErrorMessage(`Não consegui voltar (há alterações que conflitam?): ${(r.stderr || r.stdout).trim()}`);
+    return;
+  }
+  ctl.log(`reset --keep ${wt.branch} → ${sha} (backup em ${backup})`);
+  const undo = await vscode.window.showInformationMessage(`${wt.branch} voltou para ${sha.slice(0, 7)}.`, 'Desfazer');
+  if (undo) await repo.run(['reset', '--keep', backup], wt.path);
+  ctl.scheduleRefresh(50);
+}
+
+export async function branchAt(ctl: Controller, sha: string) {
+  const names = new Set((await ctl.repo!.refs()).filter(r => r.kind === 'head').map(r => r.name));
+  const name = await vscode.window.showInputBox({
+    title: `Nova branch em ${sha.slice(0, 7)} (sem worktree)`,
+    validateInput: v => (!v.trim() ? 'Informe um nome.' : names.has(v) ? 'Essa branch já existe.' : /[\s~^:?*[\\]|\.\.|@\{/.test(v) ? 'Nome inválido.' : undefined),
+  });
+  if (!name) return;
+  await ctl.repo!.exec(['branch', name, sha]);
+  const go = await vscode.window.showInformationMessage(`Branch ${name} criada em ${sha.slice(0, 7)}.`, 'Criar worktree dela');
+  if (go) await createWorktree(ctl, { existing: name });
+  ctl.scheduleRefresh(50);
+}
+
+export async function tagAt(ctl: Controller, sha: string) {
+  const name = await vscode.window.showInputBox({ title: `Tag em ${sha.slice(0, 7)}`, prompt: 'Nome (ex.: v1.2.0)', validateInput: v => (/^[^\s~^:?*[\\]+$/.test(v) ? undefined : 'Nome inválido.') });
+  if (!name) return;
+  const msg = await vscode.window.showInputBox({ title: `Tag ${name}`, prompt: 'Mensagem (vazio = tag leve)' });
+  if (msg === undefined) return;
+  await ctl.repo!.exec(msg ? ['tag', '-a', name, '-m', msg, sha] : ['tag', name, sha]);
+  vscode.window.showInformationMessage(`Tag ${name} criada. Para enviar: git push origin ${name}.`);
+  ctl.scheduleRefresh(50);
+}
+
+export function commitUrl(r: { kind: string; webBase: string; projectPath: string }, sha: string): string {
+  return r.kind === 'gitlab' ? `${r.webBase}/${r.projectPath}/-/commit/${sha}` : `${r.webBase}/${r.projectPath}/commit/${sha}`;
+}
+
+export async function openCommitOnWeb(ctl: Controller, sha: string) {
+  const r = await ctl.requests.detectRemote();
+  if (!r) {
+    vscode.window.showWarningMessage('O remoto não é GitHub nem GitLab reconhecido.');
+    return;
+  }
+  await vscode.env.openExternal(vscode.Uri.parse(commitUrl(r, sha)));
+}
+
+export async function explainCommit(ctl: Controller, sha: string) {
+  const c = await info(ctl, sha);
+  const branch = await pickBranch(ctl, undefined, `Abrir o agente em qual worktree para explicar ${sha.slice(0, 7)}?`, true);
+  if (!branch) return;
+  const prompt = [
+    `Explique o commit ${c.full} ("${c.subject}", de ${c.author}).`,
+    'Rode `git show ' + c.full + '` para ver o diff. Diga o que mudou, por quê (pelo contexto do código), riscos e o que testar.',
+    'Não altere nenhum arquivo.',
+  ].join('\n');
+  await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { branch, prompt });
+}
+
+export async function copyMessage(ctl: Controller, sha: string) {
+  const c = await info(ctl, sha);
+  await vscode.env.clipboard.writeText(c.body ? `${c.subject}\n\n${c.body}` : c.subject);
+  vscode.window.setStatusBarMessage('Mensagem do commit copiada', 2500);
+}

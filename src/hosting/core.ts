@@ -1,11 +1,12 @@
 import { Issue, IssueScope, mapGitHubIssue, mapGitLabIssue, NewIssue } from '../issues/core';
+import { parsePlatformRemote } from './platforms';
 
 /**
  * GitHub (incl. Enterprise) e GitLab (incl. self-hosted) via REST, sem depender da API do VS Code
  * para poder ser testado contra um servidor falso (test/hosting.test.js).
  */
 
-export type HostKind = 'github' | 'gitlab';
+export type HostKind = 'github' | 'gitlab' | 'bitbucket' | 'azure';
 
 export interface RemoteInfo {
   kind: HostKind;
@@ -13,8 +14,13 @@ export interface RemoteInfo {
   host: string;
   /** Endereço web com esquema e porta: "https://gitlab.empresa.com:8443". */
   webBase: string;
-  /** "grupo/subgrupo/projeto" ou "dono/repo". */
+  /** "grupo/subgrupo/projeto", "dono/repo", "PROJ/repo" (Bitbucket Server) ou "org/projeto/repo" (Azure). */
   projectPath: string;
+  /** Bitbucket e Azure DevOps: serviço na nuvem ou instalação própria. */
+  flavor?: 'cloud' | 'server';
+  /** Raiz da API quando não sai direto do webBase (Bitbucket Cloud/Server, coleção do Azure). */
+  apiRoot?: string;
+  azure?: { collection: string; organization: string; project: string; repo: string };
 }
 
 export interface ChangeRequest {
@@ -27,6 +33,73 @@ export interface ChangeRequest {
   state: 'open' | 'draft' | 'merged' | 'closed';
   source: string;
   target: string;
+  /** Situação da revisão (só para PRs/MRs abertos; preenchida à parte). */
+  review?: ReviewStatus;
+}
+
+export interface ReviewStatus {
+  state: 'approved' | 'changes' | 'commented' | 'pending' | 'discussions';
+  /** Aprovações recebidas. */
+  approvals: number;
+  /** Aprovações que ainda faltam (GitLab, quando há regra). */
+  approvalsLeft?: number;
+  /** Quem aprovou / pediu mudanças, para o tooltip. */
+  by: string[];
+}
+
+/**
+ * Decisão a partir das revisões do GitHub: vale a última revisão de cada pessoa; qualquer
+ * "mudanças pedidas" pesa mais que aprovações.
+ */
+export function githubReviewDecision(reviews: { user?: { login?: string }; state: string }[]): ReviewStatus {
+  const last = new Map<string, string>();
+  for (const r of reviews) {
+    const who = r.user?.login ?? '?';
+    // COMMENTED não desfaz uma aprovação ou um pedido de mudança anterior da mesma pessoa
+    if (r.state === 'COMMENTED' && last.has(who)) continue;
+    if (r.state === 'DISMISSED') {
+      last.delete(who);
+      continue;
+    }
+    last.set(who, r.state);
+  }
+  const changes = [...last].filter(([, s]) => s === 'CHANGES_REQUESTED').map(([w]) => w);
+  const approved = [...last].filter(([, s]) => s === 'APPROVED').map(([w]) => w);
+  if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
+  if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
+  if (last.size) return { state: 'commented', approvals: 0, by: [...last.keys()] };
+  return { state: 'pending', approvals: 0, by: [] };
+}
+
+/** Bitbucket Cloud: participantes com papel de revisor; approved ou state "changes_requested". */
+export function bitbucketCloudReview(participants: any[]): ReviewStatus {
+  const rev = (participants ?? []).filter(p => p.role === 'REVIEWER' || p.approved || p.state);
+  const name = (p: any) => p.user?.nickname ?? p.user?.display_name ?? '?';
+  const changes = rev.filter(p => p.state === 'changes_requested').map(name);
+  const approved = rev.filter(p => p.approved || p.state === 'approved').map(name);
+  if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
+  if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
+  return { state: 'pending', approvals: 0, by: [] };
+}
+
+/** Bitbucket Server/Data Center: reviewers[].status APPROVED | NEEDS_WORK | UNAPPROVED. */
+export function bitbucketServerReview(reviewers: any[]): ReviewStatus {
+  const name = (r: any) => r.user?.name ?? r.user?.displayName ?? '?';
+  const changes = (reviewers ?? []).filter(r => r.status === 'NEEDS_WORK').map(name);
+  const approved = (reviewers ?? []).filter(r => r.status === 'APPROVED' || r.approved).map(name);
+  if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
+  if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
+  return { state: 'pending', approvals: 0, by: [] };
+}
+
+/** Azure DevOps: vote 10 aprovado, 5 aprovado com sugestões, -5 aguardando o autor, -10 rejeitado. */
+export function azureReview(reviewers: any[]): ReviewStatus {
+  const name = (r: any) => r.displayName ?? r.uniqueName ?? '?';
+  const changes = (reviewers ?? []).filter(r => r.vote <= -5).map(name);
+  const approved = (reviewers ?? []).filter(r => r.vote >= 5).map(name);
+  if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
+  if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
+  return { state: 'pending', approvals: 0, by: [] };
 }
 
 export interface NewChangeRequest {
@@ -44,6 +117,8 @@ export interface HostClient {
   listOpen(): Promise<ChangeRequest[]>;
   findForBranch(branch: string): Promise<ChangeRequest | undefined>;
   create(r: NewChangeRequest): Promise<ChangeRequest>;
+  /** Situação da revisão de um PR/MR aberto. */
+  reviewStatus(r: ChangeRequest): Promise<ReviewStatus>;
   /** Confere o token; devolve o nome do usuário. */
   whoami(): Promise<string>;
   listIssues(scope: IssueScope): Promise<Issue[]>;
@@ -57,12 +132,14 @@ export class HostError extends Error {
 }
 
 /** Entrada da configuração ("gitlab.empresa.com" ou "https://gitlab.empresa.com:8443") → nome e endereço web. */
-function hostEntry(entry: string): { host: string; webBase: string } | undefined {
+function hostEntry(entry: string): { host: string; webBase: string; prefix: string } | undefined {
   const e = entry.trim();
   if (!e) return undefined;
   try {
     const u = new URL(/^[a-z]+:\/\//i.test(e) ? e : `https://${e}`);
-    return { host: u.hostname.toLowerCase(), webBase: `${u.protocol}//${u.host}` };
+    // instalação em subcaminho: https://empresa.com/gitlab
+    const prefix = u.pathname.replace(/^\/+|\/+$/g, '');
+    return { host: u.hostname.toLowerCase(), webBase: `${u.protocol}//${u.host}${prefix ? `/${prefix}` : ''}`, prefix };
   } catch {
     return undefined;
   }
@@ -73,7 +150,16 @@ function hostEntry(entry: string): { host: string; webBase: string } | undefined
  * A porta de um remoto ssh é a do ssh, não a da web: nesses casos o endereço web vem da
  * configuração do host (gitlabHosts/githubHosts) ou cai para https://host.
  */
-export function parseRemote(url: string, gitlabHosts: string[] = [], githubHosts: string[] = []): RemoteInfo | undefined {
+export function parseRemote(
+  url: string,
+  gitlabHosts: string[] = [],
+  githubHosts: string[] = [],
+  bitbucketHosts: string[] = [],
+  azureHosts: string[] = [],
+): RemoteInfo | undefined {
+  // Bitbucket e Azure DevOps têm formatos de caminho próprios (/scm/, /_git/, v3/…)
+  const platform = parsePlatformRemote(url, bitbucketHosts, azureHosts);
+  if (platform) return platform;
   let host: string;
   let path: string;
   let webBase: string;
@@ -102,8 +188,12 @@ export function parseRemote(url: string, gitlabHosts: string[] = [], githubHosts
   if (host === 'github.com' || gh) kind = 'github';
   else if (host === 'gitlab.com' || gl || /(^|[.-])gitlab([.-]|$)/.test(host)) kind = 'gitlab';
   if (!kind) return undefined;
-  if (gl) webBase = gl.webBase;
-  if (gh) webBase = gh.webBase;
+  const entry = gl ?? gh;
+  if (entry) {
+    webBase = entry.webBase;
+    // num remoto https de instalação em subcaminho, o caminho começa com o prefixo: não é parte do projeto
+    if (entry.prefix && path.toLowerCase().startsWith(entry.prefix.toLowerCase() + '/')) path = path.slice(entry.prefix.length + 1);
+  }
   return { kind, host, webBase, projectPath: path };
 }
 
@@ -185,6 +275,10 @@ export class GitHubClient implements HostClient {
     return this.map(await this.req<any>('POST', '/pulls', { title: r.title, head: r.source, base: r.target, body: r.body, draft: r.draft }));
   }
 
+  async reviewStatus(r: ChangeRequest): Promise<ReviewStatus> {
+    return githubReviewDecision(await this.req<any[]>('GET', `/pulls/${r.id}/reviews?per_page=100`));
+  }
+
   private login?: string;
 
   async listIssues(scope: IssueScope): Promise<Issue[]> {
@@ -242,8 +336,22 @@ export class GitLabClient implements HostClient {
     };
   }
 
+  /** detailed_merge_status que veio na lista, por iid (evita uma chamada a mais). */
+  private readonly mergeStatus = new Map<number, string>();
+
+  async reviewStatus(r: ChangeRequest): Promise<ReviewStatus> {
+    const a = await this.req<any>('GET', `/projects/${this.project}/merge_requests/${r.id}/approvals`);
+    const by: string[] = (a.approved_by ?? []).map((x: any) => x.user?.username).filter(Boolean);
+    const left = typeof a.approvals_left === 'number' ? a.approvals_left : undefined;
+    const ms = this.mergeStatus.get(r.id);
+    if (ms === 'discussions_not_resolved') return { state: 'discussions', approvals: by.length, approvalsLeft: left, by };
+    if (by.length && !left) return { state: 'approved', approvals: by.length, approvalsLeft: left, by };
+    return { state: 'pending', approvals: by.length, approvalsLeft: left, by };
+  }
+
   async listOpen() {
     const list = await this.req<any[]>('GET', `/projects/${this.project}/merge_requests?state=opened&per_page=100`);
+    for (const m of list) if (m.detailed_merge_status) this.mergeStatus.set(m.iid, m.detailed_merge_status);
     return list.map(m => this.map(m));
   }
 

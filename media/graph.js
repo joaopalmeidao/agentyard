@@ -10,8 +10,12 @@
   let state = null;
   let filter = '';
   /** Layout do painel (fica guardado pelo VS Code entre recargas do webview). */
-  const ui = Object.assign({ layout: 'rows', split: 46, tab: 'a' }, (vscode.getState() || {}).ui);
-  const saveUi = () => vscode.setState({ ...(vscode.getState() || {}), ui });
+  // Padrão: abas, abrindo no Histórico. A escolha do usuário fica no VS Code (mensagem 'saveUi').
+  const ui = Object.assign({ layout: 'tabs', split: 46, tab: 'b' }, (vscode.getState() || {}).ui);
+  const saveUi = () => {
+    vscode.setState({ ...(vscode.getState() || {}), ui });
+    vscode.postMessage({ type: 'saveUi', ui: { ...ui } });
+  };
   const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
   const send = (action, args = {}) => vscode.postMessage({ type: 'action', action, args });
@@ -32,6 +36,12 @@
     if (m.type === 'state') {
       state = m.state;
       render();
+    } else if (m.type === 'ui') {
+      if (m.ui) {
+        Object.assign(ui, m.ui);
+        vscode.setState({ ...(vscode.getState() || {}), ui });
+        if (state) render();
+      }
     } else if (m.type === 'demo') {
       demo(m);
     } else if (m.type === 'busy') {
@@ -123,7 +133,7 @@
       state.unmerged,
       state.commits.map(c => c.sha + c.refs.map(r => r.name + (r.current ? '*' : '')).join(',')),
       state.worktrees.filter(w => w.changes && w.head).map(w => w.head + ':' + w.changes),
-      [...shown].map(n => n + ':' + aheadOf(n)),
+      [...shown].map(n => n + ':' + aheadOf(n) + ':' + (requestOf(n) ? requestOf(n).ref + requestOf(n).state + (requestOf(n).review ? requestOf(n).review.state + requestOf(n).review.approvals : '') : '')),
     ]);
   }
 
@@ -191,9 +201,11 @@
           ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : 'ligado') : 'desligado'}</button>
         <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">onde: ${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'}</button>
         <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
+        ${toPull() ? `<button data-action="pullMany" title="Trazer do remoto as branches com novidades (lista para escolher)">☁↓ Trazer ${toPull()}</button>` : ''}
         ${toPush() ? `<button data-action="pushMany" title="Enviar branches com commits não enviados (lista para escolher)">☁↑ Enviar ${toPush()}</button>` : ''}
+        <button data-action="activity" title="Commits, sessões e tokens do dia por worktree, e custo por tarefa">Atividade</button>
         <button data-action="generateCi" title="Gera o workflow de sync para o GitHub Actions ou o GitLab CI">Gerar CI</button>
-        ${state.hosting && !state.hosting.connected ? `<button data-action="connectHosting" title="Para publicar e acompanhar ${state.hosting.label}s em ${esc(state.hosting.host)}">Conectar ${state.hosting.kind === 'gitlab' ? 'GitLab' : 'GitHub'}</button>` : ''}
+        ${state.hosting && !state.hosting.connected ? `<button data-action="connectHosting" title="Para publicar e acompanhar ${state.hosting.label}s em ${esc(state.hosting.host)}">Conectar ${esc(state.hosting.name || state.hosting.kind)}</button>` : ''}
         <span class="layouts" title="Layout do painel">
           <button data-local="layout" data-layout="rows" class="${ui.layout === 'rows' ? 'on' : ''}" title="Empilhado: worktrees em cima, histórico embaixo">⬒</button>
           <button data-local="layout" data-layout="cols" class="${ui.layout === 'cols' ? 'on' : ''}" title="Lado a lado">◫</button>
@@ -253,7 +265,7 @@
 
   function claudeChip(w) {
     const c = w.claude;
-    return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}</span>`;
+    return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}${c.usd !== undefined ? ` · ≈US$ ${c.usd.toFixed(2).replace('.', ',')}` : ''}</span>`;
   }
   const fmtTokens = n => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} mi` : n >= 1e3 ? `${Math.round(n / 1e3)} mil` : String(n));
 
@@ -270,6 +282,15 @@
   function pushButton(branch, r, compact) {
     const label = !r.published ? (compact ? '☁ publicar' : '☁ Publicar') : compact ? `☁↑${r.ahead}` : `☁ Push ↑${r.ahead}`;
     return `<button data-action="push" data-branch="${esc(branch)}" title="${!r.published ? 'git push -u (cria a branch no remoto)' : `Enviar ${r.ahead} commit(s)`}">${label}</button>`;
+  }
+
+  function pullButton(branch, behind, compact) {
+    return `<button data-action="pullBranch" data-branch="${esc(branch)}" title="Trazer ${behind} commit(s) do remoto (fast-forward; se divergir, pergunta merge ou rebase)">${compact ? `☁↓${behind}` : `☁↓ Trazer ${behind}`}</button>`;
+  }
+
+  /** Branches publicadas com commits no remoto que ainda não estão aqui. */
+  function toPull() {
+    return [...state.worktrees.filter(w => w.branch && !w.prunable), ...state.branches].filter(x => x.remote && x.remote.published && x.remote.behind > 0).length;
   }
 
   /** Branches publicadas com commits pendentes de envio. */
@@ -293,9 +314,44 @@
     return main + fix;
   }
 
+  /** Revisão do PR/MR: aprovado, mudanças pedidas, comentado, aguardando, conversas abertas. */
+  function reviewInfo(r) {
+    if (r.state === 'draft') return ['rascunho', 'muted', 'rascunho: ainda não pede revisão'];
+    if (r.state === 'merged') return ['mesclado', 'ok', 'mesclado'];
+    if (r.state === 'closed') return ['fechado', 'muted', 'fechado sem mesclar'];
+    const v = r.review;
+    if (!v) return ['aberto', 'info', 'aberto'];
+    const by = v.by && v.by.length ? ` (${v.by.join(', ')})` : '';
+    const left = v.approvalsLeft ? `, faltam ${v.approvalsLeft}` : '';
+    return {
+      approved: [`✓ aprovado${v.approvals > 1 ? ` ×${v.approvals}` : ''}`, 'ok', `aprovado${by}${left}`],
+      changes: ['✎ mudanças pedidas', 'bad', `mudanças pedidas${by}`],
+      discussions: ['💬 conversas abertas', 'warn', `há conversas não resolvidas${left}`],
+      commented: ['💬 comentado', 'info', `comentado${by}, sem aprovação`],
+      pending: [`◷ aguardando revisão${v.approvals ? ` (${v.approvals} ok)` : ''}`, 'muted', `aguardando revisão${by}${left}`],
+    }[v.state] || ['aberto', 'info', 'aberto'];
+  }
+
   function requestChip(r) {
-    const st = { open: ['aberto', 'info'], draft: ['rascunho', 'muted'], merged: ['mesclado', 'ok'], closed: ['fechado', 'muted'] }[r.state] || [r.state, ''];
-    return `<span class="chip ${st[1]} link" data-action="openUrl" data-url="${esc(r.url)}" title="${esc(r.title)} — abrir no navegador">${esc(r.ref)} ${st[0]} ↗</span>`;
+    const [txt, cls, tip] = reviewInfo(r);
+    return `<span class="chip ${cls} link" data-action="openUrl" data-url="${esc(r.url)}" title="${esc(r.ref)} ${esc(r.title)} — ${esc(tip)}. Clique para abrir no navegador.">${esc(r.ref)} ${txt}</span>`;
+  }
+
+  /** PR/MR aberto da branch (worktree ou branch sem worktree). */
+  function requestOf(name) {
+    const v = state.worktrees.find(w => w.branch === name) || state.branches.find(b => b.name === name);
+    return v && v.request;
+  }
+
+  /** O agente terminou e deixou commits: clique abre a revisão. */
+  function reviewChip(w) {
+    return `<span class="chip ok link" data-action="reviewReady" data-path="${esc(w.path)}" data-branch="${esc(w.branch || '')}" title="O agente terminou${w.review.commits ? ` com ${w.review.commits} commit(s) novos` : ''}. Clique para revisar.">✓ pronto para revisar</span>`;
+  }
+
+  function tasksChip(w) {
+    const t = w.tasks;
+    const n = t.waiting + (t.running ? 1 : 0);
+    return `<span class="chip info link" data-action="openTasks" title="${t.running ? `Rodando: ${esc(t.running)}\n` : ''}${t.waiting} na fila">☰ ${n} tarefa(s)</span>`;
   }
 
   const arrows = (behind, ahead) => [behind ? `↓${behind}` : '', ahead ? `↑${ahead}` : ''].filter(Boolean).join(' ');
@@ -352,6 +408,7 @@
     return `<section>
       <h2>Todas as worktrees <span class="count">${rest.length}</span>
         ${orphans ? `<button class="link" data-action="pruneWorktrees" title="Pastas que não existem mais (git worktree prune)">${orphans} órfã(s) · remover</button>` : ''}
+        ${mergedCount() ? `<button class="link" data-action="removeMerged" title="Worktrees limpas cuja branch já está inteira em ${esc(state.base)} (favoritas, com agente e protegidas ficam de fora)">remover mescladas (${mergedCount()})</button>` : ''}
         <button class="link" data-action="cleanupWorktrees" title="Remover várias de uma vez; já marca as mescladas e limpas">limpar em lote…</button>
         <button class="link ${onlyDirty ? 'on' : ''}" data-local="dirty" title="Mostrar só worktrees com alterações não commitadas">${onlyDirty ? '✓ ' : ''}com alterações (${state.worktrees.filter(w => w.changes > 0).length})</button>
         <input id="wtfilter" type="search" placeholder="Filtrar por branch, pasta ou commit" /></h2>
@@ -379,11 +436,12 @@
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
-        <td class="c-chips">${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="c-chips">${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
           ${w.remote.ahead || !w.remote.published ? pushButton(w.branch, w.remote, true) : ''}
+          ${w.remote.published && w.remote.behind ? pullButton(w.branch, w.remote.behind, true) : ''}
           <button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>
           <button data-action="diffWithBase" data-branch="${b}" title="Revisar alterações × ${esc(state.base)}">Revisar</button>
           <button data-action="analyzeMerge" data-branch="${b}" title="Analisar o merge em ${esc(state.base)}">Analisar</button>
@@ -414,6 +472,8 @@
         if (w.branch) chips.push(remoteChip(w));
         if (w.branch) chips.push(syncChip(w));
         if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
+        if (w.review) chips.push(reviewChip(w));
+        if (w.tasks) chips.push(tasksChip(w));
         if (w.request) chips.push(requestChip(w.request));
         if (w.branch && pipelineFor(w.branch)) chips.push(pipelineChip(pipelineFor(w.branch)));
         if (w.claude) chips.push(claudeChip(w));
@@ -424,6 +484,7 @@
             ? `<button data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" class="agent" title="Abre ${esc(agent)} num terminal dentro desta worktree (botão direito no card para outros agentes)">✦ ${esc(agent)}</button>`
             : '',
           w.branch && (w.remote.ahead || !w.remote.published) && !w.prunable ? pushButton(w.branch, w.remote) : '',
+          w.branch && w.remote.published && w.remote.behind && !w.prunable ? pullButton(w.branch, w.remote.behind) : '',
           `<button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>`,
           `<button data-action="openFile" data-path="${esc(w.path)}" title="Buscar e abrir um arquivo desta worktree aqui mesmo">Arquivos</button>`,
           `<button data-action="openTerminal" data-path="${esc(w.path)}" title="Terminal nesta pasta">Terminal</button>`,
@@ -431,6 +492,8 @@
         if (w.branch && !w.isBase) {
           act.push(`<button data-action="diffWithBase" data-branch="${b}" title="Arquivos alterados desde que saiu da base">Revisar</button>`);
           act.push(`<button data-action="analyzeMerge" data-branch="${b}" title="Simular o merge em ${esc(state.base)}: commits, arquivos e conflitos">Analisar</button>`);
+          if (w.request && (w.request.state === 'open' || w.request.state === 'draft'))
+            act.push(`<button class="agent" data-action="reviewWithAgent" data-branch="${b}" title="O agente revisa o ${esc(w.request.ref)} e você escolhe o que postar">✦ Revisar ${esc(w.request.ref)}</button>`);
           if (w.preview?.conflict && agent) act.unshift(`<button data-action="resolveConflict" data-branch="${b}" class="agent" title="Abre ${esc(agent)} nesta worktree com a tarefa de trazer ${esc(state.base)} e resolver os conflitos">✦ Resolver com ${esc(agent)}</button>`);
           if (state.hosting && !w.request && w.ahead) act.push(`<button data-action="publishRequest" data-branch="${b}" title="Push + ${state.hosting.label} para ${esc(state.base)}">Publicar ${state.hosting.label}</button>`);
           act.push(`<button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="git merge ${esc(state.baseRef)}">↓ Trazer ${esc(state.base)}</button>`);
@@ -444,6 +507,7 @@
             ${w.isMain ? '' : starBtn(w)}
             <span class="branch">${esc(w.name)}</span>
             ${w.isBase ? '<span class="tag">base</span>' : ''}
+            ${w.branch && isProtected(w.branch) ? '<span class="tag" title="Branch protegida: merge e push direto pedem confirmação ou PR/MR">🔒 protegida</span>' : ''}
             ${w.isMain ? '<span class="tag">principal</span>' : ''}
             ${w.isCurrent ? '<span class="tag accent">esta janela</span>' : ''}
           </div>
@@ -484,6 +548,17 @@
     return v && v.compareKnown ? v.ahead : 0;
   }
 
+  const isProtected = name => (state.protectedBranches || []).includes(name);
+
+  /** Mesma regra de actions.mergedWorktrees (a pasta desta janela é conferida na hora de remover). */
+  function mergedCount() {
+    return state.worktrees.filter(
+      w => !w.isMain && !w.isBase && !w.bare && !w.prunable && w.branch && !isProtected(w.branch) && !w.isCurrent &&
+        w.compareKnown && w.ahead === 0 && !w.favorite && !(w.agents && w.agents.length) &&
+        w.statusKnown && w.changes === 0 && !w.operation,
+    ).length;
+  }
+
   function badge(r) {
     const cls = { head: 'ref-head', remote: 'ref-remote', tag: 'ref-tag', detached: 'ref-detached' }[r.kind];
     const base = r.name === state.base && r.kind === 'head' ? ' ref-base' : '';
@@ -495,7 +570,9 @@
     const ahead = pending ? aheadOf(r.name) : 0;
     const merged = pending === false ? ' ref-merged' : '';
     const title = r.kind === 'head' ? `${r.worktree ? 'branch com worktree' : 'branch local'}${pending ? ` · ${ahead || 'com'} commit(s) fora de ${state.base}` : pending === false ? ` · já mesclada em ${state.base}` : ''}` : r.kind;
-    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}">${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>`;
+    const req = r.kind === 'head' ? requestOf(r.name) : undefined;
+    const lock = r.kind === 'head' && isProtected(r.name) ? '🔒 ' : '';
+    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}${lock ? ' · protegida' : ''}">${lock}${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>${req ? requestChip(req) : ''}`;
   }
 
   function graphHeader(n) {
@@ -546,7 +623,7 @@
             <span class="desc"><span class="subject">● ${esc(c.subject)}</span>
             <button class="link" data-action="diffWithBase" data-branch="${esc(c.branch || '')}">revisar</button></span>
             <span class="author"></span><span class="date">agora</span><span class="sha"></span></div>`;
-        return `<div class="row ${hide ? 'dim' : ''} ${c.boundary ? 'boundary' : ''}" data-sha="${c.sha}" style="padding-left:${W}px" ${c.boundary ? `title="Ponto de ${esc(state.base)} de onde branches pendentes saíram"` : ''}>
+        return `<div class="row ${hide ? 'dim' : ''} ${c.boundary ? 'boundary' : ''}" data-sha="${c.sha}" ${c.boundary ? '' : `draggable="true" data-drag-commit="${c.sha}" `}style="padding-left:${W}px" ${c.boundary ? `title="Ponto de ${esc(state.base)} de onde branches pendentes saíram"` : ''}>
           <span class="desc">${c.refs.map(badge).join('')}<span class="subject">${esc(c.subject)}</span></span>
           <span class="author">${esc(c.author)}</span>
           <span class="date">${ago(c.date)}</span>
@@ -616,6 +693,13 @@
 
   let dragging = '';
   document.addEventListener('dragstart', e => {
+    const commit = /** @type {HTMLElement} */ (e.target).closest?.('[data-drag-commit]');
+    if (commit) {
+      dragging = 'commit:' + /** @type {HTMLElement} */ (commit).dataset.dragCommit;
+      e.dataTransfer?.setData('text/plain', dragging);
+      document.body.classList.add('dragging');
+      return;
+    }
     const el = /** @type {HTMLElement} */ (e.target).closest?.('[data-drag]');
     if (!el) return;
     dragging = /** @type {HTMLElement} */ (el).dataset.drag || '';
@@ -639,7 +723,13 @@
     if (!el || !dragging) return;
     e.preventDefault();
     const target = /** @type {HTMLElement} */ (el).dataset.drop;
-    if (target && target !== dragging) send('mergeBranches', { source: dragging, target });
+    if (target && dragging.startsWith('commit:')) send('cherryPick', { sha: dragging.slice(7), target });
+    else if (target && target !== dragging) send('mergeBranches', { source: dragging, target });
+  });
+
+  document.addEventListener('dblclick', e => {
+    const row = /** @type {HTMLElement} */ (e.target).closest?.('.row[data-sha]');
+    if (row) send('showCommit', { sha: /** @type {HTMLElement} */ (row).dataset.sha });
   });
 
   // divisor entre worktrees e histórico
@@ -689,7 +779,15 @@
         items.push(item('mergeIntoBase', `↑ Mesclar em ${state.base}`, { branch: b }));
       }
       items.push(item('mergeInto', 'Mesclar em…', { branch: b }));
+      if (wt) items.push(item('addTask', '☰ Adicionar tarefa para o agente…', { path: wt.path, branch: b }));
       items.push(item('push', 'Push (enviar para o remoto)', { branch: b }));
+      items.push(item('pullBranch', 'Pull (trazer do remoto)', { branch: b }));
+      items.push(item('compareWith', 'Comparar com…', { branch: b }));
+      if (wt) {
+        items.push(item('stashCreate', 'Guardar alterações (stash)…', { path: wt.path }));
+        items.push(item('moveChanges', 'Mover alterações para outra worktree…', { path: wt.path }));
+        if (!isBase) items.push(item('reorganizeCommits', 'Reorganizar commits (juntar, reordenar, descartar)…', { path: wt.path }));
+      }
       items.push('<hr>');
       if (wt) {
         for (const a of state.agentNames || []) items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
@@ -704,6 +802,7 @@
       items.push(item('createWorktree', 'Nova branch + worktree a partir daqui', { startPoint: b }));
       if (!isBase) items.push(item('diffWithBase', `Revisar alterações × ${state.base}`, { branch: b }));
       if (!isBase) items.push(item('analyzeMerge', `Analisar merge em ${state.base}…`, { branch: b }));
+      if (!isBase) items.push(item('reviewWithAgent', '✦ Revisar PR/MR com o agente', { branch: b }, 'agent'));
       const req = (wt && wt.request) || (state.branches.find(x => x.name === b) || {}).request;
       if (!isBase && state.hosting) items.push(req ? item('openUrl', `Abrir ${req.ref} no navegador`, { url: req.url }) : item('publishRequest', `Publicar ${state.hosting.label}…`, { branch: b }));
       if (!isBase) {
@@ -719,8 +818,20 @@
     } else if (row && row.dataset.sha) {
       const sha = row.dataset.sha;
       items.push(`<div class="menu-title">${sha.slice(0, 10)}</div>`);
+      items.push(item('showCommit', 'Ver alterações do commit', { sha }));
+      if (state.agentNames && state.agentNames[0]) items.push(item('explainCommit', `✦ Explicar com ${state.agentNames[0]}`, { sha }, 'agent'));
+      if (state.hosting) items.push(item('openCommitOnWeb', `Abrir no ${state.hosting.kind === 'gitlab' ? 'GitLab' : 'GitHub'}`, { sha }));
+      items.push('<hr>');
       items.push(item('copy', 'Copiar hash', { text: sha }));
+      items.push(item('copyMessage', 'Copiar mensagem', { sha }));
+      items.push('<hr>');
+      items.push(item('cherryPick', 'Cherry-pick em…', { sha }));
       items.push(item('createWorktree', 'Nova branch + worktree a partir deste commit', { startPoint: sha }));
+      items.push(item('branchAt', 'Criar branch aqui (sem worktree)…', { sha }));
+      items.push(item('tagAt', 'Criar tag aqui…', { sha }));
+      items.push('<hr>');
+      items.push(item('revertCommit', 'Reverter este commit em…', { sha }));
+      items.push(item('resetTo', 'Voltar uma branch até aqui…', { sha }, 'danger'));
     }
     if (!items.length) return;
     e.preventDefault();

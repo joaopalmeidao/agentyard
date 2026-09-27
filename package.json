@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "Worktree Graph",
   "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "worktree-graph",
   "license": "MIT",
   "engines": {
@@ -67,6 +67,10 @@
         {
           "id": "worktreeGraph.pipelines",
           "name": "Pipelines"
+        },
+        {
+          "id": "worktreeGraph.tasks",
+          "name": "Fila de tarefas"
         }
       ]
     },
@@ -87,7 +91,19 @@
       },
       {
         "view": "worktreeGraph.issues",
+        "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao GitLab (URL)](command:worktreeGraph.connectGitLab)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
+      },
+      {
+        "view": "worktreeGraph.issues",
         "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
+      },
+      {
+        "view": "worktreeGraph.tasks",
+        "contents": "Tarefas em fila para os agentes, por worktree. Quando o agente termina uma, a próxima é enviada sozinha.\n[Adicionar tarefa](command:worktreeGraph.tasks.add)\n[Tentar várias abordagens](command:worktreeGraph.attempts.try)"
+      },
+      {
+        "view": "worktreeGraph.issues",
+        "contents": "Issues do GitHub, GitLab, Bitbucket e Azure DevOps do repositório, do Jira e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao remoto](command:worktreeGraph.connectHosting)\n[Conectar ao Jira](command:worktreeGraph.connectJira)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
       }
     ],
     "commands": [
@@ -582,6 +598,206 @@
         "title": "Iniciar job manual",
         "category": "Worktree Graph",
         "icon": "$(debug-start)"
+      },
+      {
+        "command": "worktreeGraph.connectGitLab",
+        "title": "Conectar ao GitLab (URL e token)…",
+        "category": "Worktree Graph",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "worktreeGraph.cleanupReminder",
+        "title": "Verificar worktrees mescladas e paradas",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.showChecksOutput",
+        "title": "Mostrar saída das checagens",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.reviewWithAgent",
+        "title": "✦ Revisar PR/MR com o agente",
+        "category": "Worktree Graph",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "worktreeGraph.openReview",
+        "title": "Abrir a última revisão do agente",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.activity",
+        "title": "Atividade (commits, sessões, tokens e custo por tarefa)",
+        "category": "Worktree Graph",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "worktreeGraph.tasks.add",
+        "title": "Adicionar tarefa para o agente…",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.tasks.runNow",
+        "title": "Rodar agora",
+        "category": "Worktree Graph",
+        "icon": "$(play)"
+      },
+      {
+        "command": "worktreeGraph.tasks.moveUp",
+        "title": "Subir na fila",
+        "category": "Worktree Graph",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "worktreeGraph.tasks.moveDown",
+        "title": "Descer na fila",
+        "category": "Worktree Graph",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "worktreeGraph.tasks.remove",
+        "title": "Remover tarefa",
+        "category": "Worktree Graph",
+        "icon": "$(close)"
+      },
+      {
+        "command": "worktreeGraph.tasks.markDone",
+        "title": "Marcar como pronta",
+        "category": "Worktree Graph",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "worktreeGraph.tasks.markFailed",
+        "title": "Marcar como falhou",
+        "category": "Worktree Graph",
+        "icon": "$(error)"
+      },
+      {
+        "command": "worktreeGraph.tasks.clearFinished",
+        "title": "Limpar tarefas terminadas",
+        "category": "Worktree Graph",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "worktreeGraph.agents.checkReady",
+        "title": "Verificar se o agente terminou",
+        "category": "Worktree Graph",
+        "icon": "$(check)"
+      },
+      {
+        "command": "worktreeGraph.agents.dismissReady",
+        "title": "Tirar \"pronto para revisar\"",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.attempts.try",
+        "title": "Tentar N abordagens…",
+        "category": "Worktree Graph",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "worktreeGraph.attempts.fromIssue",
+        "title": "Tentar N abordagens para esta issue…",
+        "category": "Worktree Graph",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "worktreeGraph.attempts.compare",
+        "title": "Comparar tentativas…",
+        "category": "Worktree Graph",
+        "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "worktreeGraph.pullBranch",
+        "title": "Pull da branch (trazer do remoto)",
+        "category": "Worktree Graph",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "worktreeGraph.pullMany",
+        "title": "Trazer do remoto as branches com novidades…",
+        "category": "Worktree Graph",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "worktreeGraph.fetchNow",
+        "title": "Fetch agora",
+        "category": "Worktree Graph",
+        "icon": "$(repo-fetch)"
+      },
+      {
+        "command": "worktreeGraph.stashCreate",
+        "title": "Guardar alterações da worktree (stash)…",
+        "category": "Worktree Graph",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "worktreeGraph.stashApply",
+        "title": "Aplicar stash em…",
+        "category": "Worktree Graph",
+        "icon": "$(check)"
+      },
+      {
+        "command": "worktreeGraph.stashPop",
+        "title": "Aplicar e remover stash (pop) em…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.stashShow",
+        "title": "Ver diff do stash",
+        "category": "Worktree Graph",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreeGraph.stashDrop",
+        "title": "Apagar stash",
+        "category": "Worktree Graph",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreeGraph.moveChanges",
+        "title": "Mover alterações para outra worktree…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.cherryPick",
+        "title": "Cherry-pick de um commit em…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.reorganizeCommits",
+        "title": "Reorganizar commits (juntar, reordenar, descartar)…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.undoReorganize",
+        "title": "Desfazer a última reorganização de commits",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.compareWith",
+        "title": "Comparar com outra branch/worktree…",
+        "category": "Worktree Graph",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "worktreeGraph.connectJira",
+        "title": "Conectar ao Jira",
+        "category": "Worktree Graph",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "worktreeGraph.disconnectJira",
+        "title": "Desconectar do Jira (apagar credenciais)",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.removeMerged",
+        "title": "Remover worktrees já mescladas na base",
+        "category": "Worktree Graph",
+        "icon": "$(git-merge)"
       }
     ],
     "menus": {
@@ -750,6 +966,56 @@
           "command": "worktreeGraph.pipelines.scopeWorktrees",
           "when": "view == worktreeGraph.pipelines && worktreeGraph.pipelinesScope == all",
           "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.connectGitLab",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "4_hosting"
+        },
+        {
+          "command": "worktreeGraph.activity",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "5_claude"
+        },
+        {
+          "command": "worktreeGraph.tasks.add",
+          "when": "view == worktreeGraph.tasks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.attempts.try",
+          "when": "view == worktreeGraph.tasks",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.attempts.compare",
+          "when": "view == worktreeGraph.tasks",
+          "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.tasks.clearFinished",
+          "when": "view == worktreeGraph.tasks",
+          "group": "9_clean"
+        },
+        {
+          "command": "worktreeGraph.fetchNow",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "1_sync"
+        },
+        {
+          "command": "worktreeGraph.pullMany",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "1_sync"
+        },
+        {
+          "command": "worktreeGraph.connectJira",
+          "when": "view == worktreeGraph.issues",
+          "group": "1_connect"
+        },
+        {
+          "command": "worktreeGraph.removeMerged",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "3_cleanup@0"
         }
       ],
       "view/item/context": [
@@ -1107,6 +1373,141 @@
           "command": "worktreeGraph.pipelines.fix",
           "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
           "group": "3_fix@1"
+        },
+        {
+          "command": "worktreeGraph.reviewWithAgent",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@7"
+        },
+        {
+          "command": "worktreeGraph.openReview",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@8"
+        },
+        {
+          "command": "worktreeGraph.tasks.runNow",
+          "when": "view == worktreeGraph.tasks && viewItem == task-waiting",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.moveUp",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.tasks.moveDown",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.tasks.remove",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "inline@4"
+        },
+        {
+          "command": "worktreeGraph.tasks.runNow",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "1_run@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.markDone",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "2_status@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.markFailed",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "2_status@2"
+        },
+        {
+          "command": "worktreeGraph.tasks.remove",
+          "when": "view == worktreeGraph.tasks && viewItem =~ /^task-/",
+          "group": "9_remove"
+        },
+        {
+          "command": "worktreeGraph.tasks.add",
+          "when": "view == worktreeGraph.tasks && viewItem == taskQueue",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.tasks.add",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@6"
+        },
+        {
+          "command": "worktreeGraph.agents.checkReady",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@7"
+        },
+        {
+          "command": "worktreeGraph.attempts.fromIssue",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "1_work@3"
+        },
+        {
+          "command": "worktreeGraph.pullBranch",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_merge@7"
+        },
+        {
+          "command": "worktreeGraph.compareWith",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@6"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@1"
+        },
+        {
+          "command": "worktreeGraph.moveChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@2"
+        },
+        {
+          "command": "worktreeGraph.reorganizeCommits",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "4_changes@3"
+        },
+        {
+          "command": "worktreeGraph.undoReorganize",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "4_changes@4"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem == stashGroup",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeGraph.stashApply",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.stashDrop",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.stashApply",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "1_stash@1"
+        },
+        {
+          "command": "worktreeGraph.stashPop",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "1_stash@2"
+        },
+        {
+          "command": "worktreeGraph.stashShow",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "1_stash@3"
+        },
+        {
+          "command": "worktreeGraph.stashDrop",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "9_danger"
         }
       ],
       "commandPalette": [
@@ -1244,6 +1645,46 @@
         },
         {
           "command": "worktreeGraph.pipelines.fix",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.runNow",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.moveUp",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.moveDown",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.remove",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.markDone",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.tasks.markFailed",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.attempts.fromIssue",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.cherryPick",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.stashShow",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.stashDrop",
           "when": "false"
         }
       ],
@@ -1479,7 +1920,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Hosts de GitLab self-hosted cujo endereço não contém \"gitlab\", ex.: `git.empresa.com` ou `https://git.empresa.com:8443` (use a forma com esquema/porta quando o remoto for ssh e a web estiver em outra porta)."
+          "markdownDescription": "Endereços de GitLab self-hosted, ex.: `https://gitlab.empresa.com`, `https://git.empresa.com:8443` ou `https://empresa.com/gitlab` (instalação em subcaminho). O comando *Conectar ao GitLab (URL e token)* preenche isto. Hosts com \"gitlab\" no nome são reconhecidos sozinhos."
         },
         "worktreeGraph.gitlab.apiUrl": {
           "type": "string",
@@ -1580,6 +2021,172 @@
           "editPresentation": "multilineText",
           "default": "",
           "markdownDescription": "Tarefa enviada ao agente em *✦ Corrigir* de um pipeline que falhou. Vazio = texto padrão. Placeholders: `${branch}`, `${pipeline}`, `${url}`, `${jobs}`, `${log}` (últimas ~150 linhas do job que falhou)."
+        },
+        "worktreeGraph.checks.mode": {
+          "type": "string",
+          "enum": [
+            "block",
+            "warn",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Falha impede o merge/push (dá para continuar mesmo assim, confirmando).",
+            "Falha só avisa.",
+            "Não roda checagens."
+          ],
+          "default": "block",
+          "description": "O que acontece quando as checagens antes de mesclar ou enviar falham."
+        },
+        "worktreeGraph.checks.beforeMerge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Comandos rodados na worktree da branch de origem antes de mesclá-la (ex.: `[\"npm run lint\", \"npm test\"]`). Não roda quando é a base descendo para uma branch de trabalho."
+        },
+        "worktreeGraph.checks.beforePush": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Comandos rodados na worktree da branch antes do push e antes de abrir PR/MR."
+        },
+        "worktreeGraph.checks.useTestCommand": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Sem comandos configurados, usar `worktreeGraph.autoSync.testCommand` nas checagens."
+        },
+        "worktreeGraph.checks.timeoutSeconds": {
+          "type": "number",
+          "default": 900,
+          "description": "Tempo máximo de cada comando de checagem."
+        },
+        "worktreeGraph.prompts.fixChecks": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "Tarefa enviada ao agente em \"✦ Corrigir\" quando as checagens falham. Placeholders: `${branch}`, `${action}`, `${commands}`, `${failed}`, `${log}`. Vazio = texto padrão."
+        },
+        "worktreeGraph.protectedBranches": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Branches protegidas (aceita `*`/`**`). Vazio = automático: a base, os estágios do fluxo de ambientes, `main` e `master`."
+        },
+        "worktreeGraph.protection.mode": {
+          "type": "string",
+          "enum": [
+            "confirm",
+            "require-pr",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Merge/push direto numa protegida pede para digitar o nome da branch.",
+            "Merge/push direto bloqueado; oferece abrir PR/MR.",
+            "Sem proteção."
+          ],
+          "default": "confirm",
+          "description": "Como tratar merge e push direto em branches protegidas. Push forçado numa protegida só passa com \"off\"."
+        },
+        "worktreeGraph.cleanup.remindThreshold": {
+          "type": "number",
+          "default": 20,
+          "description": "Avisar quando houver pelo menos esta quantidade de worktrees mescladas e paradas (ou órfãs)."
+        },
+        "worktreeGraph.cleanup.staleDays": {
+          "type": "number",
+          "default": 7,
+          "description": "Dias sem commit para uma worktree mesclada contar como parada."
+        },
+        "worktreeGraph.prompts.review": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "",
+          "markdownDescription": "Tarefa enviada ao agente em *Revisar PR/MR com o agente*. Vazio = texto padrão. Placeholders: `${kind}`, `${title}`, `${url}`, `${branch}`, `${base}`, `${diffStat}`. O agente precisa gravar `.worktree-graph/review.json` no formato `{ summary, comments: [{ path, line, severity, body }] }`."
+        },
+        "worktreeGraph.claude.pricePerMTokInput": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "US$ por milhão de tokens de entrada (e criação de cache), para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
+        },
+        "worktreeGraph.claude.pricePerMTokOutput": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "US$ por milhão de tokens de saída, para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
+        },
+        "worktreeGraph.claude.pricePerMTokCacheRead": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "US$ por milhão de tokens de leitura de cache, para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
+        },
+        "worktreeGraph.agents.idleMinutes": {
+          "type": "number",
+          "default": 3,
+          "description": "Minutos sem mudança no HEAD nem no índice da worktree para considerar que o agente terminou (quando o fim do comando não pode ser detectado pelo shell integration)."
+        },
+        "worktreeGraph.agents.notifyReady": {
+          "type": "boolean",
+          "default": true,
+          "description": "Avisar quando um agente termina e a worktree fica pronta para revisar."
+        },
+        "worktreeGraph.tasks.autoAdvance": {
+          "type": "boolean",
+          "default": true,
+          "description": "Quando o agente termina uma tarefa da fila, enviar a próxima automaticamente."
+        },
+        "worktreeGraph.fetch.intervalMinutes": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Fetch automático a cada N minutos (0 = desligado), com aviso quando branches ganham novidades no remoto."
+        },
+        "worktreeGraph.bitbucket.hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Hosts de Bitbucket Server/Data Center, ex.: `git.empresa.com` ou `https://git.empresa.com/bitbucket` (com o caminho de contexto, se houver). Endereços com \"bitbucket\" no nome são reconhecidos sozinhos."
+        },
+        "worktreeGraph.azureDevOps.hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Hosts de Azure DevOps Server (on-premises), ex.: `tfs.empresa.com`. dev.azure.com e *.visualstudio.com são reconhecidos sozinhos."
+        },
+        "worktreeGraph.azureDevOps.workItemType": {
+          "type": "string",
+          "default": "Task",
+          "description": "Tipo de work item criado por \"Nova issue…\" no Azure DevOps (Task, Bug, User Story, Issue…)."
+        },
+        "worktreeGraph.jira.url": {
+          "type": "string",
+          "default": "",
+          "description": "Endereço do Jira (Cloud ou Server/Data Center). As credenciais ficam no cofre do VS Code (comando Conectar ao Jira)."
+        },
+        "worktreeGraph.jira.projectKey": {
+          "type": "string",
+          "default": "",
+          "description": "Chave do projeto do Jira (ex.: PROJ). Vazio = o escolhido ao conectar."
+        },
+        "worktreeGraph.jira.jql": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "JQL opcional que substitui o filtro padrão (projeto e `statusCategory != Done`). Em \"minhas\", a extensão acrescenta `assignee = currentUser()`."
+        },
+        "worktreeGraph.jira.issueType": {
+          "type": "string",
+          "default": "Task",
+          "description": "Tipo de issue criado por \"Nova issue…\" no Jira."
         }
       }
     }
@@ -1589,7 +2196,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

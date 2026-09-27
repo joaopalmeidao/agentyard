@@ -13,6 +13,12 @@ const STATUS_LABEL: Record<string, string> = { A: 'adicionado', M: 'modificado',
 /** Último pipeline de uma branch (preenchido pelo provider a partir do estado). */
 let pipelineOf: ((branch: string) => { status: string } | undefined) | undefined;
 
+/** Preenchido a cada leitura com as branches protegidas (src/guards.ts), para o cadeado na árvore. */
+let protectedNames = new Set<string>();
+export function setProtectedNames(list: string[] | undefined) {
+  protectedNames = new Set(list ?? []);
+}
+
 export class WorktreeItem extends vscode.TreeItem {
   readonly kind = 'worktree';
   readonly branch?: string;
@@ -27,6 +33,7 @@ export class WorktreeItem extends vscode.TreeItem {
 
     const parts: string[] = [];
     if (wt.favorite) parts.push('★');
+    if (wt.branch && protectedNames.has(wt.branch)) parts.push('🔒');
     if (!wt.statusKnown || !wt.compareKnown) parts.push('…');
     if (!wt.isBase && wt.behind) parts.push(`↓${wt.behind}`);
     if (!wt.isBase && wt.ahead) parts.push(`↑${wt.ahead}`);
@@ -36,6 +43,8 @@ export class WorktreeItem extends vscode.TreeItem {
     if (wt.operation) parts.push(wt.operation);
     if (wt.preview?.conflict) parts.push('⚠ conflito');
     if (wt.agents.length) parts.push(`✦ ${wt.agents.join(', ')}`);
+    if (wt.review) parts.push('✓ revisar');
+    if (wt.tasks) parts.push(`☰${wt.tasks.waiting + (wt.tasks.running ? 1 : 0)}`);
     if (wt.request) parts.push(`${wt.request.ref}${wt.request.state === 'draft' ? ' rascunho' : ''}`);
     if (wt.branch && pipelineOf?.(wt.branch)) {
       const p = pipelineOf(wt.branch)!;
@@ -169,6 +178,12 @@ class TreeEntryItem extends vscode.TreeItem {
   }
 }
 
+/**
+ * Grupos extras na raiz da árvore, registrados por outros módulos (ex.: "Stashes" em src/gitops).
+ * `children` devolve undefined quando o item não é dele.
+ */
+export const extraTree: { roots: () => vscode.TreeItem[]; children: (el: vscode.TreeItem) => Promise<vscode.TreeItem[]> | undefined }[] = [];
+
 export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.emitter.event;
@@ -199,7 +214,12 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
         if (orphans.length) items.push(new OrphansGroup(orphans.length));
         const branches = s.branches.filter(b => !b.isBase);
         if (branches.length) items.push(new BranchesGroup(branches.length));
+        for (const x of extraTree) items.push(...(x.roots() as unknown as Node[]));
         return items;
+      }
+      for (const x of extraTree) {
+        const c = x.children(el as vscode.TreeItem);
+        if (c) return (await c) as unknown as Node[];
       }
       if (el instanceof WorktreeItem) {
         const out: Node[] = [];

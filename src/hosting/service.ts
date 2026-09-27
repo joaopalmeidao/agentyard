@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
+import { guardChecks } from '../guards';
 import { pushBranch } from '../push';
 import type { Controller } from '../controller';
+import { AzureDevOpsClient } from './azure';
+import { bitbucketClient } from './bitbucket';
 import { ChangeRequest, GitHubClient, GitLabClient, HostClient, HostError, parseRemote, RemoteInfo, suggestBody, suggestTitle } from './core';
+import { hostLabel } from './platforms';
 
 const REFRESH_MS = 120_000;
 
@@ -49,7 +53,16 @@ export class RequestService {
     if (!repo) return (this.remote = undefined);
     const name = this.cfg().get<string>('remote', 'origin');
     const r = await repo.run(['remote', 'get-url', name]);
-    this.remote = r.code === 0 ? parseRemote(r.stdout.trim(), this.cfg().get<string[]>('gitlab.hosts', []), this.cfg().get<string[]>('github.hosts', [])) : undefined;
+    this.remote =
+      r.code === 0
+        ? parseRemote(
+            r.stdout.trim(),
+            this.cfg().get<string[]>('gitlab.hosts', []),
+            this.cfg().get<string[]>('github.hosts', []),
+            this.cfg().get<string[]>('bitbucket.hosts', []),
+            this.cfg().get<string[]>('azureDevOps.hosts', []),
+          )
+        : undefined;
     return this.remote;
   }
 
@@ -61,17 +74,33 @@ export class RequestService {
       const s = await vscode.authentication.getSession('github', ['repo'], interactive ? { createIfNone: true } : { silent: true });
       return s?.accessToken;
     }
-    const env = r.kind === 'gitlab' ? process.env.GITLAB_TOKEN : process.env.GITHUB_TOKEN;
+    const env = {
+      github: process.env.GITHUB_TOKEN,
+      gitlab: process.env.GITLAB_TOKEN,
+      bitbucket: process.env.BITBUCKET_TOKEN,
+      azure: process.env.AZURE_DEVOPS_EXT_PAT ?? process.env.AZURE_DEVOPS_TOKEN,
+    }[r.kind];
     if (env) return env;
     return interactive ? this.askToken(r) : undefined;
   }
 
   private apiBase(r: RemoteInfo): string | undefined {
-    return (r.kind === 'gitlab' ? this.cfg().get<string>('gitlab.apiUrl', '') : this.cfg().get<string>('github.apiUrl', '')) || undefined;
+    if (r.kind === 'gitlab') return this.cfg().get<string>('gitlab.apiUrl', '') || undefined;
+    if (r.kind === 'github') return this.cfg().get<string>('github.apiUrl', '') || undefined;
+    return undefined;
   }
 
   private makeClient(r: RemoteInfo, token: string): HostClient {
-    return r.kind === 'github' ? new GitHubClient(r, token, this.apiBase(r)) : new GitLabClient(r, token, this.apiBase(r));
+    switch (r.kind) {
+      case 'github':
+        return new GitHubClient(r, token, this.apiBase(r));
+      case 'gitlab':
+        return new GitLabClient(r, token, this.apiBase(r));
+      case 'bitbucket':
+        return bitbucketClient(r, token, this.apiBase(r));
+      case 'azure':
+        return new AzureDevOpsClient(r, token, this.apiBase(r), fetch, this.cfg().get<string>('azureDevOps.workItemType', 'Task'));
+    }
   }
 
   async client(interactive: boolean): Promise<HostClient | undefined> {
@@ -102,24 +131,21 @@ export class RequestService {
 
   /** Pede um token de acesso pessoal, valida e guarda no cofre do VS Code. */
   async askToken(r: RemoteInfo): Promise<string | undefined> {
-    const where =
-      r.kind === 'gitlab'
-        ? `${r.webBase}/-/user_settings/personal_access_tokens?name=Worktree%20Graph&scopes=api`
-        : `${r.webBase}/settings/tokens`;
+    const h = tokenHelp(r);
     const open = await vscode.window.showInformationMessage(
-      `Conectar ao ${r.kind === 'gitlab' ? 'GitLab' : 'GitHub'} em ${r.webBase}`,
+      `Conectar ao ${hostLabel(r.kind)} em ${r.webBase}`,
       {
         modal: true,
-        detail: `Crie um token de acesso pessoal com o escopo ${r.kind === 'gitlab' ? '"api"' : '"repo"'} e cole na próxima tela. Ele fica guardado no cofre de segredos do VS Code, não em arquivos.`,
+        detail: `${h.detail} Ele fica guardado no cofre de segredos do VS Code, não em arquivos.`,
       },
       'Abrir página de tokens',
       'Já tenho um token',
     );
     if (!open) return undefined;
-    if (open === 'Abrir página de tokens') await vscode.env.openExternal(vscode.Uri.parse(where));
+    if (open === 'Abrir página de tokens') await vscode.env.openExternal(vscode.Uri.parse(h.url));
     const token = await vscode.window.showInputBox({
       title: `Token de ${r.host}`,
-      prompt: `Escopo ${r.kind === 'gitlab' ? 'api' : 'repo'}`,
+      prompt: h.prompt,
       password: true,
       ignoreFocusOut: true,
     });
@@ -136,15 +162,55 @@ export class RequestService {
     }
   }
 
+  /**
+   * Conectar ao GitLab informando a URL (útil para self-hosted, subcaminho, ou quando o remoto é ssh
+   * numa porta/host diferente da web). Salva a URL em worktreeGraph.gitlab.hosts e pede o token.
+   */
+  async connectGitLab() {
+    const current = await this.detectRemote(true);
+    const url = await vscode.window.showInputBox({
+      title: 'Conectar ao GitLab',
+      prompt: 'Endereço do GitLab (ex.: https://gitlab.empresa.com ou https://empresa.com/gitlab)',
+      value: current?.kind === 'gitlab' ? current.webBase : 'https://',
+      ignoreFocusOut: true,
+      validateInput: v => (/^https?:\/\/[^/\s]+/.test(v.trim()) ? undefined : 'Informe um endereço http(s)://'),
+    });
+    if (!url) return;
+    const base = url.trim().replace(/\/+$/, '');
+    const hosts = this.cfg().get<string[]>('gitlab.hosts', []);
+    const host = new URL(base).hostname.toLowerCase();
+    const others = hosts.filter(h => {
+      try {
+        return new URL(/^[a-z]+:\/\//i.test(h) ? h : `https://${h}`).hostname.toLowerCase() !== host;
+      } catch {
+        return true;
+      }
+    });
+    await this.cfg().update('gitlab.hosts', [...others, base], vscode.ConfigurationTarget.Global);
+    const r = await this.detectRemote(true);
+    if (!r || r.kind !== 'gitlab' || r.host !== host) {
+      vscode.window.showWarningMessage(
+        `Salvei ${base}, mas o remoto "${this.cfg().get('remote', 'origin')}" deste repositório não aponta para ${host}. Os PRs/MRs, issues e pipelines usam o remoto do repositório.`,
+      );
+      return;
+    }
+    await this.askToken(r);
+    await this.refresh(true);
+  }
+
   async connect() {
     const r = await this.detectRemote(true);
     if (!r) {
-      vscode.window.showWarningMessage(
-        'O remoto não foi reconhecido como GitHub nem GitLab. Para GitLab self-hosted cujo endereço não contém "gitlab", adicione o host em worktreeGraph.gitlab.hosts.',
+      const pick = await vscode.window.showWarningMessage(
+        'O remoto não foi reconhecido como GitHub, GitLab, Bitbucket nem Azure DevOps. Se for um GitLab próprio, informe o endereço; para outras instalações próprias, adicione o host em worktreeGraph.bitbucket.hosts, azureDevOps.hosts ou github.hosts.',
+        'Informar URL do GitLab',
         'Abrir configuração',
-      ).then(p => p && vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.gitlab.hosts'));
+      );
+      if (pick === 'Informar URL do GitLab') return this.connectGitLab();
+      if (pick === 'Abrir configuração') vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.gitlab.hosts');
       return;
     }
+    if (r.kind === 'gitlab') return this.connectGitLab();
     if (r.kind === 'github' && r.host === 'github.com') {
       const s = await vscode.authentication.getSession('github', ['repo'], { createIfNone: true });
       if (s) vscode.window.showInformationMessage(`Conectado ao GitHub como ${s.account.label}.`);
@@ -165,7 +231,7 @@ export class RequestService {
   }
 
   private signature() {
-    return `${this.connected}|${this.error ?? ''}|${this.remote?.host ?? ''}|${[...this.byBranch.values()].map(p => `${p.ref}${p.state}`).join(',')}`;
+    return `${this.connected}|${this.error ?? ''}|${this.remote?.host ?? ''}|${[...this.byBranch.values()].map(p => `${p.ref}${p.state}${p.review?.state ?? ''}${p.review?.approvals ?? ''}`).join(',')}`;
   }
 
   /** Busca os PRs/MRs abertos (no máximo a cada 2 min, salvo force). Não pergunta nada ao usuário. */
@@ -180,6 +246,19 @@ export class RequestService {
         const client = await this.client(false);
         if (!client) return;
         const list = await client.listOpen();
+        // revisão só dos abertos (rascunhos não pedem revisão), 4 de cada vez
+        const open = list.filter(p => p.state === 'open');
+        for (let i = 0; i < open.length; i += 4) {
+          await Promise.all(
+            open.slice(i, i + 4).map(async p => {
+              try {
+                p.review = await client.reviewStatus(p);
+              } catch {
+                // sem permissão para ver revisões: fica sem a informação
+              }
+            }),
+          );
+        }
         this.byBranch.clear();
         for (const p of list) this.byBranch.set(p.source, p);
         this.error = undefined;
@@ -246,6 +325,8 @@ export class RequestService {
     );
     if (!kind) return;
 
+    // checagens antes do PR/MR mesmo se a branch já estiver enviada (o push reaproveita o resultado)
+    if (!(await guardChecks('push', branch))) return;
     if (!(await this.push(branch))) return;
     try {
       const created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Criando ${L}…` }, () =>
@@ -269,4 +350,36 @@ export class RequestService {
     return pushBranch(this.ctl, branch, { quiet: true });
   }
 
+}
+
+/** Onde criar o token e o que colar, por plataforma. */
+function tokenHelp(r: RemoteInfo): { url: string; prompt: string; detail: string } {
+  switch (r.kind) {
+    case 'gitlab':
+      return {
+        url: `${r.webBase}/-/user_settings/personal_access_tokens?name=Worktree%20Graph&scopes=api`,
+        prompt: 'Escopo api',
+        detail: 'Crie um token de acesso pessoal com o escopo "api" e cole na próxima tela.',
+      };
+    case 'bitbucket':
+      return r.flavor === 'cloud'
+        ? {
+            url: 'https://bitbucket.org/account/settings/app-passwords/',
+            prompt: 'usuario:app-password (ou e-mail:API token), ou um access token do repositório',
+            detail: 'Use "usuario:app password" (ou "e-mail:API token") com permissão de leitura e escrita em Pull requests, Issues e Pipelines, ou um access token do repositório.',
+          }
+        : {
+            url: `${r.webBase}/plugins/servlet/access-tokens/manage`,
+            prompt: 'HTTP access token (projeto/repositório: escrita)',
+            detail: 'Crie um HTTP access token pessoal com permissão de escrita no repositório.',
+          };
+    case 'azure':
+      return {
+        url: `${r.azure?.collection ?? r.webBase}/_usersSettings/tokens`,
+        prompt: 'PAT com Code (leitura e escrita), Work Items (leitura e escrita) e Build (leitura e execução)',
+        detail: 'Crie um Personal Access Token com os escopos Code (Read & write), Work Items (Read & write) e Build (Read & execute).',
+      };
+    default:
+      return { url: `${r.webBase}/settings/tokens`, prompt: 'Escopo repo', detail: 'Crie um token de acesso pessoal com o escopo "repo" e cole na próxima tela.' };
+  }
 }

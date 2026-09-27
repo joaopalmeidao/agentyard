@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.9.0
+**Histórico e commits**
+- Painel abre no layout de abas, na aba Histórico; layout, aba e divisor ficam salvos no VS Code.
+- Comandos nos commits (botão direito ou duplo clique): ver alterações, ✦ explicar com o agente,
+  abrir no GitHub/GitLab, copiar hash/mensagem, criar branch/tag/worktree, cherry-pick em…,
+  reverter e voltar uma branch até o commit (com backup e Desfazer).
+- Situação da revisão do PR/MR ao lado da branch (✓ aprovado, ✎ mudanças pedidas, ◷ aguardando,
+  💬 conversas abertas) no histórico, nos cards e na tabela — GitHub, GitLab, Bitbucket e Azure DevOps.
+
+**Git do dia a dia**
+- Pull: "☁↓ Trazer" por branch (fast-forward; se divergir, merge ou rebase; worktree suja pode
+  guardar num stash e devolver), "Trazer n" em lote e fetch manual ou periódico.
+- Stash por worktree (grupo "Stashes"): guardar, aplicar, ver diff, apagar e mover alterações entre worktrees.
+- Cherry-pick arrastando um commit do histórico sobre uma branch; "Reorganizar commits" (reordenar,
+  squash/fixup, reword, drop) sem editor, com backup e Desfazer; "Comparar com…" entre duas worktrees.
+- "Remover mescladas (n)": remove de uma vez as worktrees limpas cuja branch já está na base
+  (e as branches, se quiser); favoritas, com agente e protegidas ficam de fora.
+
+**Agentes**
+- "✓ Pronto para revisar" quando o agente termina deixando commits e a worktree limpa.
+- Fila de tarefas por worktree, com a próxima indo sozinha para o agente.
+- "Tentar N abordagens": várias worktrees try/* com agentes em paralelo e painel para comparar,
+  escolher uma e descartar as outras.
+- "✦ Revisar PR/MR com o agente": comentários do agente num painel para postar no GitHub/GitLab.
+
+**Qualidade**
+- Checagens antes de mesclar e de enviar (lint/testes), com cache por commit e "✦ Corrigir com o agente".
+- Branches protegidas (base, estágios do fluxo, main/master): merge e push direto pedem confirmação
+  digitando o nome, ou exigem PR/MR; push forçado bloqueado. 🔒 no painel e na árvore.
+- Lembrete de limpeza quando se acumulam worktrees mescladas e paradas.
+
+**Métricas**
+- Painel "Atividade" (hoje, ontem, 7 dias): commits, arquivos, sessões e tokens por worktree, PRs e pipelines.
+- Custo por tarefa: tokens por branch ligados à issue ou PR/MR, com custo estimado em US$ se configurado.
+
+**Plataformas**
+- Bitbucket Cloud e Server/Data Center, Azure DevOps Services e Server: PRs, pipelines/builds,
+  issues/work items. Jira Cloud e Server na view Issues.
+- "Conectar ao GitLab" informando a URL (self-hosted, porta, instalação em subcaminho).
+
 ## 0.8.0
 - View "Pipelines": GitHub Actions e GitLab CI (inclusive self-hosted), com jobs, log, re-executar
   (inclusive só os falhos), cancelar, disparar numa branch e iniciar job manual.

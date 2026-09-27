@@ -43,7 +43,7 @@ exports.run = async () => {
     const root = await tree.getChildren();
     const labels = root.map(n => (typeof n.label === 'string' ? n.label : n.label.label));
     // principal primeiro, depois as mais recentes
-    assert.deepStrictEqual(labels, ['master', 'ai/precos-promo', 'ai/refatorar-api', 'ai/login-oauth', 'Branches sem worktree']);
+    assert.deepStrictEqual(labels, ['master', 'ai/precos-promo', 'ai/refatorar-api', 'ai/login-oauth', 'Branches sem worktree', 'Stashes']);
   });
 
   await check('árvore: alterações × base incluem não commitados', async () => {
@@ -178,6 +178,17 @@ exports.run = async () => {
     assert.deepStrictEqual(api.issues.groups, [], 'demo sem remoto e sem Redmine: nenhum grupo');
   });
 
+  await check('issues: Jira configurado sem credencial aparece com "Conectar ao Jira"', async () => {
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    await cfg.update('jira.url', 'https://jira.exemplo.invalid', vscode.ConfigurationTarget.Global);
+    await api.issues.refresh(true);
+    const g = api.issues.groups.find(x => x.provider === 'jira');
+    assert.ok(g && g.needsConnect, JSON.stringify(api.issues.groups));
+    await cfg.update('jira.url', undefined, vscode.ConfigurationTarget.Global);
+    await api.issues.refresh(true);
+    assert.ok(!api.issues.groups.some(x => x.provider === 'jira'));
+  });
+
   await check('issues: começar cria a worktree da issue e entrega o prompt', async () => {
     const issue = { provider: 'github', id: 99, key: '#99', title: 'Teste de issue', body: 'corpo da issue', url: 'https://example.com/99', labels: [], updated: 0 };
     await api.issues.start(issue, true);
@@ -256,6 +267,48 @@ exports.run = async () => {
     await ctl.refresh();
   });
 
+  await check('atividade: painel abre e soma commits e tokens por branch; custo por tarefa com preço', async () => {
+    await until(() => api.claude.loaded, 20000);
+    await vscode.commands.executeCommand('worktreeGraph.activity');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Atividade');
+    const week = await api.activity.compute('week');
+    const row = week.report.rows.find(r => r.branch === 'ai/login-oauth');
+    assert.ok(row, 'linha da worktree com sessão sintética');
+    assert.strictEqual(row.tokens, 3500);
+    assert.ok(week.report.totals.commits >= 3, 'commits da demo nos últimos 7 dias');
+    const cost = week.costs.find(c => c.branch === 'ai/login-oauth');
+    assert.strictEqual(cost.tokens, 3500);
+    assert.strictEqual(cost.usd, undefined, 'sem preço, sem custo');
+
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    await cfg.update('claude.pricePerMTokInput', 3, vscode.ConfigurationTarget.Global);
+    await cfg.update('claude.pricePerMTokOutput', 15, vscode.ConfigurationTarget.Global);
+    await ctl.refresh();
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(wt.claude.usd.toFixed(4), ((1500 * 3 + 2000 * 15) / 1e6).toFixed(4), 'chip do card com custo estimado');
+    await cfg.update('claude.pricePerMTokInput', undefined, vscode.ConfigurationTarget.Global);
+    await cfg.update('claude.pricePerMTokOutput', undefined, vscode.ConfigurationTarget.Global);
+  });
+
+  await check('revisão: agente recebe a tarefa; review.json vira painel com os comentários; pasta fora do git', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    await api.review.start('ai/login-oauth');
+    const prompt = fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8');
+    assert.ok(prompt.includes('.worktree-graph/review.json') && prompt.includes('src/oauth.ts'), prompt);
+    fs.writeFileSync(
+      path.join(wt.path, '.worktree-graph', 'review.json'),
+      JSON.stringify({ summary: 'Revisão sintética', comments: [{ path: 'src/auth.ts', line: 2, severity: 'bug', body: 'verify sem tratar erro' }, { path: 'src/oauth.ts', body: 'nit', severity: 'nit' }] }),
+    );
+    await until(() => api.review.panel?.current?.review.comments.length === 2, 15000);
+    assert.strictEqual(api.review.panel.current.review.summary, 'Revisão sintética');
+    assert.ok(!execSync('git status --porcelain', { cwd: wt.path }).toString().includes('.worktree-graph'), 'fora do git');
+    const exclude = fs.readFileSync(path.join(ctl.repo.commonDir, 'info', 'exclude'), 'utf8');
+    assert.ok(exclude.includes('.worktree-graph/'));
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
@@ -313,6 +366,231 @@ exports.run = async () => {
     await vscode.commands.executeCommand('worktreeGraph.pushBranch', { branch: 'ai/login-oauth' });
     await ctl.refresh();
     assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').remote.ahead, 0, 'enviado');
+  });
+
+  await check('commits: URL no GitHub/GitLab e branch criada num commit', async () => {
+    const { commitUrl } = require('../out/commits');
+    assert.strictEqual(commitUrl({ kind: 'github', webBase: 'https://github.com', projectPath: 'a/b' }, 'abc'), 'https://github.com/a/b/commit/abc');
+    assert.strictEqual(commitUrl({ kind: 'gitlab', webBase: 'https://git.x:8443', projectPath: 'g/s/p' }, 'abc'), 'https://git.x:8443/g/s/p/-/commit/abc');
+  });
+
+  await check('proteções: checagem bloqueia e libera merge, cache, branch protegida e lembrete de limpeza', async () => {
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    const guards = api.guards;
+    const originalUi = guards.ui;
+    const seen = [];
+    let answers = [];
+    let typed;
+    guards.ui = {
+      warn: async (m, o, ...items) => (seen.push(m), answers.shift()),
+      input: async () => typed,
+    };
+    const root = ctl.repo.root;
+    const git = (c, cwd = root) => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd }).toString().trim();
+    try {
+      // lista automática: base protegida
+      await ctl.refresh();
+      assert.ok(ctl.state.protectedBranches.includes('master'), 'master protegida por padrão');
+
+      // branches descartáveis: guard/teste (com worktree e um commit) → guard/alvo
+      const wtTeste = path.join(root, '..', 'guard-teste');
+      git('branch guard/alvo master');
+      git(`worktree add -q -b guard/teste "${wtTeste}" master`);
+      git('commit -q --allow-empty -m "trabalho do agente"', wtTeste);
+      const alvoAntes = git('rev-parse guard/alvo');
+
+      await cfg.update('protection.mode', 'off', G);
+      await cfg.update('checks.mode', 'block', G);
+      await cfg.update('checks.beforeMerge', ['node -e "process.exit(3)"'], G);
+      answers = [undefined]; // fecha o aviso de falha sem escolher nada
+      let ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'guard/alvo', { confirm: false, quiet: true });
+      assert.strictEqual(ok, false, 'checagem falhando bloqueia');
+      assert.strictEqual(guards.lastCheck.ok, false);
+      assert.ok(guards.lastCheck.failed.includes('process.exit(3)'));
+      assert.strictEqual(git('rev-parse guard/alvo'), alvoAntes, 'destino intacto');
+
+      await cfg.update('checks.beforeMerge', ['node -e "process.exit(0)"'], G);
+      ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'guard/alvo', { confirm: false, quiet: true });
+      assert.strictEqual(ok, true, 'checagem passando libera');
+      assert.notStrictEqual(git('rev-parse guard/alvo'), alvoAntes, 'merge feito');
+      assert.strictEqual(await guards.runChecks('merge', 'guard/teste'), true);
+      assert.strictEqual(guards.lastCheck.cached, true, 'mesmo commit, worktree limpa: não roda de novo');
+      await cfg.update('checks.beforeMerge', undefined, G);
+
+      // merge direto na master protegida
+      const masterAntes = git('rev-parse master');
+      await cfg.update('protection.mode', 'require-pr', G);
+      answers = [undefined];
+      ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'master', { confirm: false, quiet: true });
+      assert.strictEqual(ok, false, 'require-pr bloqueia');
+      assert.ok(seen.some(m => m.includes('master é protegida')), seen.join(' | '));
+      await cfg.update('protection.mode', 'confirm', G);
+      typed = 'errado';
+      ok = await api.actions.mergeBranches(ctl, 'guard/teste', 'master', { confirm: false, quiet: true });
+      assert.strictEqual(ok, false, 'confirm sem digitar o nome certo bloqueia');
+      assert.strictEqual(git('rev-parse master'), masterAntes, 'master intacta');
+
+      // lembrete: uma worktree mesclada e limpa, limite 1, sem espera de dias
+      git(`worktree add -q -b guard/parada "${path.join(root, '..', 'guard-parada')}" master`);
+      await cfg.update('cleanup.remindThreshold', 1, G);
+      await cfg.update('cleanup.staleDays', 0, G);
+      await ctl.refresh();
+      await until(() => ctl.state.pending === 0, 30000);
+      await ctl.ctx.globalState.update(`cleanupRemind:${ctl.repo.commonDir.toLowerCase()}`, undefined);
+      guards.lastReminder = undefined;
+      guards.maybeRemind();
+      assert.ok(guards.lastReminder && guards.lastReminder.stale >= 1, JSON.stringify(guards.lastReminder));
+      assert.ok(seen.some(m => /worktrees sobrando/.test(m)));
+      const again = guards.lastReminder.at;
+      guards.maybeRemind();
+      assert.strictEqual(guards.lastReminder.at, again, 'no máximo um aviso por dia');
+    } finally {
+      guards.ui = originalUi;
+      for (const k of ['protection.mode', 'checks.mode', 'checks.beforeMerge', 'cleanup.remindThreshold', 'cleanup.staleDays']) await cfg.update(k, undefined, G);
+    }
+  });
+
+  await check('agentes: "pronto para revisar" quando o agente deixa commits e a worktree fica limpa', async () => {
+    const { execSync } = require('child_process');
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const watch = api.agentFlow.watch;
+    await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { branch: 'ai/login-oauth', prompt: 'tarefa de teste' });
+    await until(() => watch.isWatching(wt.path));
+    assert.strictEqual(await watch.checkNow(wt.path), false, 'sem commits novos ainda não está pronto');
+    execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "agente: feito"', { cwd: wt.path });
+    assert.strictEqual(await watch.checkNow(wt.path), true, 'commit novo + limpa = pronto');
+    await ctl.refresh();
+    const v = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.ok(v.review && v.review.commits === 1, JSON.stringify(v.review));
+    await vscode.commands.executeCommand('worktreeGraph.agents.dismissReady', { path: wt.path });
+    await ctl.refresh();
+    assert.ok(!ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').review);
+  });
+
+  await check('fila de tarefas: a próxima vai sozinha quando a atual fica pronta', async () => {
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const q = api.agentFlow.tasks;
+    await q.add(wt.path, wt.branch, 'tarefa 1: criar endpoint');
+    await until(() => fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8') === 'tarefa 1: criar endpoint');
+    await q.add(wt.path, wt.branch, 'tarefa 2: escrever testes');
+    assert.deepStrictEqual(q.queue(wt.path).tasks.map(t => t.status), ['running', 'waiting']);
+    execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "tarefa 1"', { cwd: wt.path });
+    await api.agentFlow.watch.checkNow(wt.path);
+    await until(() => fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8') === 'tarefa 2: escrever testes');
+    await until(() => q.queue(wt.path).tasks.map(t => t.status).join() === 'done,running');
+    await ctl.refresh();
+    assert.deepStrictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').tasks, { waiting: 0, running: 'tarefa 2: escrever testes' });
+    await api.agentFlow.watch.clearReady(wt.path);
+  });
+
+  await check('tentativas: cria worktrees try/* com agente em cada e abre o painel de comparação', async () => {
+    const g = await api.agentFlow.attempts.tryApproaches({ prompt: 'Implementar cache de preços', n: 2, quiet: true });
+    assert.deepStrictEqual(g.attempts.map(a => a.branch), ['try/implementar-cache-de-precos-a', 'try/implementar-cache-de-precos-b']);
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Tentativas: Implementar cache de preços');
+    await ctl.refresh();
+    assert.ok(ctl.state.worktrees.some(w => w.branch === 'try/implementar-cache-de-precos-b'));
+    assert.ok(vscode.window.terminals.some(t => t.name === 'Eco · try/implementar-cache-de-precos-a · tarefa'));
+    assert.strictEqual(api.agentFlow.attempts.groups()[0].attempts[1].variation.length > 0, true, 'B recebe uma variação');
+  });
+
+  await check('pull: fetch mostra ↓1 e o pull faz fast-forward', async () => {
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const root = ctl.repo.root;
+    const bare = path.join(root, '..', 'origin-push.git');
+    const clone = path.join(root, '..', 'clone-pull');
+    // outros testes podem ter feito commits em ai/login-oauth: o remoto parte do estado atual dela
+    execSync(`git push -q -f "${bare}" ai/login-oauth`, { cwd: root });
+    execSync('git fetch -q origin', { cwd: root });
+    execSync(`git clone -q "${bare}" "${clone}"`);
+    execSync('git checkout -q ai/login-oauth', { cwd: clone });
+    execSync('git -c user.name=o -c user.email=o@o commit -q --allow-empty -m "do remoto"', { cwd: clone });
+    execSync('git push -q origin ai/login-oauth', { cwd: clone });
+    await api.gitOps.fetchNow({ quiet: true });
+    let wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(wt.remote.behind, 1, 'um commit novo no remoto');
+    assert.strictEqual(await api.gitOps.pull('ai/login-oauth', { quiet: true }), true);
+    await ctl.refresh();
+    wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(wt.remote.behind, 0);
+    assert.strictEqual(execSync('git log -1 --format=%s', { cwd: wt.path, encoding: 'utf8' }).trim(), 'do remoto');
+  });
+
+  await check('stash: guarda numa worktree e move as alterações para outra', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const from = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const to = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    fs.writeFileSync(path.join(from.path, 'nota.txt'), 'rascunho\n');
+    const sha = await api.gitOps.stashCreate(from.path, 'nota de teste', { quiet: true });
+    assert.ok(sha, 'stash criado');
+    assert.ok(!fs.existsSync(path.join(from.path, 'nota.txt')), 'saiu da origem');
+    const list = await api.gitOps.stashes();
+    assert.strictEqual(list[0].branch, 'ai/precos-promo');
+    assert.strictEqual(await api.gitOps.stashApply(sha, to.path, true, { quiet: true }), true);
+    assert.ok(fs.existsSync(path.join(to.path, 'nota.txt')), 'chegou no destino');
+    assert.ok(!(await api.gitOps.stashes()).some(e => e.sha === sha), 'pop removeu o stash');
+    fs.unlinkSync(path.join(to.path, 'nota.txt'));
+    const root = await tree.getChildren();
+    assert.ok(root.some(n => n.kind === 'stashes'), 'grupo Stashes na árvore');
+  });
+
+  await check('reorganizar commits: fixup junta dois commits e "Desfazer" volta', async () => {
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const before = execSync('git rev-parse HEAD', { cwd: wt.path, encoding: 'utf8' }).trim();
+    const { commits } = await api.gitOps.commitsSinceBase(wt.path);
+    const plan = commits.map((c, i) => ({ sha: c.sha, subject: c.subject, action: i === commits.length - 1 ? 'fixup' : 'pick' }));
+    assert.strictEqual(await api.gitOps.reorganize(wt.path, plan), true);
+    const after = await api.gitOps.commitsSinceBase(wt.path);
+    assert.strictEqual(after.commits.length, commits.length - 1, 'um commit a menos');
+    assert.strictEqual(await api.gitOps.undoReorganize('ai/login-oauth'), true);
+    assert.strictEqual(execSync('git rev-parse HEAD', { cwd: wt.path, encoding: 'utf8' }).trim(), before);
+  });
+
+  await check('cherry-pick: commit de ai/precos-promo aplicado em ai/login-oauth', async () => {
+    const { execSync } = require('child_process');
+    const src = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const sha = execSync('git rev-parse HEAD', { cwd: src.path, encoding: 'utf8' }).trim();
+    assert.strictEqual(await api.gitOps.cherryPick(sha, 'ai/login-oauth', { confirm: false }), true);
+    const dst = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(execSync('git log -1 --format=%s', { cwd: dst.path, encoding: 'utf8' }).trim(), 'feat(precos): preços da promoção');
+  });
+
+  await check('comparar duas worktrees: arquivos diferentes, inclusive não commitados', async () => {
+    const files = await api.gitOps.compareFiles('ai/refatorar-api', 'ai/precos-promo');
+    const paths = files.map(f => f.path);
+    assert.ok(paths.includes('src/api.ts'), paths.join(','));
+    assert.ok(paths.includes('src/novo.ts'), 'não rastreado em ai/refatorar-api');
+    assert.strictEqual(files.find(f => f.path === 'src/novo.ts').status, 'D', 'só existe no lado A');
+  });
+
+  await check('remover mescladas: entram só as limpas com a branch inteira na base', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const root = ctl.repo.root;
+    const pronta = path.join(root, '..', 'limpeza-pronta');
+    const suja = path.join(root, '..', 'limpeza-suja');
+    execSync(`git worktree add -q -b limpeza/pronta "${pronta}" master`, { cwd: root });
+    execSync(`git worktree add -q -b limpeza/suja "${suja}" master`, { cwd: root });
+    fs.writeFileSync(path.join(suja, 'rascunho.txt'), 'x');
+    await ctl.refresh();
+    await until(() => ctl.state.pending === 0, 30000);
+    const { removable, dirty } = api.actions.mergedWorktrees(ctl);
+    const names = removable.map(w => w.branch);
+    assert.ok(names.includes('limpeza/pronta'), names.join(','));
+    assert.ok(!names.includes('limpeza/suja') && dirty.some(w => w.branch === 'limpeza/suja'), 'suja fica de fora');
+    assert.ok(!names.includes('ai/login-oauth'), 'branch com commits fora da base não entra');
+    assert.ok(!names.includes('master'), 'base nunca entra');
+    execSync(`git worktree remove --force "${pronta}"`, { cwd: root });
+    execSync(`git worktree remove --force "${suja}"`, { cwd: root });
   });
 
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
