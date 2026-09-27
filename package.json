@@ -798,6 +798,44 @@
         "title": "Remover worktrees já mescladas na base",
         "category": "Worktree Graph",
         "icon": "$(git-merge)"
+      },
+      {
+        "command": "worktreeGraph.templates.use",
+        "title": "✦ Usar modelo de tarefa…",
+        "category": "AgentYard",
+        "icon": "$(symbol-snippet)"
+      },
+      {
+        "command": "worktreeGraph.templates.new",
+        "title": "Novo modelo de tarefa…",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.templates.edit",
+        "title": "Editar modelo de tarefa…",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.env.configure",
+        "title": "Configurar ambiente desta worktree (.env, portas, dependências)",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.env.runDev",
+        "title": "Rodar dev nesta worktree",
+        "category": "AgentYard",
+        "icon": "$(play)"
+      },
+      {
+        "command": "worktreeGraph.env.openBrowser",
+        "title": "Abrir a porta desta worktree no navegador",
+        "category": "AgentYard",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "worktreeGraph.env.refreshSizes",
+        "title": "Recalcular espaço em disco das worktrees",
+        "category": "AgentYard"
       }
     ],
     "menus": {
@@ -1508,6 +1546,21 @@
           "command": "worktreeGraph.stashDrop",
           "when": "view == worktreeGraph.worktrees && viewItem == stash",
           "group": "9_danger"
+        },
+        {
+          "command": "worktreeGraph.templates.use",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@6"
+        },
+        {
+          "command": "worktreeGraph.env.configure",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@7"
+        },
+        {
+          "command": "worktreeGraph.env.runDev",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@8"
         }
       ],
       "commandPalette": [
@@ -1693,6 +1746,10 @@
           "command": "worktreeGraph.issues.createFromSelection",
           "when": "editorHasSelection",
           "group": "9_worktreeGraph"
+        },
+        {
+          "command": "worktreeGraph.templates.use",
+          "group": "9_worktreeGraph@1"
         }
       ]
     },
@@ -2187,6 +2244,91 @@
           "type": "string",
           "default": "Task",
           "description": "Tipo de issue criado por \"Nova issue…\" no Jira."
+        },
+        "worktreeGraph.taskTemplates": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Modelos de tarefa extras `{ name, description?, prompt }`. Placeholders: `${branch}`, `${base}`, `${file}`, `${selection}`, `${issue}`. Também valem arquivos `.agentyard/templates/*.md` no repositório.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "prompt"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "worktreeGraph.readySummary.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostrar o resumo (commits, arquivos, +/−) quando um agente fica pronto para revisar."
+        },
+        "worktreeGraph.readySummary.useAgent": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Também pedir ao agente um resumo (o que mudou, riscos, o que testar) em `.worktree-graph/summary.md`, fora do git."
+        },
+        "worktreeGraph.env.ports": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "Portas por worktree, ex.: `{ \"base\": 3000, \"step\": 10, \"vars\": [\"PORT\", \"VITE_PORT\", \"API_PORT\"] }`. Cada worktree ganha um bloco estável; a 1ª variável recebe a porta, as seguintes +1, +2…",
+          "properties": {
+            "base": {
+              "type": "number"
+            },
+            "step": {
+              "type": "number"
+            },
+            "vars": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "worktreeGraph.env.devCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Comando de desenvolvimento rodado por \"Rodar dev\" (ex.: npm run dev), com as variáveis de porta da worktree."
+        },
+        "worktreeGraph.setup.nodeModules": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "install",
+            "link"
+          ],
+          "default": "ask",
+          "enumDescriptions": [
+            "Perguntar ao criar a worktree.",
+            "Instalar as dependências num terminal.",
+            "Compartilhar o node_modules da principal (junction/symlink)."
+          ],
+          "description": "O que fazer com as dependências Node ao criar uma worktree (postCreateCommand, se definido, vence)."
+        },
+        "worktreeGraph.diskUsage.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Calcular em segundo plano o espaço em disco de cada worktree."
+        },
+        "worktreeGraph.diskUsage.secondsPerWorktree": {
+          "type": "number",
+          "default": 3,
+          "description": "Tempo máximo para contar o espaço de uma worktree (passando disso, o valor é um mínimo)."
         }
       }
     }
@@ -2196,7 +2338,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/env.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

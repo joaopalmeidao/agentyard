@@ -399,6 +399,18 @@
   // ---------- tabela compacta ----------
   let wtFilter = '';
   let onlyDirty = false;
+  let bySize = false;
+
+  function formatBytes(n) {
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (n >= 1024 && i < u.length - 1) (n /= 1024), i++;
+    return `${n >= 100 || i === 0 ? Math.round(n) : n.toFixed(1).replace('.', ',')} ${u[i]}`;
+  }
+
+  function sizeChip(sz) {
+    return chip(`💾 ${sz.complete ? '' : '≥'}${formatBytes(sz.bytes)}`, 'muted', sz.complete ? 'Espaço em disco (links como node_modules compartilhado não contam)' : 'Contagem interrompida pelo limite de tempo: valor mínimo');
+  }
   let rowLimit = 60;
 
   function tableSection() {
@@ -411,6 +423,7 @@
         ${mergedCount() ? `<button class="link" data-action="removeMerged" title="Worktrees limpas cuja branch já está inteira em ${esc(state.base)} (favoritas, com agente e protegidas ficam de fora)">remover mescladas (${mergedCount()})</button>` : ''}
         <button class="link" data-action="cleanupWorktrees" title="Remover várias de uma vez; já marca as mescladas e limpas">limpar em lote…</button>
         <button class="link ${onlyDirty ? 'on' : ''}" data-local="dirty" title="Mostrar só worktrees com alterações não commitadas">${onlyDirty ? '✓ ' : ''}com alterações (${state.worktrees.filter(w => w.changes > 0).length})</button>
+        <button class="link ${bySize ? 'on' : ''}" data-local="bysize" title="Ordenar pelo espaço em disco">${bySize ? '✓ ' : ''}por espaço</button>
         <input id="wtfilter" type="search" placeholder="Filtrar por branch, pasta ou commit" /></h2>
       <div class="table-wrap"><table class="wts"><tbody id="wt-rows">${tableRows()}</tbody></table></div>
     </section>`;
@@ -420,6 +433,7 @@
     const q = wtFilter.toLowerCase();
     const rest = state.worktrees.filter(w => !w.prunable && !featured(w));
     const match = rest.filter(w => (!q || `${w.name} ${w.path} ${w.subject}`.toLowerCase().includes(q)) && (!onlyDirty || w.changes > 0));
+    if (bySize) match.sort((a, b) => ((b.size && b.size.bytes) || 0) - ((a.size && a.size.bytes) || 0));
     const agent = state.agentNames && state.agentNames[0];
     const rows = match.slice(0, rowLimit).map(w => {
       const b = esc(w.branch || '');
@@ -436,7 +450,7 @@
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
-        <td class="c-chips">${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="c-chips">${w.size ? sizeChip(w.size) : ''}${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
@@ -477,6 +491,8 @@
         if (w.request) chips.push(requestChip(w.request));
         if (w.branch && pipelineFor(w.branch)) chips.push(pipelineChip(pipelineFor(w.branch)));
         if (w.claude) chips.push(claudeChip(w));
+        if (w.port) chips.push(`<span class="chip info link" data-action="env.openBrowser" data-path="${esc(w.path)}" data-branch="${b}" title="Porta desta worktree; clique para abrir http://localhost:${w.port}">🌐 :${w.port}</span>`);
+        if (w.size) chips.push(sizeChip(w.size));
 
         const agent = state.agentNames && state.agentNames[0];
         const act = [
@@ -656,6 +672,11 @@
       render();
       return;
     }
+    if (local && local.dataset.local === 'bysize') {
+      bySize = !bySize;
+      render();
+      return;
+    }
     if (local && local.dataset.local === 'dirty') {
       onlyDirty = !onlyDirty;
       render();
@@ -798,6 +819,9 @@
         for (const a of state.agentNames || []) items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
         if ((state.agentNames || []).length) items.push('<hr>');
         items.push(item('toggleFavorite', wt.favorite ? '★ Desfavoritar' : '☆ Favoritar', { path: wt.path }));
+        items.push(item('templates.use', '✦ Usar modelo de tarefa…', { path: wt.path, branch: b }, 'agent'));
+        items.push(item('env.configure', 'Configurar ambiente (.env, portas, dependências)', { path: wt.path, branch: b }));
+        if (wt.port) items.push(item('env.runDev', `Rodar dev (:${wt.port})`, { path: wt.path, branch: b }));
         items.push(item('openWorktree', 'Abrir worktree em nova janela', { path: wt.path }));
         items.push(item('openFile', 'Buscar arquivo nesta worktree…', { path: wt.path }));
         items.push(item('openTerminal', 'Abrir terminal', { path: wt.path }));

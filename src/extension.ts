@@ -10,6 +10,9 @@ import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
 import { registerGuards } from './guards';
 import { registerAgentFlow } from './agentFlow/register';
+import { ReadySummaryService } from './env/readySummary';
+import { registerEnv } from './env/register';
+import { registerTemplates } from './templates/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
@@ -351,6 +354,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
     issueOf: b => issues.linkOf(b),
   });
   const gitOps = registerGitOps(ctx, ctl, guard);
+  const env = registerEnv(ctx, ctl, guard);
+  actions.worktreeCreatedHooks.push((dir, branch, quiet) => env.afterCreate(dir, branch, quiet));
+  const templates = registerTemplates(ctx, ctl, guard, b => issues.linkOf(b)?.key);
+  const readySummary = new ReadySummaryService(ctl, agentFlow);
+  ctx.subscriptions.push(readySummary);
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -363,7 +371,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, env, templates, readySummary };
 }
 
 export function deactivate() {}

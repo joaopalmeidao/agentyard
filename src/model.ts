@@ -56,6 +56,10 @@ export interface WorktreeView extends Worktree {
   review?: { at: number; commits: number };
   /** Fila de tarefas do agente nesta worktree. */
   tasks?: { waiting: number; running?: string };
+  /** Espaço em disco (src/env): calculado em segundo plano, sem seguir links. */
+  size?: { bytes: number; complete: boolean };
+  /** Porta base desta worktree (worktreeGraph.env.ports). */
+  port?: number;
   /** PR/MR aberto desta branch. */
   request?: ChangeRequest;
 }
