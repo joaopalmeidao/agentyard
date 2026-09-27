@@ -256,6 +256,48 @@ exports.run = async () => {
     await ctl.refresh();
   });
 
+  await check('atividade: painel abre e soma commits e tokens por branch; custo por tarefa com preço', async () => {
+    await until(() => api.claude.loaded, 20000);
+    await vscode.commands.executeCommand('worktreeGraph.activity');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Atividade');
+    const week = await api.activity.compute('week');
+    const row = week.report.rows.find(r => r.branch === 'ai/login-oauth');
+    assert.ok(row, 'linha da worktree com sessão sintética');
+    assert.strictEqual(row.tokens, 3500);
+    assert.ok(week.report.totals.commits >= 3, 'commits da demo nos últimos 7 dias');
+    const cost = week.costs.find(c => c.branch === 'ai/login-oauth');
+    assert.strictEqual(cost.tokens, 3500);
+    assert.strictEqual(cost.usd, undefined, 'sem preço, sem custo');
+
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    await cfg.update('claude.pricePerMTokInput', 3, vscode.ConfigurationTarget.Global);
+    await cfg.update('claude.pricePerMTokOutput', 15, vscode.ConfigurationTarget.Global);
+    await ctl.refresh();
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(wt.claude.usd.toFixed(4), ((1500 * 3 + 2000 * 15) / 1e6).toFixed(4), 'chip do card com custo estimado');
+    await cfg.update('claude.pricePerMTokInput', undefined, vscode.ConfigurationTarget.Global);
+    await cfg.update('claude.pricePerMTokOutput', undefined, vscode.ConfigurationTarget.Global);
+  });
+
+  await check('revisão: agente recebe a tarefa; review.json vira painel com os comentários; pasta fora do git', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    await api.review.start('ai/login-oauth');
+    const prompt = fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8');
+    assert.ok(prompt.includes('.worktree-graph/review.json') && prompt.includes('src/oauth.ts'), prompt);
+    fs.writeFileSync(
+      path.join(wt.path, '.worktree-graph', 'review.json'),
+      JSON.stringify({ summary: 'Revisão sintética', comments: [{ path: 'src/auth.ts', line: 2, severity: 'bug', body: 'verify sem tratar erro' }, { path: 'src/oauth.ts', body: 'nit', severity: 'nit' }] }),
+    );
+    await until(() => api.review.panel?.current?.review.comments.length === 2, 15000);
+    assert.strictEqual(api.review.panel.current.review.summary, 'Revisão sintética');
+    assert.ok(!execSync('git status --porcelain', { cwd: wt.path }).toString().includes('.worktree-graph'), 'fora do git');
+    const exclude = fs.readFileSync(path.join(ctl.repo.commonDir, 'info', 'exclude'), 'utf8');
+    assert.ok(exclude.includes('.worktree-graph/'));
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);

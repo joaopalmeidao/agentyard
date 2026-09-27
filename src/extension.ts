@@ -11,6 +11,8 @@ import { GraphPanel } from './graphPanel';
 import { registerGuards } from './guards';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
+import { registerActivity } from './activityPanel';
+import { registerReview } from './review';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
@@ -209,6 +211,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
         if (s) claude.resume(s);
         return;
       }
+      case 'reviewWithAgent':
+        await vscode.commands.executeCommand('worktreeGraph.reviewWithAgent', a.branch);
+        return;
+      case 'activity':
+        await vscode.commands.executeCommand('worktreeGraph.activity');
+        return;
       case 'claudeCommands': {
         const t = await claudeTarget({ path: a.path });
         if (t) await claude.commands(t.cwd, t.label);
@@ -327,6 +335,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const issues = registerIssues(ctx, ctl, guard);
   const pipelines = registerPipelines(ctx, ctl, guard);
+  const review = registerReview(ctx, ctl, guard);
+  const activity = registerActivity(ctx, ctl, guard, {
+    claude,
+    pipelines: () => pipelines.pipelines,
+    issueOf: b => issues.linkOf(b),
+  });
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -339,7 +353,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity };
 }
 
 export function deactivate() {}

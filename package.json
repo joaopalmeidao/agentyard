@@ -602,6 +602,23 @@
         "command": "worktreeGraph.showChecksOutput",
         "title": "Mostrar saída das checagens",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.reviewWithAgent",
+        "title": "✦ Revisar PR/MR com o agente",
+        "category": "Worktree Graph",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "worktreeGraph.openReview",
+        "title": "Abrir a última revisão do agente",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.activity",
+        "title": "Atividade (commits, sessões, tokens e custo por tarefa)",
+        "category": "Worktree Graph",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -775,6 +792,11 @@
           "command": "worktreeGraph.connectGitLab",
           "when": "view == worktreeGraph.worktrees",
           "group": "4_hosting"
+        },
+        {
+          "command": "worktreeGraph.activity",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "5_claude"
         }
       ],
       "view/item/context": [
@@ -1132,6 +1154,16 @@
           "command": "worktreeGraph.pipelines.fix",
           "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
           "group": "3_fix@1"
+        },
+        {
+          "command": "worktreeGraph.reviewWithAgent",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@7"
+        },
+        {
+          "command": "worktreeGraph.openReview",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@8"
         }
       ],
       "commandPalette": [
@@ -1685,6 +1717,30 @@
           "type": "number",
           "default": 7,
           "description": "Dias sem commit para uma worktree mesclada contar como parada."
+        },
+        "worktreeGraph.prompts.review": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "",
+          "markdownDescription": "Tarefa enviada ao agente em *Revisar PR/MR com o agente*. Vazio = texto padrão. Placeholders: `${kind}`, `${title}`, `${url}`, `${branch}`, `${base}`, `${diffStat}`. O agente precisa gravar `.worktree-graph/review.json` no formato `{ summary, comments: [{ path, line, severity, body }] }`."
+        },
+        "worktreeGraph.claude.pricePerMTokInput": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "US$ por milhão de tokens de entrada (e criação de cache), para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
+        },
+        "worktreeGraph.claude.pricePerMTokOutput": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "US$ por milhão de tokens de saída, para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
+        },
+        "worktreeGraph.claude.pricePerMTokCacheRead": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "US$ por milhão de tokens de leitura de cache, para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
         }
       }
     }
@@ -1694,7 +1750,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
