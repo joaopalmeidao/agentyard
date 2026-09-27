@@ -11,6 +11,7 @@ import { GraphPanel } from './graphPanel';
 import { registerGuards } from './guards';
 import { registerAgentFlow } from './agentFlow/register';
 import { registerSchedule } from './schedule/register';
+import { registerCoord } from './coord/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
@@ -35,6 +36,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(agentTerms);
   const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
   const schedules = registerSchedule(ctx, ctl, agentTerms, agentFlow.tasks);
+  const coord = registerCoord(ctx, ctl, agentTerms, agentFlow);
+  ctl.taskBlocked = p => coord.isBlocked(p);
 
   /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
   const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
@@ -378,7 +381,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord };
 }
 
 export function deactivate() {}

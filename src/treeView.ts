@@ -45,6 +45,8 @@ export class WorktreeItem extends vscode.TreeItem {
     if (wt.agents.length) parts.push(`✦ ${wt.agents.join(', ')}`);
     if (wt.review) parts.push('✓ revisar');
     if (wt.tasks) parts.push(`☰${wt.tasks.waiting + (wt.tasks.running ? 1 : 0)}`);
+    if (wt.overlap) parts.push(`⚠ sobrepõe ${wt.overlap.with.length}`);
+    if (wt.budget) parts.push(wt.budget.level === 'over' ? '$ estourado' : `$ ${wt.budget.pct}%`);
     if (wt.request) parts.push(`${wt.request.ref}${wt.request.state === 'draft' ? ' rascunho' : ''}`);
     if (wt.branch && pipelineOf?.(wt.branch)) {
       const p = pipelineOf(wt.branch)!;

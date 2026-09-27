@@ -683,6 +683,61 @@ exports.run = async () => {
     execSync(`git worktree remove --force "${suja}"`, { cwd: root });
   });
 
+  await check('coordenação: sobreposição, fila de merge numa base descartável e tarefa em lote', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const root = ctl.repo.root;
+    const git = (c, cwd = root) => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd, encoding: 'utf8' }).trim();
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    const coord = api.coord;
+
+    // sobreposição: coord/x commita em src/api.ts, que ai/refatorar-api tem alterado sem commit
+    const x = path.join(root, '..', 'coord-x');
+    git(`worktree add -q -b coord/x "${x}" master`);
+    fs.writeFileSync(path.join(x, 'src', 'api.ts'), 'export function api() { return "v3"; }\n');
+    git('commit -qam "coord: api v3"', x);
+    await ctl.refresh();
+    await until(() => ctl.state.pending === 0, 30000);
+    await coord.recompute();
+    const o = coord.overlaps.find(v => [v.a, v.b].some(p => p.toLowerCase() === x.toLowerCase()));
+    assert.ok(o, 'sobreposição encontrada');
+    assert.ok(o.files.includes('src/api.ts'), o.files.join(','));
+    await ctl.refresh();
+    assert.ok(ctl.state.worktrees.find(w => w.branch === 'coord/x').overlap, 'chip no estado');
+
+    // fila de merge: duas branches limpas entram em fila/base, uma por vez
+    git('branch fila/base master');
+    for (const n of ['a', 'b']) {
+      const d = path.join(root, '..', `fila-${n}`);
+      git(`worktree add -q -b fila/${n} "${d}" master`);
+      fs.writeFileSync(path.join(d, `fila-${n}.txt`), n);
+      git('add -A', d);
+      git(`commit -qm "fila ${n}"`, d);
+    }
+    await coord.enqueue('fila/a', 'fila/base');
+    await coord.enqueue('fila/b', 'fila/base');
+    await coord.runQueue();
+    await until(() => coord.queue().filter(i => i.target === 'fila/base').every(i => i.status === 'done'), 60000);
+    assert.strictEqual(git('merge-base --is-ancestor fila/a fila/base && echo sim'), 'sim');
+    assert.strictEqual(git('merge-base --is-ancestor fila/b fila/base && echo sim'), 'sim');
+    assert.notStrictEqual(git('rev-parse master'), git('rev-parse fila/base'), 'master intacta');
+    await coord.clearFinished();
+
+    // tarefa em lote: 3 worktrees, 2 vagas → 2 terminais agora e 1 esperando
+    await cfg.update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], G);
+    const running = [...api.agentTerms.running().values()].reduce((n, l) => n + l.length, 0);
+    await cfg.update('batch.maxParallel', running + 2, G);
+    const targets = ['coord/x', 'fila/a', 'fila/b'].map(b => ctl.state.worktrees.find(w => w.branch === b).path);
+    const before = vscode.window.terminals.length;
+    await coord.batch({ paths: targets, prompt: 'rode os testes em ${branch}', mode: 'now' });
+    await until(() => vscode.window.terminals.length === before + 2);
+    assert.strictEqual(coord.batchPending, 1, 'um esperando vaga');
+    assert.ok(require('fs').readFileSync(api.agentTerms.lastPromptFile, 'utf8').startsWith('rode os testes em '));
+    await cfg.update('batch.maxParallel', undefined, G);
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));

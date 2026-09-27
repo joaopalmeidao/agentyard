@@ -78,6 +78,10 @@
         {
           "id": "worktreeGraph.schedules",
           "name": "Agendamentos"
+        },
+        {
+          "id": "worktreeGraph.mergeQueue",
+          "name": "Fila de merge"
         }
       ]
     },
@@ -115,6 +119,10 @@
       {
         "view": "worktreeGraph.schedules",
         "contents": "Nenhum agendamento. Mande tarefas para os agentes em horários fixos (todo dia, dias úteis, a cada N horas ou cron).\n[Novo agendamento](command:worktreeGraph.schedules.new)"
+      },
+      {
+        "view": "worktreeGraph.mergeQueue",
+        "contents": "Branches entram na base uma por vez: a base é trazida, os testes rodam e só então o merge acontece.\n[Pôr uma branch na fila](command:worktreeGraph.mergeQueue.add)"
       }
     ],
     "commands": [
@@ -856,6 +864,76 @@
         "title": "Atualizar agendamentos",
         "category": "AgentYard",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.coord.showOverlaps",
+        "title": "Ver sobreposição de arquivos entre worktrees",
+        "category": "AgentYard",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.add",
+        "title": "Pôr na fila de merge",
+        "category": "AgentYard",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.remove",
+        "title": "Tirar da fila de merge",
+        "category": "AgentYard",
+        "icon": "$(close)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.moveUp",
+        "title": "Subir na fila de merge",
+        "category": "AgentYard",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.moveDown",
+        "title": "Descer na fila de merge",
+        "category": "AgentYard",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.pause",
+        "title": "Pausar a fila de merge",
+        "category": "AgentYard",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.resume",
+        "title": "Retomar a fila de merge",
+        "category": "AgentYard",
+        "icon": "$(play)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.run",
+        "title": "Processar a fila de merge agora",
+        "category": "AgentYard",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.clearFinished",
+        "title": "Limpar mescladas e falhas da fila",
+        "category": "AgentYard",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "worktreeGraph.batchTask",
+        "title": "Enviar tarefa para várias worktrees…",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.showOverlaps",
+        "title": "Ver sobreposição (painel)",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.mergeQueueAdd",
+        "title": "Pôr na fila de merge (painel)",
+        "category": "AgentYard"
       }
     ],
     "menus": {
@@ -1089,6 +1167,41 @@
           "command": "worktreeGraph.schedules.refresh",
           "when": "view == worktreeGraph.schedules",
           "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.add",
+          "when": "view == worktreeGraph.mergeQueue",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.run",
+          "when": "view == worktreeGraph.mergeQueue",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.pause",
+          "when": "view == worktreeGraph.mergeQueue",
+          "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.resume",
+          "when": "view == worktreeGraph.mergeQueue",
+          "group": "navigation@4"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.clearFinished",
+          "when": "view == worktreeGraph.mergeQueue",
+          "group": "1_q"
+        },
+        {
+          "command": "worktreeGraph.batchTask",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "5_coord"
+        },
+        {
+          "command": "worktreeGraph.coord.showOverlaps",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "5_coord"
         }
       ],
       "view/item/context": [
@@ -1621,6 +1734,31 @@
           "command": "worktreeGraph.schedules.delete",
           "when": "view == worktreeGraph.schedules && viewItem =~ /^schedule-/",
           "group": "9_danger"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.moveUp",
+          "when": "view == worktreeGraph.mergeQueue && viewItem == mergeQueue-waiting",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.moveDown",
+          "when": "view == worktreeGraph.mergeQueue && viewItem == mergeQueue-waiting",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.remove",
+          "when": "view == worktreeGraph.mergeQueue",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.add",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@7"
+        },
+        {
+          "command": "worktreeGraph.coord.showOverlaps",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_merge@8"
         }
       ],
       "commandPalette": [
@@ -1798,6 +1936,26 @@
         },
         {
           "command": "worktreeGraph.stashDrop",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.showOverlaps",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.mergeQueueAdd",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.remove",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.moveUp",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.moveDown",
           "when": "false"
         }
       ],
@@ -2308,6 +2466,39 @@
           },
           "default": [],
           "markdownDescription": "Branches extras para o filtro **CI** do histórico (além das achadas no fluxo de ambientes, na base e nos arquivos de CI: `.github/workflows`, `.gitlab-ci.yml`, `bitbucket-pipelines.yml`, `azure-pipelines.yml`). Aceita padrões com `*`."
+        },
+        "worktreeGraph.mergeQueue.pushBase": {
+          "type": "boolean",
+          "default": false,
+          "description": "Fila de merge: fazer push da base depois de cada merge."
+        },
+        "worktreeGraph.batch.maxParallel": {
+          "type": "number",
+          "default": 3,
+          "description": "Tarefa em lote: quantos agentes abertos ao mesmo tempo; os demais esperam vaga."
+        },
+        "worktreeGraph.budget.perWorktreeTokens": {
+          "type": "number",
+          "default": 0,
+          "description": "Orçamento de tokens por worktree (0 = sem limite). Aviso aos 80% e aos 100%."
+        },
+        "worktreeGraph.budget.perWorktreeUsd": {
+          "type": "number",
+          "default": 0,
+          "description": "Orçamento em US$ por worktree (0 = sem limite; usa os preços de worktreeGraph.claude.pricePerMTok*)."
+        },
+        "worktreeGraph.budget.action": {
+          "type": "string",
+          "enum": [
+            "warn",
+            "pause-queue"
+          ],
+          "enumDescriptions": [
+            "Só avisa.",
+            "Avisa e não envia mais tarefas da fila/agendamento para a worktree que estourou."
+          ],
+          "default": "warn",
+          "description": "O que fazer quando uma worktree estoura o orçamento."
         }
       }
     }
@@ -2317,7 +2508,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

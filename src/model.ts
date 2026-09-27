@@ -57,6 +57,10 @@ export interface WorktreeView extends Worktree {
   review?: { at: number; commits: number };
   /** Fila de tarefas do agente nesta worktree. */
   tasks?: { waiting: number; running?: string };
+  /** Arquivos em comum com outras worktrees ativas (src/coord). */
+  overlap?: { with: string[]; files: number };
+  /** Orçamento de tokens/US$ perto do fim ou estourado (src/coord). */
+  budget?: { level: 'warn' | 'over'; pct: number; by?: 'tokens' | 'usd' };
   /** PR/MR aberto desta branch. */
   request?: ChangeRequest;
 }
