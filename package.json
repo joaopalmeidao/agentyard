@@ -262,8 +262,8 @@
         "command": "worktreeGraph.launchAgentWithPrompt",
         "title": "Abrir agente com uma tarefa",
         "category": "Worktree Graph"
-},
-{
+      },
+      {
         "command": "worktreeGraph.addProject",
         "title": "Adicionar projeto…",
         "category": "Worktree Graph",
@@ -492,8 +492,8 @@
           "command": "worktreeGraph.resolveConflict",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
           "group": "2_merge@5"
-},
-{
+        },
+        {
           "command": "worktreeGraph.openProjectGraph",
           "when": "view == worktreeGraph.projects && viewItem =~ /^project/",
           "group": "inline@1"
@@ -551,8 +551,9 @@
         },
         {
           "command": "worktreeGraph.launchAgentWithPrompt",
-},
-{
+          "when": "false"
+        },
+        {
           "command": "worktreeGraph.openProjectWindow",
           "when": "false"
         },
