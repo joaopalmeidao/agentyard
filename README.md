@@ -10,6 +10,8 @@ Extensão do VS Code para quem desenvolve com vários agentes de IA em paralelo,
 
 Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
 
+**Manual completo:** [docs/MANUAL.md](docs/MANUAL.md)
+
 ![VS Code com o AgentYard](docs/prints/00-vscode.png)
 
 ## O que tem

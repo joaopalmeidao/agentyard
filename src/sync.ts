@@ -6,6 +6,8 @@ import { mergeBranches, openWorktree } from './actions';
 import { resolveButton, runResolve } from './conflicts';
 import { Controller } from './controller';
 import { branchMatches, Repo, Worktree } from './git';
+import { describePlan, needsAttention, needsRechain } from './migrations/core';
+import { applyRechain, checkMigrations } from './migrations/register';
 import { SyncKind, SyncWhere } from './model';
 
 const LOCK_FILE = 'worktree-graph-sync.lock';
@@ -176,6 +178,18 @@ export class AutoSync implements vscode.Disposable {
     }
 
     const pre = (await repo.revParse('HEAD', wt.path))!;
+    // Migrations novas dos dois lados não conflitam no git, mas quebram a cadeia: reencadeia antes
+    // (depois de `pre`, para o rollback dos testes desfazer as duas coisas).
+    const mig = await checkMigrations(repo, branch, baseRef).catch(() => undefined);
+    if (mig && needsAttention(mig.plan)) {
+      const auto = c.get<boolean>('migrations.rechainOnSync', true) && needsRechain(mig.plan);
+      if (!auto || !(await applyRechain(this.ctl, mig, { commit: true, quiet: true }))) {
+        this.set(branch, 'conflict', `Migrations colidem com ${baseRef}: ${describePlan(mig.plan).join(' ')}`);
+        this.notifyOnce(`${branch}@${baseSha}@migrations`, `${branch}: as migrations colidem com as de ${baseRef}.`, branch, true);
+        return;
+      }
+      this.ctl.log(`[${branch}] migrations reencadeadas após ${baseRef}.`);
+    }
     const msg = `Merge ${baseRef} into ${branch} (worktree-graph auto-sync)`;
     const r = await repo.run(['merge', '--no-edit', '-m', msg, baseRef], wt.path, 300_000);
     if (r.code !== 0) {

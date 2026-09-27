@@ -16,6 +16,7 @@ import { registerSchedule } from './schedule/register';
 import { registerCoord } from './coord/register';
 import { ReadySummaryService } from './env/readySummary';
 import { registerEnv } from './env/register';
+import { registerMigrations } from './migrations/register';
 import { registerTemplates } from './templates/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
@@ -445,6 +446,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const claudeConfig = registerClaudeConfig(ctx, ctl);
 
   const guards = registerGuards(ctx, ctl);
+  registerMigrations(ctx, ctl);
 
   return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion };
 }
