@@ -220,3 +220,6 @@ button.agent.mini { font-size: 11px; padding: 0 6px; margin-left: 2px; }
 /* seletor de projeto na barra */
 button.repo { background: transparent; border: 0; padding: 0 2px; font-size: 15px; font-weight: 600; color: var(--fg); }
 button.repo:hover:not(:disabled) { background: var(--btn-bg); }
+
+/* PR/MR ao lado da etiqueta no histórico */
+.row .desc .chip { font-size: 10.5px; padding: 0 6px; line-height: 15px; flex-shrink: 0; }

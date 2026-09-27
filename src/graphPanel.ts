@@ -37,7 +37,12 @@ export class GraphPanel implements vscode.Disposable {
       }),
       panel.onDidChangeViewState(e => e.webviewPanel.visible && ctl.scheduleRefresh(50)),
       panel.webview.onDidReceiveMessage(async msg => {
+        if (msg.type === 'saveUi') {
+          await ctl.ctx.globalState.update('panelUi', msg.ui);
+          return;
+        }
         if (msg.type === 'ready') {
+          panel.webview.postMessage({ type: 'ui', ui: ctl.ctx.globalState.get('panelUi') ?? null });
           this.post();
           ctl.scheduleRefresh(50);
           return;

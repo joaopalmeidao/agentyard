@@ -1,7 +1,7 @@
 // Testes de src/hosting/core.ts contra um servidor HTTP falso. Uso: node test/hosting.test.js
 const assert = require('assert');
 const http = require('http');
-const { parseRemote, GitHubClient, GitLabClient, suggestTitle } = require('../out/hosting/core');
+const { parseRemote, GitHubClient, GitLabClient, suggestTitle, githubReviewDecision } = require('../out/hosting/core');
 
 let failures = 0;
 const check = async (name, fn) => {
@@ -31,6 +31,26 @@ const check = async (name, fn) => {
     assert.strictEqual(parseRemote('https://bitbucket.org/a/b.git'), undefined);
   });
 
+  await check('parseRemote: GitLab em subcaminho (https://empresa.com/gitlab) e ssh com URL configurada', () => {
+    const a = parseRemote('https://empresa.com/gitlab/time/api.git', ['https://empresa.com/gitlab']);
+    assert.deepStrictEqual(a, { kind: 'gitlab', host: 'empresa.com', webBase: 'https://empresa.com/gitlab', projectPath: 'time/api' });
+    const b = parseRemote('git@empresa.com:time/api.git', ['https://empresa.com/gitlab']);
+    assert.deepStrictEqual(b, { kind: 'gitlab', host: 'empresa.com', webBase: 'https://empresa.com/gitlab', projectPath: 'time/api' });
+  });
+
+  await check('revisão do GitHub: última de cada pessoa, mudanças pedidas pesam mais', () => {
+    const r = (u, st) => ({ user: { login: u }, state: st });
+    assert.strictEqual(githubReviewDecision([]).state, 'pending');
+    assert.deepStrictEqual(githubReviewDecision([r('ana', 'APPROVED'), r('bia', 'APPROVED')]), { state: 'approved', approvals: 2, by: ['ana', 'bia'] });
+    assert.strictEqual(githubReviewDecision([r('ana', 'APPROVED'), r('bia', 'CHANGES_REQUESTED')]).state, 'changes');
+    // bia pediu mudanças e depois aprovou: vale a última
+    assert.strictEqual(githubReviewDecision([r('bia', 'CHANGES_REQUESTED'), r('bia', 'APPROVED')]).state, 'approved');
+    // comentário depois da aprovação não desfaz a aprovação
+    assert.strictEqual(githubReviewDecision([r('ana', 'APPROVED'), r('ana', 'COMMENTED')]).state, 'approved');
+    assert.strictEqual(githubReviewDecision([r('ana', 'COMMENTED')]).state, 'commented');
+    assert.strictEqual(githubReviewDecision([r('ana', 'CHANGES_REQUESTED'), r('ana', 'DISMISSED')]).state, 'pending');
+  });
+
   await check('suggestTitle', () => {
     assert.strictEqual(suggestTitle('ai/refatorar-login', ['a', 'b']), 'Refatorar login');
     assert.strictEqual(suggestTitle('x', ['feat: único commit']), 'feat: único commit');
@@ -48,6 +68,9 @@ const check = async (name, fn) => {
         res.end(JSON.stringify(obj));
       };
       const u = req.url;
+      if (u === '/gl/projects/time%2Fbackend%2Fapi/merge_requests/5/approvals') return send(200, { approvals_left: 1, approved_by: [{ user: { username: 'rui' } }] });
+      if (u === '/gl/projects/time%2Fbackend%2Fapi/merge_requests/8/approvals') return send(200, { approvals_left: 0, approved_by: [{ user: { username: 'rui' } }] });
+      if (u === '/gh/repos/dono/repo/pulls/3/reviews?per_page=100') return send(200, [{ user: { login: 'ana' }, state: 'APPROVED' }]);
       if (u.startsWith('/gh/repos/dono/repo/pulls') && req.method === 'GET' && u.includes('head=')) return send(200, [{ number: 7, html_url: 'https://github.com/dono/repo/pull/7', title: 'X', state: 'closed', merged_at: '2026-01-01', draft: false, head: { ref: 'ai/x' }, base: { ref: 'main' } }]);
       if (u.startsWith('/gh/repos/dono/repo/pulls') && req.method === 'GET') return send(200, [
         { number: 3, html_url: 'h3', title: 'A', state: 'open', draft: true, head: { ref: 'ai/a', repo: { full_name: 'dono/repo' } }, base: { ref: 'main' } },
@@ -101,6 +124,12 @@ const check = async (name, fn) => {
     await assert.rejects(bad.create({ source: 'a', target: 'b', title: 't', body: '', draft: false }), /401/);
   });
   await check('GitLab: whoami', async () => assert.strictEqual(await gl.whoami(), 'joao'));
+
+  await check('revisão: GitHub pelas reviews; GitLab pelas aprovações (faltando uma, e completo)', async () => {
+    assert.deepStrictEqual(await gh.reviewStatus({ id: 3 }), { state: 'approved', approvals: 1, by: ['ana'] });
+    assert.deepStrictEqual(await gl.reviewStatus({ id: 5 }), { state: 'pending', approvals: 1, approvalsLeft: 1, by: ['rui'] });
+    assert.strictEqual((await gl.reviewStatus({ id: 8 })).state, 'approved');
+  });
 
   server.close();
   if (failures) process.exit(1);

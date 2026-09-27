@@ -87,7 +87,7 @@
       },
       {
         "view": "worktreeGraph.issues",
-        "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
+        "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao GitLab (URL)](command:worktreeGraph.connectGitLab)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
       }
     ],
     "commands": [
@@ -582,6 +582,12 @@
         "title": "Iniciar job manual",
         "category": "Worktree Graph",
         "icon": "$(debug-start)"
+      },
+      {
+        "command": "worktreeGraph.connectGitLab",
+        "title": "Conectar ao GitLab (URL e token)…",
+        "category": "Worktree Graph",
+        "icon": "$(plug)"
       }
     ],
     "menus": {
@@ -750,6 +756,11 @@
           "command": "worktreeGraph.pipelines.scopeWorktrees",
           "when": "view == worktreeGraph.pipelines && worktreeGraph.pipelinesScope == all",
           "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.connectGitLab",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "4_hosting"
         }
       ],
       "view/item/context": [
@@ -1479,7 +1490,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Hosts de GitLab self-hosted cujo endereço não contém \"gitlab\", ex.: `git.empresa.com` ou `https://git.empresa.com:8443` (use a forma com esquema/porta quando o remoto for ssh e a web estiver em outra porta)."
+          "markdownDescription": "Endereços de GitLab self-hosted, ex.: `https://gitlab.empresa.com`, `https://git.empresa.com:8443` ou `https://empresa.com/gitlab` (instalação em subcaminho). O comando *Conectar ao GitLab (URL e token)* preenche isto. Hosts com \"gitlab\" no nome são reconhecidos sozinhos."
         },
         "worktreeGraph.gitlab.apiUrl": {
           "type": "string",
