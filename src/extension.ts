@@ -6,6 +6,7 @@ import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
 import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
+import { registerIssues } from './issues/register';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
@@ -94,7 +95,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
       case 'switchProject':
         return projects.switch(a.path);
       case 'createWorktree':
-        return actions.createWorktree(ctl, { startPoint: a.startPoint, existing: a.existing });
+        await actions.createWorktree(ctl, { startPoint: a.startPoint, existing: a.existing });
+        return;
       case 'openWorktree':
         return actions.openWorktree(ctl, a.path ? { path: a.path } : a.branch);
       case 'launchAgent':
@@ -247,11 +249,16 @@ export async function activate(ctx: vscode.ExtensionContext) {
     vscode.workspace.updateWorkspaceFolders(n, 0, { uri: vscode.Uri.file(p), name: `wt: ${item.branch ?? require('path').basename(p)}` });
   });
 
+  const issues = registerIssues(ctx, ctl, guard);
+
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
-  const ready = ctl.init().then(() => projects.scanWorkspace());
+  const ready = ctl.init().then(() => {
+    projects.scanWorkspace();
+    issues.refresh(true);
+  });
 
   // Usado pelos testes de integração (test/).
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues };
 }
 
 export function deactivate() {}

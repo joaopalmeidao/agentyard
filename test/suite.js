@@ -171,6 +171,28 @@ exports.run = async () => {
     assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'linha 1\nlinha 2');
   });
 
+  await check('issues: a view abre sem rede nem credenciais', async () => {
+    await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph');
+    await vscode.commands.executeCommand('worktreeGraph.issues.focus');
+    await api.issues.refresh(true);
+    assert.deepStrictEqual(api.issues.groups, [], 'demo sem remoto e sem Redmine: nenhum grupo');
+  });
+
+  await check('issues: começar cria a worktree da issue e entrega o prompt', async () => {
+    const issue = { provider: 'github', id: 99, key: '#99', title: 'Teste de issue', body: 'corpo da issue', url: 'https://example.com/99', labels: [], updated: 0 };
+    await api.issues.start(issue, true);
+    await ctl.refresh();
+    const wt = ctl.state.worktrees.find(w => w.branch === 'issue/99-teste-de-issue');
+    assert.ok(wt, 'worktree criada');
+    // com launchAgentWithPrompt disponível, o prompt vai para o agente (arquivo da tarefa)
+    await until(() => api.agentTerms.lastPromptFile && require('fs').readFileSync(api.agentTerms.lastPromptFile, 'utf8').includes('Trabalhe na issue #99: Teste de issue'));
+    assert.deepStrictEqual(api.issues.trailers('issue/99-teste-de-issue'), ['Closes #99']);
+    // de novo: reaproveita a worktree, não cria outra
+    await api.issues.start(issue, false);
+    await ctl.refresh();
+    assert.strictEqual(ctl.state.worktrees.filter(w => w.branch === 'issue/99-teste-de-issue').length, 1);
+  });
+
   await check('painel do grafo abre', async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
