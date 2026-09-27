@@ -205,7 +205,7 @@ export class RequestService {
   }
 
   private signature() {
-    return `${this.connected}|${this.error ?? ''}|${this.remote?.host ?? ''}|${[...this.byBranch.values()].map(p => `${p.ref}${p.state}`).join(',')}`;
+    return `${this.connected}|${this.error ?? ''}|${this.remote?.host ?? ''}|${[...this.byBranch.values()].map(p => `${p.ref}${p.state}${p.review?.state ?? ''}${p.review?.approvals ?? ''}`).join(',')}`;
   }
 
   /** Busca os PRs/MRs abertos (no máximo a cada 2 min, salvo force). Não pergunta nada ao usuário. */
@@ -220,6 +220,19 @@ export class RequestService {
         const client = await this.client(false);
         if (!client) return;
         const list = await client.listOpen();
+        // revisão só dos abertos (rascunhos não pedem revisão), 4 de cada vez
+        const open = list.filter(p => p.state === 'open');
+        for (let i = 0; i < open.length; i += 4) {
+          await Promise.all(
+            open.slice(i, i + 4).map(async p => {
+              try {
+                p.review = await client.reviewStatus(p);
+              } catch {
+                // sem permissão para ver revisões: fica sem a informação
+              }
+            }),
+          );
+        }
         this.byBranch.clear();
         for (const p of list) this.byBranch.set(p.source, p);
         this.error = undefined;

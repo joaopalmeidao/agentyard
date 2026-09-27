@@ -133,7 +133,7 @@
       state.unmerged,
       state.commits.map(c => c.sha + c.refs.map(r => r.name + (r.current ? '*' : '')).join(',')),
       state.worktrees.filter(w => w.changes && w.head).map(w => w.head + ':' + w.changes),
-      [...shown].map(n => n + ':' + aheadOf(n)),
+      [...shown].map(n => n + ':' + aheadOf(n) + ':' + (requestOf(n) ? requestOf(n).ref + requestOf(n).state + (requestOf(n).review ? requestOf(n).review.state + requestOf(n).review.approvals : '') : '')),
     ]);
   }
 
@@ -303,9 +303,33 @@
     return main + fix;
   }
 
+  /** Revisão do PR/MR: aprovado, mudanças pedidas, comentado, aguardando, conversas abertas. */
+  function reviewInfo(r) {
+    if (r.state === 'draft') return ['rascunho', 'muted', 'rascunho: ainda não pede revisão'];
+    if (r.state === 'merged') return ['mesclado', 'ok', 'mesclado'];
+    if (r.state === 'closed') return ['fechado', 'muted', 'fechado sem mesclar'];
+    const v = r.review;
+    if (!v) return ['aberto', 'info', 'aberto'];
+    const by = v.by && v.by.length ? ` (${v.by.join(', ')})` : '';
+    const left = v.approvalsLeft ? `, faltam ${v.approvalsLeft}` : '';
+    return {
+      approved: [`✓ aprovado${v.approvals > 1 ? ` ×${v.approvals}` : ''}`, 'ok', `aprovado${by}${left}`],
+      changes: ['✎ mudanças pedidas', 'bad', `mudanças pedidas${by}`],
+      discussions: ['💬 conversas abertas', 'warn', `há conversas não resolvidas${left}`],
+      commented: ['💬 comentado', 'info', `comentado${by}, sem aprovação`],
+      pending: [`◷ aguardando revisão${v.approvals ? ` (${v.approvals} ok)` : ''}`, 'muted', `aguardando revisão${by}${left}`],
+    }[v.state] || ['aberto', 'info', 'aberto'];
+  }
+
   function requestChip(r) {
-    const st = { open: ['aberto', 'info'], draft: ['rascunho', 'muted'], merged: ['mesclado', 'ok'], closed: ['fechado', 'muted'] }[r.state] || [r.state, ''];
-    return `<span class="chip ${st[1]} link" data-action="openUrl" data-url="${esc(r.url)}" title="${esc(r.title)} — abrir no navegador">${esc(r.ref)} ${st[0]} ↗</span>`;
+    const [txt, cls, tip] = reviewInfo(r);
+    return `<span class="chip ${cls} link" data-action="openUrl" data-url="${esc(r.url)}" title="${esc(r.ref)} ${esc(r.title)} — ${esc(tip)}. Clique para abrir no navegador.">${esc(r.ref)} ${txt}</span>`;
+  }
+
+  /** PR/MR aberto da branch (worktree ou branch sem worktree). */
+  function requestOf(name) {
+    const v = state.worktrees.find(w => w.branch === name) || state.branches.find(b => b.name === name);
+    return v && v.request;
   }
 
   const arrows = (behind, ahead) => [behind ? `↓${behind}` : '', ahead ? `↑${ahead}` : ''].filter(Boolean).join(' ');
@@ -505,7 +529,8 @@
     const ahead = pending ? aheadOf(r.name) : 0;
     const merged = pending === false ? ' ref-merged' : '';
     const title = r.kind === 'head' ? `${r.worktree ? 'branch com worktree' : 'branch local'}${pending ? ` · ${ahead || 'com'} commit(s) fora de ${state.base}` : pending === false ? ` · já mesclada em ${state.base}` : ''}` : r.kind;
-    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}">${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>`;
+    const req = r.kind === 'head' ? requestOf(r.name) : undefined;
+    return `<span class="ref ${cls}${base}${wt}${cur}${merged}${pending ? ' ref-pending' : ''}" ${drag} ${drop} title="${esc(title)}">${r.worktree ? '▣ ' : ''}${esc(r.name)}${ahead ? ` <b>↑${ahead}</b>` : ''}</span>${req ? requestChip(req) : ''}`;
   }
 
   function graphHeader(n) {

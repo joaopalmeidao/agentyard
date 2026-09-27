@@ -27,6 +27,42 @@ export interface ChangeRequest {
   state: 'open' | 'draft' | 'merged' | 'closed';
   source: string;
   target: string;
+  /** Situação da revisão (só para PRs/MRs abertos; preenchida à parte). */
+  review?: ReviewStatus;
+}
+
+export interface ReviewStatus {
+  state: 'approved' | 'changes' | 'commented' | 'pending' | 'discussions';
+  /** Aprovações recebidas. */
+  approvals: number;
+  /** Aprovações que ainda faltam (GitLab, quando há regra). */
+  approvalsLeft?: number;
+  /** Quem aprovou / pediu mudanças, para o tooltip. */
+  by: string[];
+}
+
+/**
+ * Decisão a partir das revisões do GitHub: vale a última revisão de cada pessoa; qualquer
+ * "mudanças pedidas" pesa mais que aprovações.
+ */
+export function githubReviewDecision(reviews: { user?: { login?: string }; state: string }[]): ReviewStatus {
+  const last = new Map<string, string>();
+  for (const r of reviews) {
+    const who = r.user?.login ?? '?';
+    // COMMENTED não desfaz uma aprovação ou um pedido de mudança anterior da mesma pessoa
+    if (r.state === 'COMMENTED' && last.has(who)) continue;
+    if (r.state === 'DISMISSED') {
+      last.delete(who);
+      continue;
+    }
+    last.set(who, r.state);
+  }
+  const changes = [...last].filter(([, s]) => s === 'CHANGES_REQUESTED').map(([w]) => w);
+  const approved = [...last].filter(([, s]) => s === 'APPROVED').map(([w]) => w);
+  if (changes.length) return { state: 'changes', approvals: approved.length, by: changes };
+  if (approved.length) return { state: 'approved', approvals: approved.length, by: approved };
+  if (last.size) return { state: 'commented', approvals: 0, by: [...last.keys()] };
+  return { state: 'pending', approvals: 0, by: [] };
 }
 
 export interface NewChangeRequest {
@@ -44,6 +80,8 @@ export interface HostClient {
   listOpen(): Promise<ChangeRequest[]>;
   findForBranch(branch: string): Promise<ChangeRequest | undefined>;
   create(r: NewChangeRequest): Promise<ChangeRequest>;
+  /** Situação da revisão de um PR/MR aberto. */
+  reviewStatus(r: ChangeRequest): Promise<ReviewStatus>;
   /** Confere o token; devolve o nome do usuário. */
   whoami(): Promise<string>;
   listIssues(scope: IssueScope): Promise<Issue[]>;
@@ -191,6 +229,10 @@ export class GitHubClient implements HostClient {
     return this.map(await this.req<any>('POST', '/pulls', { title: r.title, head: r.source, base: r.target, body: r.body, draft: r.draft }));
   }
 
+  async reviewStatus(r: ChangeRequest): Promise<ReviewStatus> {
+    return githubReviewDecision(await this.req<any[]>('GET', `/pulls/${r.id}/reviews?per_page=100`));
+  }
+
   private login?: string;
 
   async listIssues(scope: IssueScope): Promise<Issue[]> {
@@ -248,8 +290,22 @@ export class GitLabClient implements HostClient {
     };
   }
 
+  /** detailed_merge_status que veio na lista, por iid (evita uma chamada a mais). */
+  private readonly mergeStatus = new Map<number, string>();
+
+  async reviewStatus(r: ChangeRequest): Promise<ReviewStatus> {
+    const a = await this.req<any>('GET', `/projects/${this.project}/merge_requests/${r.id}/approvals`);
+    const by: string[] = (a.approved_by ?? []).map((x: any) => x.user?.username).filter(Boolean);
+    const left = typeof a.approvals_left === 'number' ? a.approvals_left : undefined;
+    const ms = this.mergeStatus.get(r.id);
+    if (ms === 'discussions_not_resolved') return { state: 'discussions', approvals: by.length, approvalsLeft: left, by };
+    if (by.length && !left) return { state: 'approved', approvals: by.length, approvalsLeft: left, by };
+    return { state: 'pending', approvals: by.length, approvalsLeft: left, by };
+  }
+
   async listOpen() {
     const list = await this.req<any[]>('GET', `/projects/${this.project}/merge_requests?state=opened&per_page=100`);
+    for (const m of list) if (m.detailed_merge_status) this.mergeStatus.set(m.iid, m.detailed_merge_status);
     return list.map(m => this.map(m));
   }
 
