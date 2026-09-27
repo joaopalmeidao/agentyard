@@ -106,10 +106,24 @@ exports.run = async () => {
     const t = vscode.window.terminals.find(x => x.name === 'Eco · ai/login-oauth');
     assert.ok(t, 'terminal com nome do agente');
     assert.strictEqual(t.creationOptions.cwd, wt.path);
+    // já aberto: o padrão pergunta; com "reuse" só traz para frente
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agentWhenOpen', 'reuse', vscode.ConfigurationTarget.Global);
     await vscode.commands.executeCommand('worktreeGraph.launchAgent', { path: wt.path, branch: wt.branch });
     assert.strictEqual(vscode.window.terminals.length, before + 1, 'não duplica');
     await ctl.refresh();
     assert.deepStrictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').agents, ['Eco']);
+  });
+
+  await check('agente: abre outro terminal na mesma worktree mesmo com um rodando', async () => {
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const before = vscode.window.terminals.length;
+    await vscode.commands.executeCommand('worktreeGraph.launchAgentNew', { path: wt.path, branch: wt.branch }, 'Eco');
+    await until(() => vscode.window.terminals.length === before + 1);
+    assert.ok(vscode.window.terminals.find(x => x.name === 'Eco · ai/login-oauth #2'), 'segundo terminal numerado');
+    await ctl.refresh();
+    assert.deepStrictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').agents, ['Eco', 'Eco']);
+    assert.strictEqual(agentTerms.list(wt.path, 'Eco').length, 2);
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agentWhenOpen', undefined, vscode.ConfigurationTarget.Global);
   });
 
   await check('estado detalhado (status e comparação) chega em segundo plano', async () => {

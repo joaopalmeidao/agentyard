@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { AgentTerminals } from './agents';
+import { AgentsTreeProvider, AgentGroupItem, terminalOf } from './agentsView';
 import { registerPullRequests } from './prs/view';
 import * as commits from './commits';
 import { pushBranch, pushMany } from './push';
@@ -39,13 +40,20 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const agentTerms = new AgentTerminals(ctl);
   ctl.agentsRunning = () => agentTerms.running();
   ctx.subscriptions.push(agentTerms);
+  const agentsTree = new AgentsTreeProvider(agentTerms);
+  const agentsView = vscode.window.createTreeView('worktreeGraph.agents', { treeDataProvider: agentsTree });
+  const agentsBadge = () => {
+    const n = agentsTree.count();
+    agentsView.badge = n ? { value: n, tooltip: `${n} terminal(is) de agente aberto(s)` } : undefined;
+  };
+  ctx.subscriptions.push(agentsTree, agentsView, agentTerms.onDidChange(agentsBadge));
   const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
   const schedules = registerSchedule(ctx, ctl, agentTerms, agentFlow.tasks);
   const coord = registerCoord(ctx, ctl, agentTerms, agentFlow);
   ctl.taskBlocked = p => coord.isBlocked(p);
 
   /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
-  const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
+  const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string, mode?: 'reuse' | 'new') => {
     let wtPath = arg?.path;
     let branch = arg?.branch;
     const wts = ctl.repo ? await ctl.repo.worktreesFast() : [];
@@ -57,7 +65,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       branch = picked;
       wtPath = wts.find(w => w.branch === picked)?.path;
     }
-    if (wtPath) await agentTerms.launch(wtPath, branch, agent);
+    if (wtPath) await agentTerms.launch(wtPath, branch, agent, mode);
   };
 
   const projects = new Projects(ctl);
@@ -156,7 +164,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
       case 'openWorktree':
         return actions.openWorktree(ctl, a.path ? { path: a.path } : a.branch);
       case 'launchAgent':
-        return launchAgent({ path: a.path, branch: a.branch }, a.agent);
+        return launchAgent({ path: a.path, branch: a.branch }, a.agent, a.modifier === '1' ? 'new' : undefined);
+      case 'launchAgentNew':
+        return launchAgent({ path: a.path, branch: a.branch }, a.agent, 'new');
+      case 'agents.pick':
+        return agentTerms.pickOpen(a.path);
       case 'openFile':
         return actions.openFileInWorktree(ctl, a.path ? { path: a.path } : a.branch);
       case 'resolveConflict':
@@ -311,6 +323,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('openWorktree', item => actions.openWorktree(ctl, item));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
+  reg('launchAgentNew', (item?: AgentGroupItem | { path?: string; branch?: string }, agent?: string) => launchAgent(item, agent, 'new'));
+  reg('agents.pick', (item?: { path?: string }) => agentTerms.pickOpen(item?.path));
+  reg('agents.show', node => terminalOf(node)?.show());
+  reg('agents.close', node => terminalOf(node)?.dispose());
   reg('resolveConflict', (branch?: string | { branch?: string }, opts?: ResolveOptions) => {
     const b = typeof branch === 'string' ? branch : branch?.branch;
     return b && resolveConflict(ctl, agentTerms, b, opts ?? {});
