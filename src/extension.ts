@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { AgentTerminals } from './agents';
+import { pushBranch, pushMany } from './push';
 import { resolveConflict, ResolveOptions } from './conflicts';
 import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
@@ -164,6 +165,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
       case 'promote':
         await promote(ctl, a.from, a.to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t));
         return;
+      case 'push':
+        await pushBranch(ctl, a.branch);
+        return;
+      case 'pushMany':
+        return pushMany(ctl);
       case 'setGraphFilter':
         await ctx.workspaceState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
         return ctl.refresh();
@@ -275,6 +281,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
     if (b) await ctl.requests.publish(b);
   });
   reg('connectHosting', () => ctl.requests.connect());
+  reg('pushBranch', async item => {
+    const b = await actions.pickBranch(ctl, item, 'Enviar qual branch?');
+    if (b) await pushBranch(ctl, b);
+  });
+  reg('pushMany', () => pushMany(ctl));
   reg('configureFlow', () => configureFlow(ctl));
   reg('disconnectHosting', () => ctl.requests.disconnect());
   reg('analyzeMerge', (source?: string | { branch?: string }, target?: string) =>

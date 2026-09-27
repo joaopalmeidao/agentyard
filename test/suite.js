@@ -267,6 +267,32 @@ exports.run = async () => {
     assert.ok(!api.projects.list().some(p => p.path.toLowerCase() === path.normalize(second).toLowerCase()));
   });
 
+  await check('push: publica branch nova (push -u) e envia commit novo', async () => {
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const root = ctl.repo.root;
+    const bare = path.join(root, '..', 'origin-push.git');
+    execSync(`git init -q --bare "${bare}"`);
+    execSync(`git remote add origin "${bare}"`, { cwd: root });
+    await ctl.refresh();
+    let wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(wt.remote.published, false, 'antes: não publicada');
+
+    await vscode.commands.executeCommand('worktreeGraph.pushBranch', { branch: 'ai/login-oauth' });
+    await ctl.refresh();
+    wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    assert.strictEqual(wt.remote.published, true, 'publicada');
+    assert.strictEqual(wt.upstream, 'origin/ai/login-oauth');
+    execSync('git rev-parse --verify refs/heads/ai/login-oauth', { cwd: bare });
+
+    execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "mais um"', { cwd: wt.path });
+    await ctl.refresh();
+    assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').remote.ahead, 1, '1 commit a enviar');
+    await vscode.commands.executeCommand('worktreeGraph.pushBranch', { branch: 'ai/login-oauth' });
+    await ctl.refresh();
+    assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').remote.ahead, 0, 'enviado');
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));

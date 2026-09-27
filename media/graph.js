@@ -144,6 +144,7 @@
           ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : 'ligado') : 'desligado'}</button>
         <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">onde: ${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'}</button>
         <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
+        ${toPush() ? `<button data-action="pushMany" title="Enviar branches com commits não enviados (lista para escolher)">☁↑ Enviar ${toPush()}</button>` : ''}
         <button data-action="generateCi" title="Gera o workflow de sync para o GitHub Actions ou o GitLab CI">Gerar CI</button>
         ${state.hosting && !state.hosting.connected ? `<button data-action="connectHosting" title="Para publicar e acompanhar ${state.hosting.label}s em ${esc(state.hosting.host)}">Conectar ${state.hosting.kind === 'gitlab' ? 'GitLab' : 'GitHub'}</button>` : ''}
         <span class="layouts" title="Layout do painel">
@@ -207,6 +208,26 @@
     return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${c.sessions} sessão(ões) do Claude Code nesta worktree, ${fmtTokens(c.tokens)} tokens; última ${ago(c.last / 1000)}. Clique para retomar a última.">✦ ${c.sessions} · ${fmtTokens(c.tokens)}</span>`;
   }
   const fmtTokens = n => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} mi` : n >= 1e3 ? `${Math.round(n / 1e3)} mil` : String(n));
+
+  /** Situação no remoto: não publicada, ↑ a enviar, ↓ a receber, ou em dia. */
+  function remoteChip(w) {
+    const r = w.remote || {};
+    if (w.isBase && r.published && !r.ahead && !r.behind) return '';
+    if (r.gone) return chip('☁ apagada no remoto', 'warn', 'O upstream desta branch não existe mais no remoto');
+    if (!r.published) return w.isBase ? '' : chip('☁ não publicada', 'muted', 'Ainda não existe no remoto; Publicar faz o push -u');
+    const parts = [r.ahead ? `↑${r.ahead}` : '', r.behind ? `↓${r.behind}` : ''].filter(Boolean).join(' ');
+    return parts ? chip(`☁ ${parts}`, r.ahead ? 'warn' : 'info', `${r.ahead} commit(s) a enviar · ${r.behind} a receber de ${w.upstream}`) : chip('☁ em dia', 'ok', `Em dia com ${w.upstream}`);
+  }
+
+  function pushButton(branch, r, compact) {
+    const label = !r.published ? (compact ? '☁ publicar' : '☁ Publicar') : compact ? `☁↑${r.ahead}` : `☁ Push ↑${r.ahead}`;
+    return `<button data-action="push" data-branch="${esc(branch)}" title="${!r.published ? 'git push -u (cria a branch no remoto)' : `Enviar ${r.ahead} commit(s)`}">${label}</button>`;
+  }
+
+  /** Branches publicadas com commits pendentes de envio. */
+  function toPush() {
+    return [...state.worktrees.filter(w => w.branch && !w.prunable), ...state.branches].filter(x => x.remote && x.remote.published && x.remote.ahead > 0).length;
+  }
 
   function requestChip(r) {
     const st = { open: ['aberto', 'info'], draft: ['rascunho', 'muted'], merged: ['mesclado', 'ok'], closed: ['fechado', 'muted'] }[r.state] || [r.state, ''];
@@ -294,10 +315,11 @@
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
-        <td class="c-chips">${st}${cmp}${conf}${w.request ? requestChip(w.request) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="c-chips">${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
+          ${w.remote.ahead || !w.remote.published ? pushButton(w.branch, w.remote, true) : ''}
           <button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>
           <button data-action="diffWithBase" data-branch="${b}" title="Revisar alterações × ${esc(state.base)}">Revisar</button>
           <button data-action="analyzeMerge" data-branch="${b}" title="Analisar o merge em ${esc(state.base)}">Analisar</button>
@@ -325,8 +347,7 @@
         } else if (w.isBase && (w.behind || w.ahead)) {
           chips.push(chip(`${arrows(w.behind, w.ahead)} ${esc(state.baseRef)}`, 'info'));
         }
-        if (w.track) chips.push(chip(esc(w.track.replace('ahead', '↑').replace('behind', '↓')), 'muted', `em relação a ${w.upstream}`));
-        else if (w.branch && !w.upstream && !w.isBase) chips.push(chip('não publicada', 'muted'));
+        if (w.branch) chips.push(remoteChip(w));
         if (w.branch) chips.push(syncChip(w));
         if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
         if (w.request) chips.push(requestChip(w.request));
@@ -337,6 +358,7 @@
           agent && !w.bare && !w.prunable
             ? `<button data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" class="agent" title="Abre ${esc(agent)} num terminal dentro desta worktree (botão direito no card para outros agentes)">✦ ${esc(agent)}</button>`
             : '',
+          w.branch && (w.remote.ahead || !w.remote.published) && !w.prunable ? pushButton(w.branch, w.remote) : '',
           `<button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>`,
           `<button data-action="openFile" data-path="${esc(w.path)}" title="Buscar e abrir um arquivo desta worktree aqui mesmo">Arquivos</button>`,
           `<button data-action="openTerminal" data-path="${esc(w.path)}" title="Terminal nesta pasta">Terminal</button>`,
@@ -602,6 +624,7 @@
         items.push(item('mergeIntoBase', `↑ Mesclar em ${state.base}`, { branch: b }));
       }
       items.push(item('mergeInto', 'Mesclar em…', { branch: b }));
+      items.push(item('push', 'Push (enviar para o remoto)', { branch: b }));
       items.push('<hr>');
       if (wt) {
         for (const a of state.agentNames || []) items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));

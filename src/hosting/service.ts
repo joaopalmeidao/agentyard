@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { pushBranch } from '../push';
 import type { Controller } from '../controller';
 import { ChangeRequest, GitHubClient, GitLabClient, HostClient, HostError, parseRemote, RemoteInfo, suggestBody, suggestTitle } from './core';
 
@@ -245,22 +246,9 @@ export class RequestService {
   }
 
   /** git push -u, só se a branch não estiver publicada ou tiver commits locais. */
+  /** Push antes de abrir o PR/MR; recusas do remoto seguem o fluxo de src/push.ts. */
   private async push(branch: string): Promise<boolean> {
-    const repo = this.ctl.repo!;
-    const remote = this.cfg().get<string>('remote', 'origin');
-    const upstream = await repo.upstream(branch);
-    if (upstream) {
-      const [, ahead] = await repo.aheadBehind(upstream, branch);
-      if (ahead === 0) return true;
-    }
-    const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `git push ${remote} ${branch}…` }, () =>
-      repo.run(['push', '-u', remote, `${branch}:${branch}`], repo.root, 300_000),
-    );
-    if (r.code !== 0) {
-      vscode.window.showErrorMessage(`O push falhou: ${(r.stderr || r.stdout).trim()}`);
-      return false;
-    }
-    this.ctl.log(`push ${remote} ${branch}: ok`);
-    return true;
+    return pushBranch(this.ctl, branch, { quiet: true });
   }
+
 }

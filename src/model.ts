@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { Commit, MergePreview, pLimit, Ref, Repo, Worktree, WorktreeStatus } from './git';
+import { Commit, MergePreview, parseTrack, pLimit, Ref, RemoteTrack, Repo, Worktree, WorktreeStatus } from './git';
 import type { FlowStep } from './flow';
 import type { ChangeRequest } from './hosting/core';
 
@@ -39,6 +39,8 @@ export interface WorktreeView extends Worktree {
   compareKnown: boolean;
   upstream?: string;
   track?: string;
+  /** Situação em relação ao remoto: publicada, commits a enviar/receber. */
+  remote: RemoteTrack;
   subject: string;
   date: number;
   isCurrent: boolean;
@@ -59,6 +61,7 @@ export interface BranchView {
   sha: string;
   upstream?: string;
   track?: string;
+  remote: RemoteTrack;
   ahead: number;
   behind: number;
   preview?: MergePreview;
@@ -188,6 +191,7 @@ export async function buildState(repo: Repo, opts: BuildOptions, cache: RepoCach
       compareKnown: false,
       upstream: ref?.upstream,
       track: ref?.track,
+      remote: parseTrack(ref?.upstream, ref?.track),
       subject: ref?.subject ?? '',
       date: ref?.date ?? 0,
       isCurrent: key(wt.path) === key(repo.root),
@@ -208,6 +212,7 @@ export async function buildState(repo: Repo, opts: BuildOptions, cache: RepoCach
         sha: r.sha,
         upstream: r.upstream,
         track: r.track,
+        remote: parseTrack(r.upstream, r.track),
         date: r.date,
         subject: r.subject,
         isBase: r.name === base,

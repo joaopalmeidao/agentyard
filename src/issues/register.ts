@@ -51,6 +51,18 @@ export function registerIssues(ctx: vscode.ExtensionContext, ctl: Controller, gu
     if (pick) await svc.start(pick.issue, true);
   });
   reg('connectRedmine', () => svc.connectRedmine());
+  reg('issues.create', () => svc.create());
+  // Trecho selecionado no editor vira contexto da issue: arquivo, linhas e código.
+  reg('issues.createFromSelection', () => {
+    const ed = vscode.window.activeTextEditor;
+    if (!ed || ed.selection.isEmpty) return svc.create();
+    const doc = ed.document;
+    const rel = vscode.workspace.asRelativePath(doc.uri, false);
+    const a = ed.selection.start.line + 1;
+    const b = ed.selection.end.line + (ed.selection.end.character === 0 ? 0 : 1);
+    const code = doc.getText(ed.selection).replace(/\s+$/, '');
+    return svc.create(`Em \`${rel}\` (linhas ${a}–${b}):\n\n\`\`\`${doc.languageId}\n${code}\n\`\`\``);
+  });
   reg('disconnectRedmine', () => svc.disconnectRedmine());
   return svc;
 }
