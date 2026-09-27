@@ -18,6 +18,8 @@ async function cwdOf(ctl: Controller, branch: string) {
 export async function pushBranch(ctl: Controller, branch: string, opts: { quiet?: boolean } = {}): Promise<boolean> {
   const repo = ctl.repo;
   if (!repo) return false;
+  // gatilho "push" do sync automático: traz a base para a branch antes de enviar (src/sync.ts)
+  await ctl.beforePush?.(branch);
   const remote = ctl.cfg().get<string>('remote', 'origin');
   const upstream = await repo.upstream(branch);
   if (upstream) {
