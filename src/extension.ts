@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
 import { AgentTerminals } from './agents';
+import { AgentsTreeProvider, AgentGroupItem, terminalOf } from './agentsView';
 import { registerPullRequests } from './prs/view';
 import * as commits from './commits';
 import { pushBranch, pushMany } from './push';
@@ -15,13 +16,16 @@ import { registerSchedule } from './schedule/register';
 import { registerCoord } from './coord/register';
 import { ReadySummaryService } from './env/readySummary';
 import { registerEnv } from './env/register';
+import { registerMigrations } from './migrations/register';
 import { registerTemplates } from './templates/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
 import { registerDelivery } from './delivery/register';
+import { registerPromotion } from './promotion/register';
 import { registerReview } from './review';
 import { registerGitOps } from './gitops/register';
+import { registerSummary } from './summary/register';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
@@ -39,13 +43,20 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const agentTerms = new AgentTerminals(ctl);
   ctl.agentsRunning = () => agentTerms.running();
   ctx.subscriptions.push(agentTerms);
+  const agentsTree = new AgentsTreeProvider(agentTerms);
+  const agentsView = vscode.window.createTreeView('worktreeGraph.agents', { treeDataProvider: agentsTree });
+  const agentsBadge = () => {
+    const n = agentsTree.count();
+    agentsView.badge = n ? { value: n, tooltip: `${n} terminal(is) de agente aberto(s)` } : undefined;
+  };
+  ctx.subscriptions.push(agentsTree, agentsView, agentTerms.onDidChange(agentsBadge));
   const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
   const schedules = registerSchedule(ctx, ctl, agentTerms, agentFlow.tasks);
   const coord = registerCoord(ctx, ctl, agentTerms, agentFlow);
   ctl.taskBlocked = p => coord.isBlocked(p);
 
   /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
-  const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
+  const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string, mode?: 'reuse' | 'new') => {
     let wtPath = arg?.path;
     let branch = arg?.branch;
     const wts = ctl.repo ? await ctl.repo.worktreesFast() : [];
@@ -57,7 +68,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       branch = picked;
       wtPath = wts.find(w => w.branch === picked)?.path;
     }
-    if (wtPath) await agentTerms.launch(wtPath, branch, agent);
+    if (wtPath) await agentTerms.launch(wtPath, branch, agent, mode);
   };
 
   const projects = new Projects(ctl);
@@ -156,7 +167,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
       case 'openWorktree':
         return actions.openWorktree(ctl, a.path ? { path: a.path } : a.branch);
       case 'launchAgent':
-        return launchAgent({ path: a.path, branch: a.branch }, a.agent);
+        return launchAgent({ path: a.path, branch: a.branch }, a.agent, a.modifier === '1' ? 'new' : undefined);
+      case 'launchAgentNew':
+        return launchAgent({ path: a.path, branch: a.branch }, a.agent, 'new');
+      case 'agents.pick':
+        return agentTerms.pickOpen(a.path);
       case 'openFile':
         return actions.openFileInWorktree(ctl, a.path ? { path: a.path } : a.branch);
       case 'resolveConflict':
@@ -200,6 +215,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return generateCiWorkflow(ctl);
       case 'configureFlow':
         return configureFlow(ctl);
+      case 'promotionMap':
+        await vscode.commands.executeCommand('worktreeGraph.promotionMap');
+        return;
       case 'promote':
         await promote(ctl, a.from, a.to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t));
         return;
@@ -311,6 +329,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('openWorktree', item => actions.openWorktree(ctl, item));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
+  reg('launchAgentNew', (item?: AgentGroupItem | { path?: string; branch?: string }, agent?: string) => launchAgent(item, agent, 'new'));
+  reg('agents.pick', (item?: { path?: string }) => agentTerms.pickOpen(item?.path));
+  reg('agents.show', node => terminalOf(node)?.show());
+  reg('agents.close', node => terminalOf(node)?.dispose());
   reg('resolveConflict', (branch?: string | { branch?: string }, opts?: ResolveOptions) => {
     const b = typeof branch === 'string' ? branch : branch?.branch;
     return b && resolveConflict(ctl, agentTerms, b, opts ?? {});
@@ -401,12 +423,18 @@ export async function activate(ctx: vscode.ExtensionContext) {
     issueOf: b => issues.linkOf(b),
   });
   const gitOps = registerGitOps(ctx, ctl, guard);
+  registerSummary(ctx, ctl, guard);
   const env = registerEnv(ctx, ctl, guard);
   actions.worktreeCreatedHooks.push((dir, branch, quiet) => env.afterCreate(dir, branch, quiet));
   const templates = registerTemplates(ctx, ctl, guard, b => issues.linkOf(b)?.key);
   const readySummary = new ReadySummaryService(ctl, agentFlow);
   ctx.subscriptions.push(readySummary);
   const delivery = registerDelivery(ctx, ctl, guard, { activity, pipelines: () => pipelines.pipelines, issueOf: b => issues.linkOf(b) });
+  const promotion = registerPromotion(ctx, ctl, guard, {
+    promote: (from, to) => promote(ctl, from, to, (s, t) => actions.mergeBranches(ctl, s, t), (s, t) => analyzeMerge(s, t)),
+    merge: (s, t) => actions.mergeBranches(ctl, s, t),
+    showCommit: sha => commits.showCommit(ctl, sha),
+  });
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -418,8 +446,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const claudeConfig = registerClaudeConfig(ctx, ctl);
 
   const guards = registerGuards(ctx, ctl);
+  registerMigrations(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion };
 }
 
 export function deactivate() {}

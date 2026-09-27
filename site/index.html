@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgentYard — agentes de IA em paralelo no VS Code</title>
+  <meta name="description" content="Extensão do VS Code para desenvolver com vários agentes de IA em paralelo, cada um na sua git worktree: grafo, merge, PR/MR, pipelines, issues e Claude Code por worktree.">
+  <meta property="og:title" content="AgentYard">
+  <meta property="og:description" content="Vários agentes de IA em paralelo, cada um na sua git worktree, organizados no VS Code.">
+  <meta property="og:image" content="img/social-preview.png">
+  <link rel="icon" href="img/logo.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="img/logo.png" alt="">AgentYard</a>
+      <nav>
+        <a href="#recursos" class="hide-sm">Recursos</a>
+        <a href="#precos">Preços</a>
+        <a href="#faq" class="hide-sm">Dúvidas</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap hero">
+      <h1>Vários agentes de IA trabalhando em paralelo, sem bagunçar o seu repositório</h1>
+      <p class="lead">O AgentYard é uma extensão do VS Code que coloca cada agente — Claude Code, Codex, Gemini ou qualquer CLI — na sua própria <code>git worktree</code> e mostra tudo num painel: o que cada um mudou, o que conflita, o que está pronto para revisar e mesclar.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://marketplace.visualstudio.com/items?itemName=worktree-graph.worktree-graph">Instalar no VS Code</a>
+        <a class="btn" href="#precos">Ver preços</a>
+      </div>
+      <video class="shot" src="img/demo.mp4" poster="img/painel.png" autoplay muted loop playsinline width="1440" height="780"></video>
+    </div>
+
+    <section id="recursos">
+      <div class="wrap">
+        <h2>Tudo o que acontece nas worktrees, num lugar só</h2>
+        <p class="sub">Feito para quem deixa agentes trabalhando em várias tarefas ao mesmo tempo.</p>
+        <div class="features">
+          <div class="feature"><h3><span class="dot" style="background:var(--blue)"></span>Cards de worktree</h3><p>Branch, alterações não commitadas, quanto está atrás e à frente da base e previsão de conflito antes de tocar em qualquer coisa.</p></div>
+          <div class="feature"><h3><span class="dot" style="background:var(--gold)"></span>Agente por worktree</h3><p>Um clique abre o Claude Code (ou outro agente) num terminal já dentro da worktree, com sessões, retomada e uso de tokens.</p></div>
+          <div class="feature"><h3><span class="dot" style="background:var(--purple)"></span>Merge sem susto</h3><p>Arraste um card sobre outro para mesclar. Antes, veja os commits que entram, os arquivos mexidos dos dois lados e os conflitos.</p></div>
+          <div class="feature"><h3><span class="dot" style="background:var(--green)"></span>PR/MR e pipelines</h3><p>Publique PRs no GitHub e MRs no GitLab, acompanhe a revisão e o CI de cada branch sem sair do editor.</p></div>
+          <div class="feature"><h3><span class="dot" style="background:var(--blue)"></span>Issues viram tarefas</h3><p>GitHub, GitLab, Bitbucket, Azure DevOps, Jira e Redmine: comece uma issue e o agente já abre numa worktree com o contexto dela.</p></div>
+          <div class="feature"><h3><span class="dot" style="background:var(--gold)"></span>Fila e agendamento</h3><p>Enfileire tarefas por worktree, agende execuções e compare várias tentativas do agente lado a lado.</p></div>
+          <div class="feature"><h3><span class="dot" style="background:var(--purple)"></span>Base sempre em dia</h3><p>Quando a base anda, o AgentYard mescla nas worktrees limpas e roda sua verificação — localmente ou no CI.</p></div>
+          <div class="feature"><h3><span class="dot" style="background:var(--green)"></span>Grafo e histórico</h3><p>Todas as branches, worktrees, remotas e tags num grafo com filtro, e a situação da revisão de cada PR.</p></div>
+        </div>
+
+        <div class="split">
+          <img src="img/mesclar.png" alt="Arrastando um card de worktree sobre outro para mesclar" width="1440" height="780" loading="lazy">
+          <div>
+            <h3>Arraste para mesclar</h3>
+            <p class="sub">Cada merge pede confirmação mostrando quantos commits entram e se a simulação prevê conflito. Se der conflito, nada muda — e um botão abre o agente para resolver, testar e commitar.</p>
+          </div>
+        </div>
+        <div class="split">
+          <div>
+            <h3>O histórico conta quem fez o quê</h3>
+            <p class="sub">Commits de pessoas e de agentes no mesmo grafo, com o que ainda não foi commitado em cada worktree e o status do PR de cada branch.</p>
+          </div>
+          <img src="img/historico.png" alt="Grafo de histórico com branches de agentes e detalhes de commit" width="1440" height="780" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <section id="precos">
+      <div class="wrap">
+        <h2>Preços</h2>
+        <p class="sub">Comece de graça. Assine quando precisar de mais.</p>
+        <div class="billing" role="group" aria-label="Período de cobrança">
+          <button type="button" data-billing="monthly" aria-pressed="true">Mensal</button>
+          <button type="button" data-billing="yearly" aria-pressed="false">Anual (2 meses grátis)</button>
+        </div>
+        <div class="plans">
+          <div class="plan">
+            <h3>Grátis</h3>
+            <p class="price">US$ 0</p>
+            <p class="note">para sempre, sem avisos</p>
+            <ul>
+              <li>Painel, grafo e histórico</li>
+              <li>Worktrees, merge e análise de merge</li>
+              <li>PR/MR com situação da revisão e pipelines</li>
+              <li>Issues do GitHub, GitLab e Redmine</li>
+              <li>Agente por worktree, sessões e uso do Claude Code</li>
+              <li>Vários projetos, fluxo de ambientes e sync da base</li>
+            </ul>
+            <a class="btn" href="https://marketplace.visualstudio.com/items?itemName=worktree-graph.worktree-graph">Instalar</a>
+          </div>
+          <div class="plan featured">
+            <h3>Pro</h3>
+            <p class="price"><span data-monthly="US$ 8" data-yearly="US$ 80">US$ 8</span> <small data-monthly="/ mês" data-yearly="/ ano">/ mês</small></p>
+            <p class="note">1 pessoa, até 3 máquinas</p>
+            <ul>
+              <li>Tudo do Grátis</li>
+              <li>Fila de tarefas, agendamentos e tarefa em lote</li>
+              <li>Tentar N abordagens e comparar</li>
+              <li>Revisão de PR/MR pelo agente</li>
+              <li>Fila de merge e detector de sobreposição</li>
+              <li>Atividade e custo por tarefa, linha do tempo e relatório do dia</li>
+              <li>Bitbucket, Azure DevOps e Jira</li>
+              <li>Checagens antes de mesclar/enviar e PR obrigatório</li>
+            </ul>
+            <button class="btn primary" type="button" data-plan="pro">Assinar o Pro</button>
+          </div>
+          <div class="plan">
+            <h3>Times</h3>
+            <p class="price">US$ 12 <small>/ pessoa / mês</small></p>
+            <p class="note">cobrado anualmente, por pessoa</p>
+            <ul>
+              <li>Tudo do Pro</li>
+              <li>Uma licença com o número de pessoas do time</li>
+              <li>Uma fatura para a empresa</li>
+              <li>Suporte prioritário por e-mail</li>
+            </ul>
+            <button class="btn" type="button" data-plan="times">Assinar o Times</button>
+          </div>
+        </div>
+        <p class="fine">Teste o Pro de graça por 14 dias direto na extensão — o teste começa na primeira vez que você usa um recurso Pro. Preços em dólares americanos; impostos locais podem ser acrescentados no checkout, conforme o seu país. Cancele quando quiser: a assinatura vale até o fim do período pago. Reembolso integral em até 30 dias — veja a <a href="reembolso.html">política de reembolso</a>. Os pagamentos são processados pela Paddle.com, nossa revendedora oficial (Merchant of Record).</p>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <h2>Dúvidas</h2>
+        <details><summary>Preciso do Claude Code para usar?</summary><p>Não. O AgentYard funciona com qualquer agente de linha de comando — Claude Code, Codex, Gemini ou um comando seu — e também sem nenhum agente, só para organizar worktrees e branches.</p></details>
+        <details><summary>Meu código sai da minha máquina?</summary><p>Não. A extensão roda localmente e usa o git que você já tem. Integrações com GitHub, GitLab, Jira e outros usam as credenciais que você mesmo configurar. Veja a <a href="privacidade.html">política de privacidade</a>.</p></details>
+        <details><summary>Como recebo a licença?</summary><p>Logo depois da compra chega no seu e-mail uma chave de licença. No VS Code, rode o comando <b>AgentYard: Ativar licença…</b> e cole a chave. Nas assinaturas, a chave se renova sozinha enquanto a assinatura estiver ativa, e funciona mesmo sem internet por algum tempo.</p></details>
+        <details><summary>Quem cobra no meu cartão?</summary><p>A Paddle.com, nossa revendedora oficial. Ela processa o pagamento, emite a nota e cuida dos impostos do seu país. O nome que aparece na fatura é o da Paddle.</p></details>
+        <details><summary>Como cancelo ou peço reembolso?</summary><p>Pelo link no e-mail de confirmação da compra ou escrevendo para <a href="mailto:contato@SEU-DOMINIO">contato@SEU-DOMINIO</a>. Reembolso integral em até 30 dias da compra.</p></details>
+        <details><summary>O que precisa estar instalado?</summary><p>VS Code 1.85 ou mais novo e git 2.38 ou mais novo. Funciona no Windows, macOS e Linux.</p></details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>© 2026 João Almeida · AgentYard</span>
+      <nav>
+        <a href="termos.html">Termos de Uso</a>
+        <a href="privacidade.html">Privacidade</a>
+        <a href="reembolso.html">Reembolso</a>
+        <a href="mailto:contato@SEU-DOMINIO">Contato</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  <script src="checkout.js"></script>
+</body>
+</html>

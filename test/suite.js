@@ -26,9 +26,17 @@ exports.run = async () => {
     }
   };
 
-  const ext = vscode.extensions.getExtension('worktree-graph.worktree-graph');
+  const ext = vscode.extensions.getExtension('joaopalmeidao.worktree-graph');
   const api = await ext.activate();
   const { ctl, tree, agentTerms } = api;
+
+  // Vídeo e print rodam sozinhos, no demo recém-criado: depois da suíte ele fica cheio de branches de teste.
+  if (process.env.WTGRAPH_VIDEO || process.env.WTGRAPH_PRINT) {
+    await until(() => ctl.state && ctl.state.pending === 0, 30000);
+    if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
+    if (process.env.WTGRAPH_VIDEO) await videoScene(api);
+    return;
+  }
 
   await check('estado carregado com 4 worktrees', async () => {
     const s = await until(() => ctl.state);
@@ -38,9 +46,19 @@ exports.run = async () => {
     assert.ok(s.agentNames.includes('Claude Code'));
   });
 
+  await check('uma mensagem de boas-vindas por view e condição', async () => {
+    // o VS Code mostra todas as entradas que casam, então duplicatas aparecem repetidas na view
+    const seen = new Set();
+    for (const w of ext.packageJSON.contributes.viewsWelcome) {
+      const k = `${w.view}|${w.when || ''}`;
+      assert.ok(!seen.has(k), `viewsWelcome duplicado: ${k}`);
+      seen.add(k);
+    }
+  });
+
   await check('comandos registrados', async () => {
     const all = await vscode.commands.getCommands(true);
-    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
+    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
     // o painel foca views pelos comandos <view>.focus que o VS Code cria para cada view declarada
     for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules', 'mergeQueue']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
   });
@@ -56,12 +74,32 @@ exports.run = async () => {
     const root = await tree.getChildren();
     const wt = root.find(n => n.branch === 'ai/refatorar-api');
     const kids = await tree.getChildren(wt);
-    assert.strictEqual(kids[0].kind, 'changes');
-    const changes = await tree.getChildren(kids[0]);
+    assert.strictEqual(kids[0].kind, 'commits');
+    assert.strictEqual(kids[1].kind, 'changes');
+    const changes = await tree.getChildren(kids[1]);
     const names = changes.map(c => c.label).sort();
     assert.deepStrictEqual(names, ['api.ts', 'novo.ts']);
     assert.strictEqual(changes[0].command.command, 'vscode.diff');
     assert.ok(kids.some(k => k.kind === 'dir'), 'lista pastas da worktree');
+  });
+
+  await check('árvore: commits × base na worktree e na branch sem worktree; resumo copiado', async () => {
+    const root = await tree.getChildren();
+    const wt = root.find(n => n.branch === 'ai/login-oauth');
+    const group = (await tree.getChildren(wt)).find(k => k.kind === 'commits');
+    const commits = await tree.getChildren(group);
+    assert.ok(commits.length >= 1, 'lista commits');
+    assert.strictEqual(String(commits.length), group.description);
+    assert.strictEqual(commits[0].command.command, 'worktreeGraph.showCommitSha');
+    const branches = await tree.getChildren(root.find(n => n.kind === 'branches'));
+    const fix = branches.find(b => b.branch === 'fix/typo-readme');
+    const fixKids = await tree.getChildren(fix);
+    if (fix.b.ahead) assert.strictEqual(fixKids[0].kind, 'commits');
+    await vscode.commands.executeCommand('worktreeGraph.copyBranchContext', wt);
+    const text = await vscode.env.clipboard.readText();
+    assert.match(text, /^# ai\/login-oauth/);
+    assert.ok(text.includes(commits[0].label), 'resumo traz o commit mais recente');
+    assert.match(text, /## Não commitado/);
   });
 
   await check('árvore: navegar pasta da worktree e abrir arquivo', async () => {
@@ -96,10 +134,24 @@ exports.run = async () => {
     const t = vscode.window.terminals.find(x => x.name === 'Eco · ai/login-oauth');
     assert.ok(t, 'terminal com nome do agente');
     assert.strictEqual(t.creationOptions.cwd, wt.path);
+    // já aberto: o padrão pergunta; com "reuse" só traz para frente
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agentWhenOpen', 'reuse', vscode.ConfigurationTarget.Global);
     await vscode.commands.executeCommand('worktreeGraph.launchAgent', { path: wt.path, branch: wt.branch });
     assert.strictEqual(vscode.window.terminals.length, before + 1, 'não duplica');
     await ctl.refresh();
     assert.deepStrictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').agents, ['Eco']);
+  });
+
+  await check('agente: abre outro terminal na mesma worktree mesmo com um rodando', async () => {
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const before = vscode.window.terminals.length;
+    await vscode.commands.executeCommand('worktreeGraph.launchAgentNew', { path: wt.path, branch: wt.branch }, 'Eco');
+    await until(() => vscode.window.terminals.length === before + 1);
+    assert.ok(vscode.window.terminals.find(x => x.name === 'Eco · ai/login-oauth #2'), 'segundo terminal numerado');
+    await ctl.refresh();
+    assert.deepStrictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').agents, ['Eco', 'Eco']);
+    assert.strictEqual(agentTerms.list(wt.path, 'Eco').length, 2);
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agentWhenOpen', undefined, vscode.ConfigurationTarget.Global);
   });
 
   await check('estado detalhado (status e comparação) chega em segundo plano', async () => {
@@ -916,8 +968,6 @@ exports.run = async () => {
     g('branch -D velha/pendente');
   });
 
-  if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
-  if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) throw new Error('falhas nos testes');
 };
@@ -933,6 +983,8 @@ async function printScene(ctl) {
   await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph');
   const wt = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
   await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
+  await ctl.ctx.globalState.update('panelUi', { layout: 'rows', split: 46, tab: 'b' });
+  await ctl.ctx.workspaceState.update('graphFilter', 'all');
   await vscode.commands.executeCommand('worktreeGraph.openGraph');
   await vscode.commands.executeCommand('worktreeGraph.launchAgent', { path: wt.path, branch: wt.branch }, 'Claude Code');
   await wait(2500);
@@ -962,23 +1014,33 @@ async function videoScene(api) {
   await vscode.commands.executeCommand('workbench.action.closePanel');
   await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
   await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph');
+  // Painel empilhado (cards em cima, histórico embaixo) e histórico completo.
+  await ctl.ctx.globalState.update('panelUi', { layout: 'rows', split: 46, tab: 'b' });
+  await ctl.ctx.workspaceState.update('graphFilter', 'all');
+  await ctl.refresh();
+  await vscode.commands.executeCommand('notifications.clearAll');
   await wait(1500);
   fs.writeFileSync(path.join(dir, 'start'), '');
   await wait(1200);
 
-  caption('AgentYard: todas as worktrees dos seus agentes num painel');
+  caption('AgentYard: as worktrees dos seus agentes de IA num painel só');
   await vscode.commands.executeCommand('worktreeGraph.openGraph');
   await wait(4500);
 
   caption('Cada card mostra se está limpa, quanto está atrás da master e se vai conflitar');
   await wait(4500);
 
-  caption('Botão direito: merge, agentes, arquivos e revisão');
-  GraphPanel.demo({ scene: 'menu', branch: 'ai/login-oauth' });
-  await wait(4000);
+  caption('Botão direito: merge, fila de merge, tarefas para o agente e revisão');
+  GraphPanel.demo({ scene: 'menu', branch: 'ai/refatorar-api' });
+  await wait(4500);
   GraphPanel.demo({ scene: 'hide' });
 
-  caption('✦ Abre o Claude Code já dentro da worktree');
+  caption('Histórico com o grafo de todas as branches e os detalhes de cada commit');
+  GraphPanel.demo({ scene: 'expand', index: 3 });
+  await wait(4500);
+  GraphPanel.demo({ scene: 'expand', index: 3 });
+
+  caption('Um clique abre o Claude Code já dentro da worktree');
   const wt = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
   await vscode.commands.executeCommand('worktreeGraph.launchAgent', { path: wt.path, branch: wt.branch }, 'Claude Code');
   await wait(4500);
@@ -996,7 +1058,24 @@ async function videoScene(api) {
   await vscode.commands.executeCommand(apiFile.command.command, ...apiFile.command.arguments);
   await wait(4500);
 
+  caption('Sessões do Claude Code e tokens de cada worktree');
+  await vscode.commands.executeCommand('worktreeGraph.claudeSessions.focus');
+  await wait(4000);
+
+  caption('Analisar merge: commits que entram e conflitos previstos, antes de mesclar');
+  await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', 'ai/precos-promo', 'master');
+  await wait(5000);
+
+  caption('Atividade do dia: commits, sessões e tokens por worktree');
+  await vscode.commands.executeCommand('worktreeGraph.activity');
+  await wait(4500);
+
+  caption('Linha do tempo de cada branch: commits, PR, aprovação e merge');
+  await vscode.commands.executeCommand('worktreeGraph.timeline');
+  await wait(4500);
+
   caption('Trazer a master para a branch com um clique');
+  await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph');
   await vscode.commands.executeCommand('worktreeGraph.openGraph');
   await wait(1500);
   await actions.mergeBranches(ctl, 'master', 'ai/login-oauth', { confirm: false, quiet: true });
@@ -1010,7 +1089,7 @@ async function videoScene(api) {
   await ctl.refresh();
   await wait(5500);
 
-  caption('github.com/joaopalmeidao/worktree-graph');
+  caption('AgentYard · no VS Code Marketplace e no Open VSX');
   await wait(3000);
   fs.writeFileSync(path.join(dir, 'captions.json'), JSON.stringify(captions));
   fs.writeFileSync(path.join(dir, 'stop'), '');

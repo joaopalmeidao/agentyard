@@ -1,5 +1,23 @@
 # Changelog
 
+## Não lançado
+- Migrations nos merges: quando a branch e o destino criaram migrations novas, o git mescla sem
+  conflito, mas a cadeia quebra (duas `0005` no Django, duas heads no Alembic, `V5__` repetida no
+  Flyway). Antes do merge o AgentYard avisa e oferece "Reencadear e mesclar": renumera as da branch
+  depois da última do destino e aponta a dependência/`down_revision` para ela, num commit na branch.
+  Funciona também depois de a base já ter sido trazida. Suporta Django, Alembic, Flyway,
+  golang-migrate e arquivos numerados em pastas de migrations (timestamps não colidem e ficam de fora).
+- "Reencadear migrations após a base" no menu da worktree, "Conferir migrations das worktrees" na
+  view Worktrees, seção "Migrations" no Analisar merge, e o sync automático reencadeia antes de trazer
+  a base (`worktreeGraph.migrations.rechainOnSync`; `migrations.checkOnMerge` desliga o aviso).
+- Vários agentes na mesma worktree: com um já aberto, o ✦ pergunta se vai para um dos terminais
+  abertos ou abre outro (`worktreeGraph.agentWhenOpen`: perguntar, reaproveitar ou sempre novo).
+  Ctrl/Alt+clique no ✦ e "Abrir outro agente na worktree" sempre abrem um terminal novo (`#2`, `#3`…).
+- View "Agentes abertos": terminais de agente agrupados por worktree, com há quanto tempo estão
+  abertos; clicar traz o terminal para frente, ➕ abre outro na worktree e ✕ fecha. Badge com o total.
+- "Agentes abertos…" (paleta, menu da worktree e chip ✦ do card) lista os terminais agrupados;
+  o chip mostra "Claude Code ×2" quando há mais de um.
+
 ## 0.14.0
 - Grupo "Não commitadas" em cada worktree da view Worktrees (inclusive a principal): cada arquivo
   com a letra (M/A/D/?), as linhas (+/−) e se está no stage; clique abre o diff com o último commit.

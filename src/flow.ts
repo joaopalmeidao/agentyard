@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { Controller } from './controller';
 import { Repo } from './git';
+import { branchNames } from './promotion/core';
 
 export interface FlowStage {
   branch: string;
@@ -55,9 +56,10 @@ export async function computeFlow(repo: Repo, stages: FlowStage[], refs: { name:
 export async function configureFlow(ctl: Controller) {
   const repo = ctl.repo;
   if (!repo) return;
-  const names = (await repo.refs()).filter(r => r.kind === 'head').map(r => r.name);
+  // locais e as do remoto (qa/hml/prd muitas vezes só existem lá)
+  const names = await branchNames(repo, ctl.cfg().get<string>('remote', 'origin'));
   const current = flowStages(ctl);
-  const guess = ['develop', 'dev', 'qa', 'homolog', 'staging', 'main', 'master'].filter(n => names.includes(n));
+  const guess = ['develop', 'dev', 'qa', 'homolog', 'hml', 'staging', 'prd', 'prod', 'production', 'main', 'master'].filter(n => names.includes(n));
   const chosen: FlowStage[] = [];
   const order = ['1º (onde as features entram, ex.: dev)', '2º (ex.: QA)', '3º (ex.: homologação)', '4º (ex.: produção)', '5º', '6º'];
   for (let i = 0; i < order.length; i++) {
