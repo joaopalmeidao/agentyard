@@ -110,19 +110,11 @@
       },
       {
         "view": "worktreeGraph.issues",
-        "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao GitLab (URL)](command:worktreeGraph.connectGitLab)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
-      },
-      {
-        "view": "worktreeGraph.issues",
-        "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
+        "contents": "Issues do GitHub, GitLab, Bitbucket e Azure DevOps do repositório, do Jira e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao remoto](command:worktreeGraph.connectHosting)\n[Conectar ao GitLab (URL)](command:worktreeGraph.connectGitLab)\n[Conectar ao Jira](command:worktreeGraph.connectJira)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
       },
       {
         "view": "worktreeGraph.tasks",
         "contents": "Tarefas em fila para os agentes, por worktree. Quando o agente termina uma, a próxima é enviada sozinha.\n[Adicionar tarefa](command:worktreeGraph.tasks.add)\n[Tentar várias abordagens](command:worktreeGraph.attempts.try)"
-      },
-      {
-        "view": "worktreeGraph.issues",
-        "contents": "Issues do GitHub, GitLab, Bitbucket e Azure DevOps do repositório, do Jira e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao remoto](command:worktreeGraph.connectHosting)\n[Conectar ao Jira](command:worktreeGraph.connectJira)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
       },
       {
         "view": "worktreeGraph.schedules",
