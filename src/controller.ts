@@ -233,9 +233,9 @@ export class Controller implements vscode.Disposable {
         const c = this.cfg();
         const t0 = Date.now();
         const run = enrich(this.repo, state, this.cache, {
-          activeSeconds: c.get('statusRefresh.activeSeconds', 30),
+          activeSeconds: c.get('statusRefresh.activeSeconds', 60),
           idleSeconds: c.get('statusRefresh.idleSeconds', 600),
-          concurrency: c.get('gitConcurrency', 8),
+          concurrency: c.get('gitConcurrency', 4),
           isCancelled: () => this.state !== state,
           onResult: () => this.fireSoon(),
         });
@@ -272,7 +272,8 @@ export class Controller implements vscode.Disposable {
   /** Redesenha no máximo a cada 400 ms enquanto os resultados chegam. */
   private fireSoon() {
     if (this.fireTimer) return;
-    const wait = Math.max(0, 400 - (Date.now() - this.lastFire));
+    // com centenas de worktrees, redesenhar mais de uma vez por segundo só atrapalha
+    const wait = Math.max(0, 1000 - (Date.now() - this.lastFire));
     this.fireTimer = setTimeout(() => {
       this.fireTimer = undefined;
       this.lastFire = Date.now();

@@ -232,3 +232,6 @@ section.cols2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(28
 body.attempts-page { overflow: auto; padding: 0 16px 24px; }
 .cards.attempts { margin-top: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .card.attempt .stats { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); margin-top: 4px; }
+
+/* troca de filtro: resposta imediata enquanto o estado novo não chega */
+.graph-scroll.loading { opacity: .35; pointer-events: none; transition: opacity .15s; }

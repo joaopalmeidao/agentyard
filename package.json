@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "Worktree Graph",
   "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "publisher": "worktree-graph",
   "license": "MIT",
   "engines": {
@@ -1792,8 +1792,8 @@
         },
         "worktreeGraph.statusRefresh.activeSeconds": {
           "type": "number",
-          "default": 30,
-          "description": "Idade máxima do git status de worktrees ativas (esta janela, favorita, com agente, com alterações ou com commit nas últimas 24 h)."
+          "default": 60,
+          "description": "Idade máxima do git status de worktrees em uso (esta janela, favorita, com agente aberto ou com alterações)."
         },
         "worktreeGraph.statusRefresh.idleSeconds": {
           "type": "number",
@@ -1802,7 +1802,7 @@
         },
         "worktreeGraph.gitConcurrency": {
           "type": "number",
-          "default": 8,
+          "default": 4,
           "description": "Quantos processos git rodam em paralelo ao detalhar worktrees."
         },
         "worktreeGraph.autoSync.enabledByDefault": {
