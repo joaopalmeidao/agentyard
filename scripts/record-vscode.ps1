@@ -21,7 +21,9 @@ for ($i = 0; $i -lt 600 -and -not (Test-Path "$Dir\start"); $i++) { Start-Sleep 
 New-Item -ItemType Directory -Force "$Dir\frames" | Out-Null
 $start = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
 $n = 0
+$times = New-Object System.Collections.Generic.List[long]
 while (-not (Test-Path "$Dir\stop")) {
+  $times.Add([DateTimeOffset]::Now.ToUnixTimeMilliseconds())
   $r = New-Object W+RECT; [W]::GetWindowRect($h, [ref]$r) | Out-Null
   $bmp = New-Object System.Drawing.Bitmap ($r.R - $r.L), ($r.B - $r.T)
   $g = [System.Drawing.Graphics]::FromImage($bmp); $dc = $g.GetHdc()
@@ -31,5 +33,5 @@ while (-not (Test-Path "$Dir\stop")) {
   $n++
 }
 $end = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-[IO.File]::WriteAllText("$Dir\timing.json", "{`"start`":$start,`"end`":$end,`"frames`":$n}")
+[IO.File]::WriteAllText("$Dir\timing.json", "{`"start`":$start,`"end`":$end,`"frames`":$n,`"times`":[$($times -join ',')]}")
 "gravados $n quadros em $(($end - $start) / 1000)s"

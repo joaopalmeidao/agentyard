@@ -26,8 +26,21 @@ const draw = caps.map((c, i) => {
 const filter = path.join(dir, 'filter.txt');
 fs.writeFileSync(filter, draw.join(','));
 
+// A captura não tem ritmo constante: com o horário de cada quadro, cada um dura o que durou de verdade
+// e as legendas batem com a tela. Sem os horários (gravações antigas), usa a taxa média.
+let input = ['-framerate', fps, '-i', path.join(dir, 'frames', 'f%05d.png')];
+if (Array.isArray(t.times) && t.times.length === t.frames) {
+  const list = t.times.map((ms, i) => {
+    const next = i + 1 < t.times.length ? t.times[i + 1] : t.end;
+    return `file 'frames/f${String(i).padStart(5, '0')}.png'\nduration ${((next - ms) / 1000).toFixed(3)}`;
+  });
+  list.push(`file 'frames/f${String(t.frames - 1).padStart(5, '0')}.png'`);
+  fs.writeFileSync(path.join(dir, 'frames.txt'), list.join('\n') + '\n');
+  input = ['-f', 'concat', '-safe', '0', '-i', path.join(dir, 'frames.txt')];
+}
+
 const mp4 = path.join(outDir, 'worktree-graph.mp4');
-execFileSync(ffmpeg, ['-y', '-loglevel', 'error', '-framerate', fps, '-i', path.join(dir, 'frames', 'f%05d.png'),
+execFileSync(ffmpeg, ['-y', '-loglevel', 'error', ...input,
   '-filter_script:v', filter, '-r', '30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '22', '-movflags', '+faststart', mp4], { stdio: 'inherit' });
 execFileSync(ffmpeg, ['-y', '-loglevel', 'error', '-i', mp4, '-vf',
   'fps=8,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer:bayer_scale=4',

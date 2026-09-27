@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 REC=docs/.tmp/rec
 rm -rf "$REC" && mkdir -p "$REC"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/record-vscode.ps1 -Dir "$(pwd -W)/$REC" &
-WTGRAPH_VIDEO="$(pwd -W)/$REC" node test/run.js | grep -E '^(ok|FAIL)'
+WTGRAPH_VIDEO="$(pwd -W)/$REC" node test/run.js
 wait
 node scripts/build-video.js
 ls -la docs/video
