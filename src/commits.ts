@@ -175,7 +175,7 @@ export interface CommitDetails {
   files: { path: string; status: string; added: number; deleted: number }[];
 }
 
-/** Detalhes para o painel expandido do histórico (estilo Git Graph): dois processos git, sob demanda. */
+/** Detalhes para o painel expandido do histórico: dois processos git, sob demanda. */
 export async function commitDetails(ctl: Controller, sha: string): Promise<CommitDetails> {
   const repo = ctl.repo!;
   const [meta, numstat, names] = await Promise.all([
