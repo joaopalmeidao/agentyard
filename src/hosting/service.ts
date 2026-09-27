@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import { pushBranch } from '../push';
 import type { Controller } from '../controller';
+import { AzureDevOpsClient } from './azure';
+import { bitbucketClient } from './bitbucket';
 import { ChangeRequest, GitHubClient, GitLabClient, HostClient, HostError, parseRemote, RemoteInfo, suggestBody, suggestTitle } from './core';
+import { hostLabel } from './platforms';
 
 const REFRESH_MS = 120_000;
 
@@ -49,7 +52,16 @@ export class RequestService {
     if (!repo) return (this.remote = undefined);
     const name = this.cfg().get<string>('remote', 'origin');
     const r = await repo.run(['remote', 'get-url', name]);
-    this.remote = r.code === 0 ? parseRemote(r.stdout.trim(), this.cfg().get<string[]>('gitlab.hosts', []), this.cfg().get<string[]>('github.hosts', [])) : undefined;
+    this.remote =
+      r.code === 0
+        ? parseRemote(
+            r.stdout.trim(),
+            this.cfg().get<string[]>('gitlab.hosts', []),
+            this.cfg().get<string[]>('github.hosts', []),
+            this.cfg().get<string[]>('bitbucket.hosts', []),
+            this.cfg().get<string[]>('azureDevOps.hosts', []),
+          )
+        : undefined;
     return this.remote;
   }
 
@@ -61,17 +73,33 @@ export class RequestService {
       const s = await vscode.authentication.getSession('github', ['repo'], interactive ? { createIfNone: true } : { silent: true });
       return s?.accessToken;
     }
-    const env = r.kind === 'gitlab' ? process.env.GITLAB_TOKEN : process.env.GITHUB_TOKEN;
+    const env = {
+      github: process.env.GITHUB_TOKEN,
+      gitlab: process.env.GITLAB_TOKEN,
+      bitbucket: process.env.BITBUCKET_TOKEN,
+      azure: process.env.AZURE_DEVOPS_EXT_PAT ?? process.env.AZURE_DEVOPS_TOKEN,
+    }[r.kind];
     if (env) return env;
     return interactive ? this.askToken(r) : undefined;
   }
 
   private apiBase(r: RemoteInfo): string | undefined {
-    return (r.kind === 'gitlab' ? this.cfg().get<string>('gitlab.apiUrl', '') : this.cfg().get<string>('github.apiUrl', '')) || undefined;
+    if (r.kind === 'gitlab') return this.cfg().get<string>('gitlab.apiUrl', '') || undefined;
+    if (r.kind === 'github') return this.cfg().get<string>('github.apiUrl', '') || undefined;
+    return undefined;
   }
 
   private makeClient(r: RemoteInfo, token: string): HostClient {
-    return r.kind === 'github' ? new GitHubClient(r, token, this.apiBase(r)) : new GitLabClient(r, token, this.apiBase(r));
+    switch (r.kind) {
+      case 'github':
+        return new GitHubClient(r, token, this.apiBase(r));
+      case 'gitlab':
+        return new GitLabClient(r, token, this.apiBase(r));
+      case 'bitbucket':
+        return bitbucketClient(r, token, this.apiBase(r));
+      case 'azure':
+        return new AzureDevOpsClient(r, token, this.apiBase(r), fetch, this.cfg().get<string>('azureDevOps.workItemType', 'Task'));
+    }
   }
 
   async client(interactive: boolean): Promise<HostClient | undefined> {
@@ -102,24 +130,21 @@ export class RequestService {
 
   /** Pede um token de acesso pessoal, valida e guarda no cofre do VS Code. */
   async askToken(r: RemoteInfo): Promise<string | undefined> {
-    const where =
-      r.kind === 'gitlab'
-        ? `${r.webBase}/-/user_settings/personal_access_tokens?name=Worktree%20Graph&scopes=api`
-        : `${r.webBase}/settings/tokens`;
+    const h = tokenHelp(r);
     const open = await vscode.window.showInformationMessage(
-      `Conectar ao ${r.kind === 'gitlab' ? 'GitLab' : 'GitHub'} em ${r.webBase}`,
+      `Conectar ao ${hostLabel(r.kind)} em ${r.webBase}`,
       {
         modal: true,
-        detail: `Crie um token de acesso pessoal com o escopo ${r.kind === 'gitlab' ? '"api"' : '"repo"'} e cole na próxima tela. Ele fica guardado no cofre de segredos do VS Code, não em arquivos.`,
+        detail: `${h.detail} Ele fica guardado no cofre de segredos do VS Code, não em arquivos.`,
       },
       'Abrir página de tokens',
       'Já tenho um token',
     );
     if (!open) return undefined;
-    if (open === 'Abrir página de tokens') await vscode.env.openExternal(vscode.Uri.parse(where));
+    if (open === 'Abrir página de tokens') await vscode.env.openExternal(vscode.Uri.parse(h.url));
     const token = await vscode.window.showInputBox({
       title: `Token de ${r.host}`,
-      prompt: `Escopo ${r.kind === 'gitlab' ? 'api' : 'repo'}`,
+      prompt: h.prompt,
       password: true,
       ignoreFocusOut: true,
     });
@@ -140,7 +165,7 @@ export class RequestService {
     const r = await this.detectRemote(true);
     if (!r) {
       vscode.window.showWarningMessage(
-        'O remoto não foi reconhecido como GitHub nem GitLab. Para GitLab self-hosted cujo endereço não contém "gitlab", adicione o host em worktreeGraph.gitlab.hosts.',
+        'O remoto não foi reconhecido como GitHub, GitLab, Bitbucket nem Azure DevOps. Para instalações próprias cujo endereço não diz a plataforma, adicione o host em worktreeGraph.gitlab.hosts, bitbucket.hosts, azureDevOps.hosts ou github.hosts.',
         'Abrir configuração',
       ).then(p => p && vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.gitlab.hosts'));
       return;
@@ -269,4 +294,36 @@ export class RequestService {
     return pushBranch(this.ctl, branch, { quiet: true });
   }
 
+}
+
+/** Onde criar o token e o que colar, por plataforma. */
+function tokenHelp(r: RemoteInfo): { url: string; prompt: string; detail: string } {
+  switch (r.kind) {
+    case 'gitlab':
+      return {
+        url: `${r.webBase}/-/user_settings/personal_access_tokens?name=Worktree%20Graph&scopes=api`,
+        prompt: 'Escopo api',
+        detail: 'Crie um token de acesso pessoal com o escopo "api" e cole na próxima tela.',
+      };
+    case 'bitbucket':
+      return r.flavor === 'cloud'
+        ? {
+            url: 'https://bitbucket.org/account/settings/app-passwords/',
+            prompt: 'usuario:app-password (ou e-mail:API token), ou um access token do repositório',
+            detail: 'Use "usuario:app password" (ou "e-mail:API token") com permissão de leitura e escrita em Pull requests, Issues e Pipelines, ou um access token do repositório.',
+          }
+        : {
+            url: `${r.webBase}/plugins/servlet/access-tokens/manage`,
+            prompt: 'HTTP access token (projeto/repositório: escrita)',
+            detail: 'Crie um HTTP access token pessoal com permissão de escrita no repositório.',
+          };
+    case 'azure':
+      return {
+        url: `${r.azure?.collection ?? r.webBase}/_usersSettings/tokens`,
+        prompt: 'PAT com Code (leitura e escrita), Work Items (leitura e escrita) e Build (leitura e execução)',
+        detail: 'Crie um Personal Access Token com os escopos Code (Read & write), Work Items (Read & write) e Build (Read & execute).',
+      };
+    default:
+      return { url: `${r.webBase}/settings/tokens`, prompt: 'Escopo repo', detail: 'Crie um token de acesso pessoal com o escopo "repo" e cole na próxima tela.' };
+  }
 }

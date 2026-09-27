@@ -44,13 +44,15 @@ export function registerIssues(ctx: vscode.ExtensionContext, ctl: Controller, gu
     await svc.refresh(true);
     const items = svc.groups.flatMap(g => g.issues.map(i => ({ label: `${i.key} ${i.title}`, description: g.title, detail: i.labels.join(' · '), issue: i })));
     if (!items.length) {
-      vscode.window.showInformationMessage('Nenhuma issue encontrada. Conecte o GitHub/GitLab ou o Redmine na view Issues.');
+      vscode.window.showInformationMessage('Nenhuma issue encontrada. Conecte o remoto, o Jira ou o Redmine na view Issues.');
       return;
     }
     const pick = await vscode.window.showQuickPick(items, { title: 'Começar trabalho numa issue (com Claude)', matchOnDescription: true, matchOnDetail: true });
     if (pick) await svc.start(pick.issue, true);
   });
   reg('connectRedmine', () => svc.connectRedmine());
+  reg('connectJira', () => svc.connectJira());
+  reg('disconnectJira', () => svc.disconnectJira());
   reg('issues.create', () => svc.create());
   // Trecho selecionado no editor vira contexto da issue: arquivo, linhas e código.
   reg('issues.createFromSelection', () => {

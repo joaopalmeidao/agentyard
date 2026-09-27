@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import type { HostKind } from '../hosting/core';
+import { hostLabel } from '../hosting/platforms';
 import { Issue } from './core';
 import { IssueGroup, IssueService } from './service';
 
@@ -22,7 +24,8 @@ export class IssueGroupItem extends vscode.TreeItem {
     super(group.title, group.issues.length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `issues:${group.title}`;
     this.description = group.needsConnect ? 'não conectado' : group.error ? 'erro' : String(group.issues.length);
-    this.iconPath = new vscode.ThemeIcon(group.provider === 'redmine' ? 'tasklist' : group.provider === 'gitlab' ? 'source-control' : 'github');
+    const icons: Record<string, string> = { redmine: 'tasklist', jira: 'issues', gitlab: 'source-control', bitbucket: 'repo', azure: 'azure-devops', github: 'github' };
+    this.iconPath = new vscode.ThemeIcon(icons[group.provider] ?? 'issues');
     this.tooltip = group.error ?? group.title;
     this.contextValue = `issueGroup-${group.provider}`;
   }
@@ -78,9 +81,9 @@ export class IssueTreeProvider implements vscode.TreeDataProvider<Node> {
     if (el instanceof IssueGroupItem) {
       const g = el.group;
       if (g.needsConnect) {
-        return g.provider === 'redmine'
-          ? [new ActionItem('Conectar ao Redmine…', 'worktreeGraph.connectRedmine', 'plug')]
-          : [new ActionItem(`Conectar ao ${g.provider === 'gitlab' ? 'GitLab' : 'GitHub'}…`, 'worktreeGraph.connectHosting', 'plug')];
+        if (g.provider === 'redmine') return [new ActionItem('Conectar ao Redmine…', 'worktreeGraph.connectRedmine', 'plug')];
+        if (g.provider === 'jira') return [new ActionItem('Conectar ao Jira…', 'worktreeGraph.connectJira', 'plug')];
+        return [new ActionItem(`Conectar ao ${hostLabel(g.provider as HostKind)}…`, 'worktreeGraph.connectHosting', 'plug')];
       }
       if (g.error) return [new ActionItem(`Erro: ${g.error}`, 'worktreeGraph.issues.refresh', 'error')];
       if (!g.issues.length) return [new ActionItem(this.svc.scope === 'mine' ? 'Nenhuma issue aberta atribuída a você' : 'Nenhuma issue aberta', 'worktreeGraph.issues.refresh', 'check')];

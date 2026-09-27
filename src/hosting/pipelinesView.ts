@@ -209,7 +209,7 @@ export class PipelineService implements vscode.Disposable {
     return this.act(`Iniciando o job manual ${job.name}…`, c => c.play(job));
   }
 
-  /** Dispara um pipeline para a branch; no GitHub, escolhe o workflow (precisa de workflow_dispatch). */
+  /** Dispara um pipeline para a branch; no GitHub (workflow_dispatch) e no Azure, escolhe qual. */
   async trigger(branch?: string) {
     const b =
       branch ??
@@ -223,15 +223,19 @@ export class PipelineService implements vscode.Disposable {
     const client = await this.client(true);
     if (!client) return;
     let workflowId: number | undefined;
-    if (client.kind === 'github') {
+    // GitHub e Azure disparam uma definição específica; GitLab e Bitbucket rodam o arquivo de CI da branch
+    if (client.kind === 'github' || client.kind === 'azure') {
       const wfs = await client.workflows().catch(() => []);
       if (!wfs.length) {
-        vscode.window.showWarningMessage('Nenhum workflow ativo encontrado neste repositório.');
+        vscode.window.showWarningMessage(client.kind === 'azure' ? 'Nenhuma definição de pipeline encontrada neste projeto.' : 'Nenhum workflow ativo encontrado neste repositório.');
         return;
       }
       const pick = await vscode.window.showQuickPick(
         wfs.map(w => ({ label: w.name, description: w.path, id: w.id })),
-        { title: `Disparar workflow em ${b}`, placeHolder: 'O workflow precisa ter o gatilho workflow_dispatch' },
+        {
+          title: `Disparar pipeline em ${b}`,
+          placeHolder: client.kind === 'github' ? 'O workflow precisa ter o gatilho workflow_dispatch' : 'Qual pipeline rodar',
+        },
       );
       if (!pick) return;
       workflowId = pick.id;
@@ -380,8 +384,8 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<Node> {
 
   async getChildren(el?: Node): Promise<Node[]> {
     if (!el) {
-      if (this.svc.unavailable === 'noRemote') return [new InfoItem('Remoto não é GitHub nem GitLab reconhecido', 'worktreeGraph.connectHosting', 'info')];
-      if (this.svc.unavailable === 'noAuth') return [new InfoItem('Conectar ao GitHub/GitLab para ver os pipelines…', 'worktreeGraph.connectHosting', 'plug')];
+      if (this.svc.unavailable === 'noRemote') return [new InfoItem('Remoto não é GitHub, GitLab, Bitbucket nem Azure DevOps reconhecido', 'worktreeGraph.connectHosting', 'info')];
+      if (this.svc.unavailable === 'noAuth') return [new InfoItem('Conectar ao remoto para ver os pipelines…', 'worktreeGraph.connectHosting', 'plug')];
       if (this.svc.error) return [new InfoItem(`Erro: ${this.svc.error}`, 'worktreeGraph.pipelines.refresh', 'error')];
       const list = this.svc.visible();
       if (!list.length) {
