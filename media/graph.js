@@ -182,11 +182,17 @@
         if (w.track) chips.push(chip(esc(w.track.replace('ahead', '↑').replace('behind', '↓')), 'muted', `em relação a ${w.upstream}`));
         else if (w.branch && !w.upstream && !w.isBase) chips.push(chip('não publicada', 'muted'));
         if (w.branch) chips.push(syncChip(w));
+        if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
 
+        const agent = state.agentNames && state.agentNames[0];
         const act = [
+          agent && !w.bare && !w.prunable
+            ? `<button data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" class="agent" title="Abre ${esc(agent)} num terminal dentro desta worktree (botão direito no card para outros agentes)">✦ ${esc(agent)}</button>`
+            : '',
           `<button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>`,
+          `<button data-action="openFile" data-path="${esc(w.path)}" title="Buscar e abrir um arquivo desta worktree aqui mesmo">Arquivos</button>`,
           `<button data-action="openTerminal" data-path="${esc(w.path)}" title="Terminal nesta pasta">Terminal</button>`,
-        ];
+        ].filter(Boolean);
         if (w.branch && !w.isBase) {
           act.push(`<button data-action="diffWithBase" data-branch="${b}" title="Arquivos alterados desde que saiu da base">Revisar</button>`);
           act.push(`<button data-action="mergeBaseInto" data-branch="${b}" ${w.behind ? '' : 'disabled'} title="git merge ${esc(state.baseRef)}">↓ Trazer ${esc(state.base)}</button>`);
@@ -364,7 +370,10 @@
       items.push(item('mergeInto', 'Mesclar em…', { branch: b }));
       items.push('<hr>');
       if (wt) {
+        for (const a of state.agentNames || []) items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
+        if ((state.agentNames || []).length) items.push('<hr>');
         items.push(item('openWorktree', 'Abrir worktree em nova janela', { path: wt.path }));
+        items.push(item('openFile', 'Buscar arquivo nesta worktree…', { path: wt.path }));
         items.push(item('openTerminal', 'Abrir terminal', { path: wt.path }));
       } else {
         items.push(item('createWorktree', 'Criar worktree desta branch', { existing: b }));

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
+import { AgentTerminals } from './agents';
 import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
 import { GitShowProvider, SCHEME } from './diff';
@@ -13,12 +14,33 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(out, ctl);
   await ctl.init();
 
+  const agentTerms = new AgentTerminals(ctl);
+  ctl.agentsRunning = () => agentTerms.running();
+  ctx.subscriptions.push(agentTerms);
+
+  /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
+  const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
+    let wtPath = arg?.path;
+    let branch = arg?.branch;
+    const wts = ctl.repo ? await ctl.repo.worktrees() : [];
+    if (!wtPath && branch) wtPath = wts.find(w => w.branch === branch)?.path;
+    if (wtPath && !branch) branch = wts.find(w => w.path.toLowerCase() === wtPath!.toLowerCase())?.branch;
+    if (!wtPath) {
+      const picked = await actions.pickBranch(ctl, undefined, 'Abrir agente em qual worktree?', true);
+      if (!picked) return;
+      branch = picked;
+      wtPath = wts.find(w => w.branch === picked)?.path;
+    }
+    if (wtPath) await agentTerms.launch(wtPath, branch, agent);
+  };
+
   const sync = new AutoSync(ctl);
+  const tree = new WorktreeTreeProvider(ctl);
   ctx.subscriptions.push(sync);
   ctx.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph.autoSync') && sync.reschedule()),
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, new GitShowProvider()),
-    vscode.window.registerTreeDataProvider('worktreeGraph.worktrees', new WorktreeTreeProvider(ctl)),
+    vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true }),
   );
 
   /** Ações vindas do webview: mesmos nomes dos comandos, argumentos simples. */
@@ -30,6 +52,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return actions.createWorktree(ctl, { startPoint: a.startPoint, existing: a.existing });
       case 'openWorktree':
         return actions.openWorktree(ctl, a.path ? { path: a.path } : a.branch);
+      case 'launchAgent':
+        return launchAgent({ path: a.path, branch: a.branch }, a.agent);
+      case 'openFile':
+        return actions.openFileInWorktree(ctl, a.path ? { path: a.path } : a.branch);
       case 'openTerminal':
         return actions.openTerminal(ctl, a.path ? { path: a.path } : a.branch);
       case 'mergeBaseInto':
@@ -80,6 +106,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('createWorktree', () => actions.createWorktree(ctl));
   reg('openWorktree', item => actions.openWorktree(ctl, item));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
+  reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
+  reg('openFileInWorktree', item => actions.openFileInWorktree(ctl, item));
   reg('mergeBaseInto', item => actions.mergeBaseInto(ctl, item));
   reg('mergeIntoBase', item => actions.mergeIntoBase(ctl, item));
   reg('mergeInto', item => actions.mergeInto(ctl, item));
@@ -91,6 +119,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('syncNow', () => sync.tick(true));
   reg('generateCiWorkflow', () => generateCiWorkflow(ctl));
   reg('showLog', () => out.show());
+
+  // Usado pelos testes de integração (test/).
+  return { ctl, tree, agentTerms };
 }
 
 export function deactivate() {}

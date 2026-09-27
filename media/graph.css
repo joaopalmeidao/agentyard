@@ -30,7 +30,7 @@ button { font: inherit; }
 .toolbar .repo { font-size: 15px; font-weight: 600; }
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }
 
-button { background: var(--btn-bg); color: var(--btn-fg); border: 1px solid transparent; border-radius: 3px; padding: 3px 9px; cursor: pointer; white-space: nowrap; }
+button { background: var(--btn-bg); color: var(--btn-fg); border: 1px solid var(--border); border-radius: 3px; padding: 3px 9px; cursor: pointer; white-space: nowrap; }
 button:hover:not(:disabled) { background: var(--btn-hover); }
 button.primary { background: var(--primary-bg); color: var(--primary-fg); }
 button.primary:hover:not(:disabled) { background: var(--primary-hover); }
@@ -68,6 +68,10 @@ details[open] > summary h2::before { content: '▾'; }
 .chip.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .chip.info { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, transparent); }
 .chip.muted { color: var(--muted); }
+.chip.agent { color: #d7a8ff; border-color: #d7a8ff66; }
+button.agent { background: color-mix(in srgb, #b180d7 22%, var(--btn-bg)); color: #e2c6ff; border-color: #b180d766; }
+button.agent:hover:not(:disabled) { background: color-mix(in srgb, #b180d7 35%, var(--btn-bg)); }
+.menu-item.agent { color: #d7a8ff; }
 .last { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
 .actions button, .row-actions button { font-size: 12px; padding: 2px 7px; }

@@ -35,6 +35,8 @@ export interface WorktreeView extends Worktree {
   isBase: boolean;
   paused: boolean;
   sync?: SyncStatus;
+  /** Agentes com terminal aberto nesta worktree. */
+  agents: string[];
 }
 
 export interface BranchView {
@@ -70,6 +72,8 @@ export interface GraphState {
   branches: BranchView[];
   commits: GraphCommit[];
   autoSync: { enabled: boolean; mode: string; testCommand: string; owner: boolean };
+  /** Agentes configurados, na ordem das configurações (o primeiro é o do botão). */
+  agentNames: string[];
   error?: string;
 }
 
@@ -81,6 +85,9 @@ export interface BuildOptions {
   paused: string[];
   statuses: Map<string, SyncStatus>;
   autoSync: GraphState['autoSync'];
+  agentNames?: string[];
+  /** Caminho da worktree em minúsculas → agentes com terminal aberto. */
+  agentsRunning?: Map<string, string[]>;
 }
 
 const samePath = (a: string, b: string) =>
@@ -125,6 +132,7 @@ export async function buildState(repo: Repo, opts: BuildOptions): Promise<GraphS
           isBase,
           paused: !!wt.branch && opts.paused.includes(wt.branch),
           sync: wt.branch ? opts.statuses.get(wt.branch) : undefined,
+          agents: opts.agentsRunning?.get(path.normalize(wt.path).toLowerCase()) ?? [],
         };
         if (wt.bare || wt.prunable) return view;
         const st = await repo.status(wt.path);
@@ -192,5 +200,6 @@ export async function buildState(repo: Repo, opts: BuildOptions): Promise<GraphS
     branches,
     commits: commits.map(c => ({ ...c, refs: badges.get(c.sha) ?? [] })),
     autoSync: opts.autoSync,
+    agentNames: opts.agentNames ?? [],
   };
 }

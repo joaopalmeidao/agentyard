@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { agents } from './agents';
 import { Repo } from './git';
 import { buildState, GraphState, resolveBase, SyncStatus } from './model';
 
@@ -9,6 +10,8 @@ export class Controller implements vscode.Disposable {
   readonly statuses = new Map<string, SyncStatus>();
   /** Preenchido pelo AutoSync: se esta janela é a que está rodando o sync. */
   syncOwner = false;
+  /** Preenchido na ativação; informa quais worktrees têm terminal de agente aberto. */
+  agentsRunning?: () => Map<string, string[]>;
 
   private readonly changed = new vscode.EventEmitter<GraphState | undefined>();
   readonly onDidChange = this.changed.event;
@@ -66,20 +69,20 @@ export class Controller implements vscode.Disposable {
     this.debounce = setTimeout(() => this.refresh(), ms);
   }
 
+  /** Quem chama durante um refresh em andamento espera também a nova rodada. */
   async refresh(): Promise<void> {
-    if (this.inFlight) {
-      this.again = true;
-      return this.inFlight;
-    }
-    this.inFlight = this.doRefresh();
+    this.again = true;
+    if (this.inFlight) return this.inFlight;
+    this.inFlight = (async () => {
+      while (this.again) {
+        this.again = false;
+        await this.doRefresh();
+      }
+    })();
     try {
       await this.inFlight;
     } finally {
       this.inFlight = undefined;
-      if (this.again) {
-        this.again = false;
-        await this.refresh();
-      }
     }
   }
 
@@ -104,6 +107,8 @@ export class Controller implements vscode.Disposable {
           testCommand: c.get('autoSync.testCommand', ''),
           owner: this.syncOwner,
         },
+        agentNames: agents(this).map(a => a.name),
+        agentsRunning: this.agentsRunning?.(),
       });
     } catch (e) {
       this.log(`Falha ao ler o repositório: ${(e as Error).message}`);

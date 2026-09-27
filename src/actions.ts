@@ -342,3 +342,29 @@ export async function copyText(text: string) {
   await vscode.env.clipboard.writeText(text);
   vscode.window.setStatusBarMessage(`Copiado: ${text}`, 2500);
 }
+
+/** Busca e abre qualquer arquivo de outra worktree sem trocar de janela. */
+export async function openFileInWorktree(ctl: Controller, arg: BranchArg | { path?: string }) {
+  const repo = repoOf(ctl);
+  let dir = typeof arg === 'object' && arg && 'path' in arg && arg.path ? arg.path : undefined;
+  let label = dir ? path.basename(dir) : '';
+  if (!dir) {
+    const wts = (await repo.worktrees()).filter(w => !w.bare && !w.prunable);
+    const byArg = typeof arg === 'string' ? wts.find(w => w.branch === arg) : undefined;
+    const pick =
+      byArg ??
+      (await vscode.window.showQuickPick(
+        wts.map(w => ({ label: w.branch ?? path.basename(w.path), description: w.path, wt: w })),
+        { placeHolder: 'Arquivos de qual worktree?' },
+      ))?.wt;
+    if (!pick) return;
+    dir = pick.path;
+    label = pick.branch ?? path.basename(pick.path);
+  }
+  const files = (await repo.exec(['ls-files', '--cached', '--others', '--exclude-standard'], dir)).split(/\r?\n/).filter(Boolean);
+  const chosen = await vscode.window.showQuickPick(
+    files.map(f => ({ label: path.basename(f), description: path.dirname(f) === '.' ? '' : path.dirname(f), file: f })),
+    { placeHolder: `Abrir arquivo de ${label} (${files.length} arquivos)`, matchOnDescription: true },
+  );
+  if (chosen) await vscode.window.showTextDocument(vscode.Uri.file(path.join(dir, chosen.file)), { preview: true });
+}

@@ -5,7 +5,7 @@ Extensão do VS Code para quem trabalha com vários agentes de IA em paralelo, c
 (ou arrastando uma branch sobre outra) e mantém as branches em dia com a base — localmente, pela
 própria extensão, e no GitHub, por um workflow que ela gera.
 
-![Painel](docs/prints/01-painel.png)
+![VS Code com o Worktree Graph](docs/prints/00-vscode.png)
 
 ## O que tem
 
@@ -15,6 +15,8 @@ própria extensão, e no GitHub, por um workflow que ela gera.
 | **Merge fácil** | `↓ Trazer master`, `↑ Mesclar em master`, arrastar card/branch sobre outro, ou botão direito → *Mesclar em…*. Sempre com confirmação mostrando quantos commits entram e se a simulação prevê conflito. |
 | **Branch sem worktree** | o merge acontece numa worktree temporária; se der conflito, nada muda e a extensão oferece criar uma worktree para resolver. |
 | **Revisar** | lista os arquivos que a branch mudou desde que saiu da base (inclui o que ainda não foi commitado) e abre cada um num diff. |
+| **Agentes no terminal** | botão **✦ Claude Code** em cada card abre o CLI do agente num terminal já dentro da worktree (reaproveita se já estiver aberto). A lista é configurável: Claude Code, Codex, Gemini ou qualquer comando; `{prompt}` pede a tarefa antes de abrir. |
+| **Navegar arquivos** | na barra lateral, cada worktree expande em *Alterações × base* (clique abre o diff) e na árvore de pastas; branches sem worktree também, lidas direto do git. **Arquivos** busca e abre qualquer arquivo de outra worktree sem trocar de janela. |
 | **Nova worktree** | cria branch + pasta a partir da base (ou de qualquer branch/commit) e roda um comando de setup (`npm install`, etc.). |
 | **Grafo** | histórico de todas as branches, worktrees (`▣`), remotas e tags, com filtro. |
 | **Sync automático** | quando a base anda, mescla nas worktrees que casam com os padrões — só se estiver limpa, sem conflito previsto, e roda um comando de verificação (desfaz o merge se falhar). |
@@ -32,6 +34,21 @@ code --install-extension worktree-graph-0.1.0.vsix
 Para desenvolver: abra a pasta no VS Code e aperte **F5**.
 
 Requer git ≥ 2.38 (previsão de conflito usa `git merge-tree --write-tree`).
+
+## Agentes
+
+```jsonc
+"worktreeGraph.agents": [
+  { "name": "Claude Code", "command": "claude" },
+  { "name": "Claude Code (com tarefa)", "command": "claude {prompt}" },
+  { "name": "Codex CLI", "command": "codex" }
+],
+"worktreeGraph.agentTerminalLocation": "editor"   // ou "panel"
+```
+
+O primeiro da lista é o do botão do card; os outros aparecem no botão direito. Cada terminal
+recebe `WTGRAPH_BRANCH`, `WTGRAPH_BASE` e `WTGRAPH_WORKTREE`. Um terminal por worktree e agente:
+clicar de novo só traz o terminal para frente.
 
 ## Sync automático (local)
 
@@ -75,6 +92,8 @@ compartilhadas — os padrões (`autoSync.branches`/`exclude`) ajudam a separar.
 | `worktreeGraph.baseBranch` | *(detecta)* | origin/HEAD → main → master → develop |
 | `worktreeGraph.worktreeRoot` | `<repo>.worktrees` | onde novas worktrees nascem (ex.: `G:\worktrees`) |
 | `worktreeGraph.postCreateCommand` | | rodado num terminal após criar a worktree |
+| `worktreeGraph.agents` | Claude Code, Codex, Gemini | CLIs do botão de agente |
+| `worktreeGraph.agentTerminalLocation` | `panel` | `panel` ou `editor` |
 | `worktreeGraph.noFastForwardIntoBase` | `true` | `--no-ff` ao mesclar na base |
 | `worktreeGraph.refreshIntervalSeconds` | `15` | atualização do painel |
 | `worktreeGraph.graph.maxCommits` | `400` | |
@@ -88,6 +107,13 @@ compartilhadas — os padrões (`autoSync.branches`/`exclude`) ajudam a separar.
 | `worktreeGraph.autoSync.testCommand` | | ex.: `npm test` |
 | `worktreeGraph.autoSync.testTimeoutSeconds` | `900` | |
 | `worktreeGraph.autoSync.rollbackOnTestFailure` | `true` | |
+
+## Testes
+
+```bash
+node test/run.js                 # integração num VS Code real, perfil isolado
+node scripts/test-sync.js <repo> # sync contra um repositório, sem VS Code
+```
 
 ## Scripts
 

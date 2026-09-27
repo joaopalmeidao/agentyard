@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+- Botão de agente em cada worktree: abre Claude Code, Codex, Gemini ou qualquer CLI configurado num terminal dentro da worktree, com `{prompt}` opcional.
+- Barra lateral navegável: alterações × base com diff, árvore de pastas de cada worktree e conteúdo de branches sem worktree.
+- "Abrir arquivo de outra worktree…" com busca.
+- Correção: um refresh pedido durante outro agora espera o estado novo.
+- Testes de integração num VS Code real (`node test/run.js`).
+
 ## 0.1.0
 - Painel com cards de worktree, branches sem worktree e grafo de commits.
 - Merge por botão, arrastar-e-soltar e menu de contexto, com previsão de conflito.
