@@ -33,6 +33,9 @@ export interface ChangeRequest {
   state: 'open' | 'draft' | 'merged' | 'closed';
   source: string;
   target: string;
+  /** Quando foi aberto e mesclado (ms), se a API informa. Usado pela linha do tempo. */
+  createdAt?: number;
+  mergedAt?: number;
   /** Situação da revisão (só para PRs/MRs abertos; preenchida à parte). */
   review?: ReviewStatus;
 }
@@ -257,6 +260,8 @@ export class GitHubClient implements HostClient {
       state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : p.draft ? 'draft' : 'open',
       source: p.head?.ref,
       target: p.base?.ref,
+      createdAt: p.created_at ? Date.parse(p.created_at) : undefined,
+      mergedAt: p.merged_at ? Date.parse(p.merged_at) : undefined,
     };
   }
 
@@ -333,6 +338,8 @@ export class GitLabClient implements HostClient {
       state: m.state === 'merged' ? 'merged' : m.state === 'opened' ? (draft ? 'draft' : 'open') : 'closed',
       source: m.source_branch,
       target: m.target_branch,
+      createdAt: m.created_at ? Date.parse(m.created_at) : undefined,
+      mergedAt: m.merged_at ? Date.parse(m.merged_at) : undefined,
     };
   }
 

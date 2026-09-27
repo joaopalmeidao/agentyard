@@ -18,6 +18,7 @@ import { registerTemplates } from './templates/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
+import { registerDelivery } from './delivery/register';
 import { registerReview } from './review';
 import { registerGitOps } from './gitops/register';
 import { WorktreeDecorations } from './decorations';
@@ -377,6 +378,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const templates = registerTemplates(ctx, ctl, guard, b => issues.linkOf(b)?.key);
   const readySummary = new ReadySummaryService(ctl, agentFlow);
   ctx.subscriptions.push(readySummary);
+  const delivery = registerDelivery(ctx, ctl, guard, { activity, pipelines: () => pipelines.pipelines, issueOf: b => issues.linkOf(b) });
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -389,7 +391,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery };
 }
 
 export function deactivate() {}

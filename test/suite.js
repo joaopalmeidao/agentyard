@@ -787,6 +787,57 @@ exports.run = async () => {
     assert.ok(sized.length >= 3, `${sized.length} com tamanho`);
   });
 
+  await check('entrega: linha do tempo tem as branches ai/* e abre o painel', async () => {
+    const rows = await api.delivery.timeline(30);
+    const names = rows.map(r => r.branch);
+    for (const b of ['ai/login-oauth', 'ai/precos-promo', 'ai/refatorar-api']) assert.ok(names.includes(b), names.join(','));
+    assert.deepStrictEqual((await api.delivery.timeline(30, 'ai/*')).every(r => r.branch.startsWith('ai/')), true);
+    await vscode.commands.executeCommand('worktreeGraph.timeline');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Linha do tempo');
+  });
+
+  await check('entrega: relatório do dia lista as branches com commits hoje', async () => {
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "feat: ajuste do relatório"', { cwd: wt.path });
+    const md = await api.delivery.report('today');
+    assert.ok(md.startsWith('# Relatório de hoje'), md.slice(0, 80));
+    assert.ok(md.includes('### `ai/precos-promo`'), md);
+    assert.ok(md.includes('feat: ajuste do relatório'));
+  });
+
+  await check('entrega: preparar versão num clone descartável cria a tag v1.2.0 e o CHANGELOG', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const os = require('os');
+    const { execSync } = require('child_process');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agentyard-release-'));
+    const clone = path.join(tmp, 'repo');
+    execSync(`git clone -q "${ctl.repo.root}" "${clone}"`);
+    const g = c => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd: clone, encoding: 'utf8' }).trim();
+    g('checkout -q master');
+    fs.writeFileSync(path.join(clone, 'CHANGELOG.md'), '# Changelog\n\n## 1.1.0\n- versão anterior\n');
+    g('add CHANGELOG.md');
+    g('commit -q -m "docs: changelog inicial"');
+    g('commit -q --allow-empty -m "feat(api): rota nova"');
+    execSync('git config user.name t && git config user.email t@t', { cwd: clone });
+    const plan = await api.delivery.prepareRelease({ cwd: clone, confirm: false });
+    assert.strictEqual(plan.version, '1.2.0');
+    assert.strictEqual(plan.tag, 'v1.2.0');
+    assert.strictEqual(g('describe --tags --abbrev=0'), 'v1.2.0');
+    const cl = fs.readFileSync(path.join(clone, 'CHANGELOG.md'), 'utf8');
+    assert.ok(cl.indexOf('## 1.2.0') < cl.indexOf('## 1.1.0') && cl.includes('versão anterior'), cl);
+    assert.ok(cl.includes('**api:** rota nova'), cl);
+    assert.strictEqual(g('log -1 --format=%s'), 'Versão 1.2.0');
+    // o repositório da demo não ganhou tag
+    assert.strictEqual(execSync('git tag', { cwd: ctl.repo.root, encoding: 'utf8' }).includes('v1.2.0'), false);
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+    } catch {
+      // no Windows algum arquivo pode seguir aberto; a pasta é temporária
+    }
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));
