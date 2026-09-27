@@ -540,6 +540,82 @@ export async function removeMerged(ctl: Controller) {
   ctl.scheduleRefresh(50);
 }
 
+/**
+ * Branches locais sem worktree já inteiras na base (`git for-each-ref --merged`, conferido na hora).
+ * Ficam de fora a base e as protegidas (inclui as do fluxo de ambientes).
+ */
+export async function mergedBranches(ctl: Controller): Promise<string[]> {
+  const s = ctl.state;
+  if (!s?.baseSha) return [];
+  const repo = repoOf(ctl);
+  const r = await repo.run(['for-each-ref', `--merged=${s.baseRef}`, '--format=%(refname:short)', 'refs/heads']);
+  if (r.code !== 0) return [];
+  const merged = new Set(r.stdout.split(/\r?\n/).filter(Boolean));
+  const inWorktree = new Set((await repo.worktreesFast()).map(w => w.branch).filter(Boolean));
+  const prot = new Set(s.protectedBranches ?? []);
+  return s.branches.map(b => b.name).filter(n => merged.has(n) && n !== s.base && !prot.has(n) && !inWorktree.has(n));
+}
+
+/** Um clique: exclui as branches locais sem worktree que já estão inteiras na base. */
+export async function removeMergedBranches(ctl: Controller) {
+  const s = ctl.state;
+  if (!s) return;
+  const branches = await mergedBranches(ctl);
+  if (!branches.length) {
+    vscode.window.showInformationMessage(`Nenhuma branch sem worktree já mesclada em ${s.base}.`);
+    return;
+  }
+  const list = branches.slice(0, 15).map(b => `• ${b}`).join('\n') + (branches.length > 15 ? `\n… e mais ${branches.length - 15}` : '');
+  const pick = await vscode.window.showWarningMessage(
+    `Excluir ${branches.length} branch(es) já mesclada(s) em ${s.base}?`,
+    {
+      modal: true,
+      detail: [
+        `Nenhuma tem worktree e todos os commits delas já estão em ${s.base}; nada se perde. Só as branches locais são excluídas (as do remoto continuam).`,
+        list,
+        `Uma branch recém-criada a partir de ${s.base}, ainda sem commits, também conta como mesclada.`,
+        'A base e as branches protegidas nunca entram.',
+      ].join('\n\n'),
+    },
+    'Excluir branches',
+    'Escolher na lista…',
+  );
+  if (!pick) return;
+  let chosen = branches;
+  if (pick === 'Escolher na lista…') {
+    const info = new Map(s.branches.map(b => [b.name, b]));
+    const picked = await vscode.window.showQuickPick(
+      branches.map(b => ({ label: b, description: info.get(b)?.subject ?? '', picked: true })),
+      { canPickMany: true, matchOnDescription: true, title: `Excluir branches mescladas em ${s.base}`, placeHolder: 'Desmarque as que quer manter' },
+    );
+    if (!picked?.length) return;
+    chosen = picked.map(p => p.label);
+  }
+  const repo = repoOf(ctl);
+  // Confere de novo: alguma pode ter ganhado commit ou worktree enquanto o diálogo estava aberto.
+  const still = new Set(await mergedBranches(ctl));
+  const failed: string[] = [];
+  let removed = 0;
+  for (const b of chosen) {
+    if (!still.has(b)) {
+      failed.push(`${b}: não está mais mesclada ou ganhou worktree`);
+      continue;
+    }
+    // -D: `-d` compara com o HEAD/upstream, não com a base; a checagem acima já garante que está na base.
+    const r = await repo.run(['branch', '-D', b]);
+    if (r.code !== 0) failed.push(`${b}: ${r.stderr.trim()}`);
+    else removed++;
+  }
+  ctl.log(`Excluir branches mescladas: ${removed} excluída(s).${failed.length ? `\n${failed.join('\n')}` : ''}`);
+  if (failed.length) {
+    const see = await vscode.window.showWarningMessage(`${removed} excluída(s); ${failed.length} não (veja o log).`, 'Ver log');
+    if (see) ctl.out.show();
+  } else {
+    vscode.window.showInformationMessage(`${removed} branch(es) mesclada(s) excluída(s).`);
+  }
+  ctl.scheduleRefresh(50);
+}
+
 export async function cleanupWorktrees(ctl: Controller, preselected?: string[]) {
   const repo = repoOf(ctl);
   const s = ctl.state;

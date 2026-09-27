@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.0
+- "Excluir mescladas" nas branches sem worktree: um clique exclui as branches locais cujos commits
+  já estão todos na base (a base e as protegidas nunca entram; as do remoto continuam). Confirmação
+  com a lista e "Escolher na lista…" para manter alguma. Também no menu da view Worktrees e na paleta.
+
 ## 0.12.1
 - O botão de PRs/MRs do painel não dá mais "command 'worktreeGraph.pullRequests.focus' not found"
   quando a janela ainda está com uma versão anterior ativa: abre a barra do AgentYard e oferece

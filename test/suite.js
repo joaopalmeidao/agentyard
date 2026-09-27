@@ -889,6 +889,33 @@ exports.run = async () => {
     }
   });
 
+  await check('excluir branches mescladas: só as sem worktree e já inteiras na base', async () => {
+    const { execSync } = require('child_process');
+    const g = c => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd: ctl.repo.root, encoding: 'utf8' }).trim();
+    g('branch velha/mesclada master');
+    g(`branch velha/pendente ${g('commit-tree "master^{tree}" -p master -m pendente')}`);
+    await ctl.refresh();
+    const actions = require('../out/actions');
+    const candidates = await actions.mergedBranches(ctl);
+    assert.ok(candidates.includes('velha/mesclada') && candidates.includes('fix/typo-readme'), candidates.join(','));
+    assert.ok(!candidates.includes('velha/pendente'), 'com commit fora da base fica');
+    assert.ok(!candidates.includes('master') && !candidates.some(b => b.startsWith('ai/')), 'base e branches de worktree ficam');
+
+    const original = vscode.window.showWarningMessage;
+    const stub = async () => 'Excluir branches';
+    vscode.window.showWarningMessage = stub;
+    assert.strictEqual(vscode.window.showWarningMessage, stub, 'consegue substituir o diálogo');
+    try {
+      await vscode.commands.executeCommand('worktreeGraph.removeMergedBranches');
+    } finally {
+      vscode.window.showWarningMessage = original;
+    }
+    const heads = g('for-each-ref --format=%(refname:short) refs/heads').split(/\r?\n/);
+    assert.ok(!heads.includes('velha/mesclada') && !heads.includes('fix/typo-readme'), heads.join(','));
+    assert.ok(heads.includes('velha/pendente') && heads.includes('master') && heads.includes('ai/login-oauth'), heads.join(','));
+    g('branch -D velha/pendente');
+  });
+
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
   if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));
