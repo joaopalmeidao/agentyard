@@ -1,5 +1,7 @@
 import { exec } from 'child_process';
 import * as vscode from 'vscode';
+import { formatBytes } from './env/core';
+import { bytesOf } from './env/register';
 import { agents, fillTemplate } from './agents';
 import type { Controller } from './controller';
 import { flowStages } from './flow';
@@ -57,7 +59,7 @@ interface RunResult {
  * no fim do arquivo, que não fazem nada se as proteções não foram registradas.
  */
 export class Guards implements vscode.Disposable {
-  readonly out = vscode.window.createOutputChannel('Worktree Graph: checagens');
+  readonly out = vscode.window.createOutputChannel('AgentYard: checagens');
   readonly cache = new CheckCache();
   ui: GuardUi = vscodeUi;
   /** Últimos resultados, para os testes e o log. */
@@ -277,7 +279,13 @@ export class Guards implements vscode.Disposable {
     this.lastReminder = { stale: stale.length, orphans: orphans.length, at: Date.now() };
     const parts = [stale.length ? `${stale.length} mesclada(s) e parada(s) há mais de ${c.get<number>('cleanup.staleDays', 7)} dias` : '', orphans.length ? `${orphans.length} órfã(s)` : ''].filter(Boolean);
     void this.ui
-      .warn(`${total} worktrees sobrando neste projeto: ${parts.join(' e ')}.`, {}, 'Limpar…', 'Lembrar depois', 'Não lembrar neste projeto')
+      .warn(
+        `${total} worktrees sobrando neste projeto: ${parts.join(' e ')}.${(b => (b ? ` Ocupam ~${formatBytes(b)}.` : ''))(bytesOf(stale.map(w => w.path)))}`,
+        {},
+        'Limpar…',
+        'Lembrar depois',
+        'Não lembrar neste projeto',
+      )
       .then(async pick => {
         if (pick === 'Limpar…') {
           if (orphans.length) await vscode.commands.executeCommand('worktreeGraph.pruneWorktrees');

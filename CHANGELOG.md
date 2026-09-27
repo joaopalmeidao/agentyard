@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.11.0
+**Correção importante**
+- Remover uma worktree que tinha um atalho (junction/symlink) para fora dela — como o `node_modules`
+  compartilhado com a principal ou um pacote de `npm link` — apagava o conteúdo do destino (o git no
+  Windows segue a junction). Agora os atalhos são desfeitos antes da remoção, em todos os caminhos
+  (remover, limpar em lote, remover mescladas, merge em worktree temporária).
+
+**Histórico**
+- Um desenho só: colunas (Graph, Description, Date, Author, Commit) e, ao clicar num commit, os
+  detalhes logo abaixo (pais, autor, mensagem completa, arquivos com +/− e diff). Etiquetas locais e
+  `origin/` do mesmo commit agrupadas.
+- Seletor "Branches:", "Mostrar branches remotas" e busca; as escolhas ficam salvas por projeto.
+- Filtro "CI": só as branches que o CI usa (fluxo, base, GitHub Actions, GitLab CI, Bitbucket
+  Pipelines, Azure Pipelines e `worktreeGraph.ciBranches`), com o que espera promoção e o último pipeline.
+
+**Agentes**
+- Agendamentos: tarefas enviadas aos agentes por cron ou atalho ("todo dia às 9h", "dias úteis às
+  08:30", "a cada 2 h", "uma vez em …"), para uma branch, uma worktree nova ou todas de um padrão;
+  condições (só limpa, só se a base andou), horário perdido, uma janela por repositório e histórico.
+- Modelos de tarefa ("✦ Usar modelo…") prontos e do projeto (`.agentyard/templates/*.md`).
+- Resumo quando o agente fica pronto: commits, arquivos e +/−, com Revisar, Analisar merge e Publicar.
+- Coordenação: detector de sobreposição de arquivos entre worktrees, fila de merge (uma branch por
+  vez, com a base trazida e checagens), tarefa em lote (`batch.maxParallel`) e orçamento por worktree.
+
+**Ambiente por worktree**
+- Porta e `.env` por worktree (`env.ports`), setup automático (npm/pnpm/yarn/bun/pip/poetry/uv ou
+  `node_modules` compartilhado) e espaço em disco (💾) na tabela, na limpeza e no "Remover mescladas".
+
+**Entrega**
+- Linha do tempo das branches (nascimento, commits, PR/MR, aprovação e merge).
+- Relatório do dia em Markdown (commits, PRs, pipelines, issues, tokens e custo por branch).
+- "Preparar versão": changelog por seções desde a última tag, versão por semver, commit e tag locais.
+
+## 0.10.0
+- Nome novo: **AgentYard** (antes Worktree Graph), com logo e ícone novos: três trilhos de agentes
+  convergindo num merge, formando um Y. Repositório em github.com/joaopalmeidao/agentyard (o link
+  antigo redireciona). Comandos e configurações continuam com os mesmos IDs (`worktreeGraph.*`).
+
 ## 0.9.2
 - Repositórios com centenas de worktrees: menos processos git em paralelo (4), status das worktrees
   paradas menos frequente, painel redesenhado no máximo 1×/s e o grafo não é refeito enquanto as

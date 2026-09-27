@@ -11,9 +11,15 @@ import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
 import { registerGuards } from './guards';
 import { registerAgentFlow } from './agentFlow/register';
+import { registerSchedule } from './schedule/register';
+import { registerCoord } from './coord/register';
+import { ReadySummaryService } from './env/readySummary';
+import { registerEnv } from './env/register';
+import { registerTemplates } from './templates/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
+import { registerDelivery } from './delivery/register';
 import { registerReview } from './review';
 import { registerGitOps } from './gitops/register';
 import { WorktreeDecorations } from './decorations';
@@ -26,7 +32,7 @@ import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, 
 import { WorktreeTreeProvider } from './treeView';
 
 export async function activate(ctx: vscode.ExtensionContext) {
-  const out = vscode.window.createOutputChannel('Worktree Graph');
+  const out = vscode.window.createOutputChannel('AgentYard');
   const ctl = new Controller(ctx, out);
   ctx.subscriptions.push(out, ctl);
 
@@ -34,6 +40,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctl.agentsRunning = () => agentTerms.running();
   ctx.subscriptions.push(agentTerms);
   const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
+  const schedules = registerSchedule(ctx, ctl, agentTerms, agentFlow.tasks);
+  const coord = registerCoord(ctx, ctl, agentTerms, agentFlow);
+  ctl.taskBlocked = p => coord.isBlocked(p);
 
   /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
   const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string) => {
@@ -202,9 +211,22 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return void (await vscode.commands.executeCommand('worktreeGraph.pullRequests.reveal', a.ref));
       case 'focusPrs':
         return void (await vscode.commands.executeCommand('worktreeGraph.pullRequests.focus'));
+      case 'setGraphOptions':
+        // seletor "Branches:" e "Mostrar branches remotas" do histórico
+        if (a.branches !== undefined) await ctx.workspaceState.update('graphBranches', a.branches ? a.branches.split('\n').filter(Boolean) : []);
+        if (a.showRemotes !== undefined) await ctx.workspaceState.update('graphShowRemotes', a.showRemotes === 'true');
+        return ctl.refresh();
+      case 'openCiBranchesSettings':
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.ciBranches');
+        return;
+      case 'openCommitFile':
+        return commits.openCommitFile(ctl, a.sha, a.parent, a.path, a.status);
       case 'setGraphFilter':
-        await ctx.workspaceState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
-        await ctx.globalState.update('graphFilter', a.value === 'unmerged' ? 'unmerged' : 'all');
+        {
+          const f = a.value === 'unmerged' || a.value === 'ci' ? a.value : 'all';
+          await ctx.workspaceState.update('graphFilter', f);
+          await ctx.globalState.update('graphFilter', f);
+        }
         return ctl.refresh();
       case 'publishRequest':
         return ctl.requests.publish(a.branch);
@@ -250,7 +272,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       try {
         await fn(...args);
       } catch (e) {
-        vscode.window.showErrorMessage(`Worktree Graph: ${(e as Error).message}`);
+        vscode.window.showErrorMessage(`AgentYard: ${(e as Error).message}`);
       }
     };
 
@@ -359,6 +381,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
     issueOf: b => issues.linkOf(b),
   });
   const gitOps = registerGitOps(ctx, ctl, guard);
+  const env = registerEnv(ctx, ctl, guard);
+  actions.worktreeCreatedHooks.push((dir, branch, quiet) => env.afterCreate(dir, branch, quiet));
+  const templates = registerTemplates(ctx, ctl, guard, b => issues.linkOf(b)?.key);
+  const readySummary = new ReadySummaryService(ctl, agentFlow);
+  ctx.subscriptions.push(readySummary);
+  const delivery = registerDelivery(ctx, ctl, guard, { activity, pipelines: () => pipelines.pipelines, issueOf: b => issues.linkOf(b) });
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -371,7 +399,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const guards = registerGuards(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, prs };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs };
 }
 
 export function deactivate() {}

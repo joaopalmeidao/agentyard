@@ -295,6 +295,22 @@ export class Repo {
     return r.code === 0 ? r.stdout.trim() : undefined;
   }
 
+  /**
+   * `git worktree remove`, mas antes desfaz os atalhos (symlink/junction) que apontam para fora da
+   * worktree. No Windows o git apaga o CONTEÚDO do destino de uma junction ao remover a pasta — foi
+   * assim que um node_modules compartilhado da worktree principal se perdeu.
+   */
+  async removeWorktree(worktreePath: string, force = false, timeoutMs = 120_000): Promise<GitResult> {
+    // a pasta inteira vai embora: desfaz todos os atalhos (o git também falha com os internos)
+    const unlinked = unlinkExternalLinks(worktreePath, 6, true);
+    const r = await this.run(['worktree', 'remove', ...(force ? ['--force'] : []), worktreePath], this.root, timeoutMs);
+    if (r.code !== 0 && unlinked.length) {
+      // a remoção falhou: os atalhos já foram desfeitos, avisa quais eram para poder recriar
+      r.stderr += `\n(atalhos desfeitos antes da tentativa: ${unlinked.join(', ')})`;
+    }
+    return r;
+  }
+
   async revParse(rev: string, cwd = this.root): Promise<string | undefined> {
     const r = await runGit(cwd, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`]);
     return r.code === 0 ? r.stdout.trim() : undefined;
@@ -336,6 +352,68 @@ export function parseTrack(upstream: string | undefined, track: string | undefin
 }
 
 /** Diretório git de uma worktree: `.git` da principal, ou o apontado pelo arquivo `.git` das demais. */
+/**
+ * Remove (só o atalho, nunca o destino) os symlinks e junctions dentro de `root` que apontam para fora
+ * dela (ou todos, com `all`). Percorre até `maxDepth` níveis sem seguir atalhos; em `node_modules` reais desce só o
+ * suficiente para achar pacotes ligados por `npm link` (inclusive @escopo/pacote). Devolve os
+ * caminhos desfeitos.
+ */
+export function unlinkExternalLinks(root: string, maxDepth = 6, all = false): string[] {
+  const base = path.resolve(root);
+  const inside = (p: string) => {
+    const rel = path.relative(base, p);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  };
+  const out: string[] = [];
+  const walk = (dir: string, depth: number, nodeModulesLevel: number) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(full);
+      } catch {
+        continue;
+      }
+      if (st.isSymbolicLink()) {
+        let target = '';
+        try {
+          target = path.resolve(path.dirname(full), fs.readlinkSync(full));
+        } catch {
+          // atalho quebrado: remover o próprio atalho é seguro
+        }
+        if (all || !target || !inside(target)) {
+          try {
+            fs.unlinkSync(full);
+          } catch {
+            try {
+              fs.rmdirSync(full); // junction de diretório no Windows
+            } catch {
+              continue;
+            }
+          }
+          out.push(full);
+        }
+        continue;
+      }
+      if (!st.isDirectory() || e.name === '.git' || depth >= maxDepth) continue;
+      if (nodeModulesLevel > 0) {
+        // dentro de node_modules real: só pacotes (e @escopo/pacote), sem descer no conteúdo deles
+        if (nodeModulesLevel === 1 && e.name.startsWith('@')) walk(full, depth + 1, 2);
+        continue;
+      }
+      walk(full, depth + 1, e.name === 'node_modules' ? 1 : 0);
+    }
+  };
+  walk(base, 0, 0);
+  return out;
+}
+
 export function gitDirOf(worktreePath: string): string | undefined {
   const dotGit = path.join(worktreePath, '.git');
   try {

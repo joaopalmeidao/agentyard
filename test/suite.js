@@ -16,10 +16,13 @@ exports.run = async () => {
   const results = [];
   const check = async (name, fn) => {
     try {
+      console.log(`[teste] começando: ${name}`);
       await fn();
       results.push(`ok   ${name}`);
+      console.log(`[teste] ok: ${name}`);
     } catch (e) {
       results.push(`FAIL ${name}: ${e.stack || e}`);
+      console.log(`[teste] FAIL: ${name}`);
     }
   };
 
@@ -314,7 +317,7 @@ exports.run = async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
     const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-    assert.ok(tab.label.startsWith('Worktree Graph'), tab.label);
+    assert.ok(tab.label.startsWith('AgentYard'), tab.label);
   });
 
   await check('vários projetos: adicionar, trocar e voltar sem abrir outra janela', async () => {
@@ -636,8 +639,252 @@ exports.run = async () => {
     const wt = ctl.state.worktrees.find(w => w.branch === 'prs/feature');
     assert.ok(wt, 'worktree da branch do PR criada');
     assert.ok((await prs.tree.getChildren(root[0]))[0].contextValue.includes('-wt'), 'item passa a indicar a worktree');
-    execSync(`git worktree remove --force "${wt.path}"`, { cwd: repoRoot });
+    await ctl.repo.removeWorktree(wt.path, true);
     prs.svc.setBrowser(undefined);
+  });
+
+  await check('histórico: filtro CI lista as branches do workflow e detalhes do commit vêm sob demanda', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const root = ctl.repo.root;
+    const dir = path.join(root, '.github', 'workflows');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ci.yml'), 'on:\n  push:\n    branches: [master, "release/*"]\njobs: {}\n');
+    try {
+      await vscode.commands.executeCommand('worktreeGraph.refresh');
+      await ctl.ctx.workspaceState.update('graphFilter', 'ci');
+      await ctl.refresh();
+      const names = ctl.state.ciBranches.map(b => b.name);
+      assert.ok(names.includes('master') && names.includes('release/1.0'), names.join(','));
+      assert.ok(ctl.state.ciBranches.find(b => b.name === 'release/1.0').sources.includes('.github/workflows/ci.yml'));
+      assert.ok(!names.includes('ai/login-oauth'), 'branch de trabalho não entra');
+      assert.ok(ctl.state.commits.length > 0 && !ctl.state.commits.some(c => c.subject === 'feat(auth): login via OAuth'), 'só commits das branches de CI');
+      const { commitDetails } = require('../out/commits');
+      const sha = ctl.state.commits[0].sha;
+      assert.ok(!('files' in ctl.state.commits[0]), 'estado não carrega detalhes');
+      const d = await commitDetails(ctl, sha);
+      assert.strictEqual(d.sha, sha);
+      assert.ok(d.authorEmail && d.message && Array.isArray(d.files));
+    } finally {
+      fs.rmSync(path.join(root, '.github'), { recursive: true, force: true });
+      await ctl.ctx.workspaceState.update('graphFilter', 'all');
+      await ctl.refresh();
+    }
+  });
+
+  await check('agendamentos: o relógio dispara o agente, a fila recebe a tarefa e "só se limpa" pula a suja', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const sch = api.schedules;
+    const root = ctl.repo.root;
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
+    const limpa = path.join(root, '..', 'sched-limpa');
+    const suja = path.join(root, '..', 'sched-suja');
+    execSync(`git worktree add -q -b sched/limpa "${limpa}" master`, { cwd: root });
+    execSync(`git worktree add -q -b sched/suja "${suja}" master`, { cwd: root });
+    fs.writeFileSync(path.join(suja, 'rascunho.txt'), 'x');
+    const base = { agent: 'Eco', conditions: {}, missed: 'run', enabled: true, scope: 'local' };
+
+    // 1. "a cada minuto", criado há 5 min: o tick executa uma vez e abre o agente com o prompt montado
+    const t0 = Date.now();
+    sch.now = () => t0;
+    await sch.save({ ...base, id: 'teste-launch', name: 'Revisão diária', when: 'a cada minuto', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'Revise ${branch} contra ${base}', delivery: 'launch', createdAt: t0 - 5 * 60_000 });
+    const before = vscode.window.terminals.length;
+    await sch.tick();
+    assert.ok(before >= 0);
+    try {
+      await until(() => vscode.window.terminals.some(x => x.name === 'Eco · sched/limpa · tarefa'), 15000);
+    } catch {
+      assert.fail(`terminal da tarefa não abriu: ${vscode.window.terminals.map(x => x.name).join(' | ')} · histórico: ${JSON.stringify(sch.history().slice(0, 3))}`);
+    }
+    assert.strictEqual(fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8'), 'Revise sched/limpa contra master');
+    assert.strictEqual(sch.runtime('teste-launch').lastRun, t0);
+    const n = vscode.window.terminals.length;
+    await sch.tick(); // mesmo minuto: nada a fazer
+    assert.strictEqual(vscode.window.terminals.length, n, 'não executa duas vezes no mesmo horário');
+    await sch.remove('teste-launch');
+
+    // 2. modo fila: a tarefa entra na fila da worktree
+    await sch.save({ ...base, id: 'teste-fila', name: 'Fila', when: 'todo dia às 09:00', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'tarefa da fila', delivery: 'queue', createdAt: t0 });
+    const r = await sch.run(sch.get('teste-fila'), { manual: true });
+    assert.strictEqual(r[0].result, 'ok', JSON.stringify(r));
+    assert.ok(api.agentFlow.tasks.queue(limpa).tasks.some(t => t.text === 'tarefa da fila'));
+    await sch.remove('teste-fila');
+
+    // 3. "só se limpa" em ai/* e sched/*: a suja fica de fora e vai para o histórico
+    await sch.save({ ...base, id: 'teste-limpa', name: 'Só limpas', when: 'dias úteis às 08:30', target: { kind: 'pattern', pattern: 'sched/*' }, prompt: 'x', delivery: 'launch', conditions: { onlyClean: true, skipIfAgentOpen: true }, createdAt: t0 });
+    const res = await sch.run(sch.get('teste-limpa'), { manual: true });
+    const byBranch = Object.fromEntries(res.map(x => [x.target, x.result]));
+    assert.strictEqual(byBranch['sched/suja'], 'skipped', JSON.stringify(res));
+    assert.strictEqual(byBranch['sched/limpa'], 'skipped', 'já há agente aberto (do passo 1)');
+    assert.ok(sch.history().some(h => h.scheduleId === 'teste-limpa' && /alteraç/.test(h.message)), JSON.stringify(sch.history().filter(h => h.scheduleId === 'teste-limpa')));
+    await sch.remove('teste-limpa');
+
+    // 4. horário perdido com política "pular": registra e não executa
+    await sch.save({ ...base, id: 'teste-perdido', name: 'Perdido', when: 'todo dia às 03:00', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'x', delivery: 'launch', missed: 'skip', createdAt: t0 - 3 * 86400_000 });
+    const n2 = vscode.window.terminals.length;
+    await sch.tick();
+    assert.strictEqual(vscode.window.terminals.length, n2);
+    assert.ok(sch.history().some(h => h.scheduleId === 'teste-perdido' && h.result === 'skipped'));
+    await sch.remove('teste-perdido');
+    sch.now = () => Date.now();
+    execSync(`git worktree remove --force "${suja}"`, { cwd: root });
+  });
+
+  await check('coordenação: sobreposição, fila de merge numa base descartável e tarefa em lote', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const root = ctl.repo.root;
+    const git = (c, cwd = root) => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd, encoding: 'utf8' }).trim();
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    const coord = api.coord;
+
+    // sobreposição: coord/x commita em src/api.ts, que ai/refatorar-api tem alterado sem commit
+    const x = path.join(root, '..', 'coord-x');
+    git(`worktree add -q -b coord/x "${x}" master`);
+    fs.writeFileSync(path.join(x, 'src', 'api.ts'), 'export function api() { return "v3"; }\n');
+    git('commit -qam "coord: api v3"', x);
+    await ctl.refresh();
+    await until(() => ctl.state.pending === 0, 30000);
+    await coord.recompute();
+    const o = coord.overlaps.find(v => [v.a, v.b].some(p => p.toLowerCase() === x.toLowerCase()));
+    assert.ok(o, 'sobreposição encontrada');
+    assert.ok(o.files.includes('src/api.ts'), o.files.join(','));
+    await ctl.refresh();
+    assert.ok(ctl.state.worktrees.find(w => w.branch === 'coord/x').overlap, 'chip no estado');
+
+    // fila de merge: duas branches limpas entram em fila/base, uma por vez
+    git('branch fila/base master');
+    for (const n of ['a', 'b']) {
+      const d = path.join(root, '..', `fila-${n}`);
+      git(`worktree add -q -b fila/${n} "${d}" master`);
+      fs.writeFileSync(path.join(d, `fila-${n}.txt`), n);
+      git('add -A', d);
+      git(`commit -qm "fila ${n}"`, d);
+    }
+    await coord.enqueue('fila/a', 'fila/base');
+    await coord.enqueue('fila/b', 'fila/base');
+    await coord.runQueue();
+    await until(() => coord.queue().filter(i => i.target === 'fila/base').every(i => i.status === 'done'), 60000);
+    assert.strictEqual(git('merge-base --is-ancestor fila/a fila/base && echo sim'), 'sim');
+    assert.strictEqual(git('merge-base --is-ancestor fila/b fila/base && echo sim'), 'sim');
+    assert.notStrictEqual(git('rev-parse master'), git('rev-parse fila/base'), 'master intacta');
+    await coord.clearFinished();
+
+    // tarefa em lote: 3 worktrees, 2 vagas → 2 terminais agora e 1 esperando
+    await cfg.update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], G);
+    const running = [...api.agentTerms.running().values()].reduce((n, l) => n + l.length, 0);
+    await cfg.update('batch.maxParallel', running + 2, G);
+    const targets = ['coord/x', 'fila/a', 'fila/b'].map(b => ctl.state.worktrees.find(w => w.branch === b).path);
+    const before = vscode.window.terminals.length;
+    await coord.batch({ paths: targets, prompt: 'rode os testes em ${branch}', mode: 'now' });
+    await until(() => vscode.window.terminals.length === before + 2);
+    assert.strictEqual(coord.batchPending, 1, 'um esperando vaga');
+    assert.ok(require('fs').readFileSync(api.agentTerms.lastPromptFile, 'utf8').startsWith('rode os testes em '));
+    await cfg.update('batch.maxParallel', undefined, G);
+  });
+
+  await check('ambiente: nova worktree ganha .env da principal com a porta dela (fora do git)', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    const root = ctl.repo.root;
+    fs.appendFileSync(path.join(ctl.repo.commonDir, 'info', 'exclude'), '\n.env\n');
+    fs.writeFileSync(path.join(root, '.env'), '# app\nPORT=8000\nDB_URL=sqlite://x\n');
+    await cfg.update('env.ports', { base: 4100, step: 10, vars: ['PORT', 'VITE_PORT'] }, G);
+    try {
+      const dir = await api.actions.createWorktree(ctl, { branch: 'env/teste', quiet: true });
+      const text = fs.readFileSync(path.join(dir, '.env'), 'utf8');
+      assert.ok(/^PORT=41\d0$/m.test(text), text);
+      assert.ok(text.includes('DB_URL=sqlite://x') && text.includes('VITE_PORT='), text);
+      assert.strictEqual(execSync('git status --porcelain', { cwd: dir, encoding: 'utf8' }).trim(), '', '.env fora do git');
+      await ctl.refresh();
+      const port = Number(/^PORT=(\d+)$/m.exec(text)[1]);
+      assert.strictEqual(ctl.state.worktrees.find(w => w.branch === 'env/teste').port, port, 'porta no estado');
+      execSync(`git worktree remove --force "${dir}"`, { cwd: root });
+    } finally {
+      await cfg.update('env.ports', undefined, G);
+      fs.unlinkSync(path.join(root, '.env'));
+    }
+  });
+
+  await check('modelo de tarefa: prompt renderizado vai para o agente e para a fila', async () => {
+    const fs = require('fs');
+    await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const all = await api.templates.list();
+    const t = all.find(x => x.id === 'simplify-diff');
+    assert.ok(t && all.length >= 6);
+    await api.templates.send({ path: wt.path, branch: wt.branch }, t, 'now');
+    const text = fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8');
+    assert.ok(text.includes('ai/login-oauth') && text.includes('master') && !text.includes('${'), text);
+    const wt2 = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    await api.templates.send({ path: wt2.path, branch: wt2.branch }, all.find(x => x.id === 'fix-tests'), 'queue');
+    const q = api.agentFlow.tasks.queue(wt2.path);
+    assert.ok(q && q.tasks.some(x => x.text.includes('ai/precos-promo')), 'tarefa na fila');
+  });
+
+  await check('espaço em disco: calculado em segundo plano e no estado', async () => {
+    await api.env.recomputeSizes();
+    await ctl.refresh();
+    const sized = ctl.state.worktrees.filter(w => w.size && w.size.bytes > 0);
+    assert.ok(sized.length >= 3, `${sized.length} com tamanho`);
+  });
+
+  await check('entrega: linha do tempo tem as branches ai/* e abre o painel', async () => {
+    const rows = await api.delivery.timeline(30);
+    const names = rows.map(r => r.branch);
+    for (const b of ['ai/login-oauth', 'ai/precos-promo', 'ai/refatorar-api']) assert.ok(names.includes(b), names.join(','));
+    assert.deepStrictEqual((await api.delivery.timeline(30, 'ai/*')).every(r => r.branch.startsWith('ai/')), true);
+    await vscode.commands.executeCommand('worktreeGraph.timeline');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Linha do tempo');
+  });
+
+  await check('entrega: relatório do dia lista as branches com commits hoje', async () => {
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "feat: ajuste do relatório"', { cwd: wt.path });
+    const md = await api.delivery.report('today');
+    assert.ok(md.startsWith('# Relatório de hoje'), md.slice(0, 80));
+    assert.ok(md.includes('### `ai/precos-promo`'), md);
+    assert.ok(md.includes('feat: ajuste do relatório'));
+  });
+
+  await check('entrega: preparar versão num clone descartável cria a tag v1.2.0 e o CHANGELOG', async () => {
+    const path = require('path');
+    const fs = require('fs');
+    const os = require('os');
+    const { execSync } = require('child_process');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agentyard-release-'));
+    const clone = path.join(tmp, 'repo');
+    execSync(`git clone -q "${ctl.repo.root}" "${clone}"`);
+    const g = c => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd: clone, encoding: 'utf8' }).trim();
+    g('checkout -q master');
+    fs.writeFileSync(path.join(clone, 'CHANGELOG.md'), '# Changelog\n\n## 1.1.0\n- versão anterior\n');
+    g('add CHANGELOG.md');
+    g('commit -q -m "docs: changelog inicial"');
+    g('commit -q --allow-empty -m "feat(api): rota nova"');
+    execSync('git config user.name t && git config user.email t@t', { cwd: clone });
+    const plan = await api.delivery.prepareRelease({ cwd: clone, confirm: false });
+    assert.strictEqual(plan.version, '1.2.0');
+    assert.strictEqual(plan.tag, 'v1.2.0');
+    assert.strictEqual(g('describe --tags --abbrev=0'), 'v1.2.0');
+    const cl = fs.readFileSync(path.join(clone, 'CHANGELOG.md'), 'utf8');
+    assert.ok(cl.indexOf('## 1.2.0') < cl.indexOf('## 1.1.0') && cl.includes('versão anterior'), cl);
+    assert.ok(cl.includes('**api:** rota nova'), cl);
+    assert.strictEqual(g('log -1 --format=%s'), 'Versão 1.2.0');
+    // o repositório da demo não ganhou tag
+    assert.strictEqual(execSync('git tag', { cwd: ctl.repo.root, encoding: 'utf8' }).includes('v1.2.0'), false);
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+    } catch {
+      // no Windows algum arquivo pode seguir aberto; a pasta é temporária
+    }
   });
 
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
@@ -690,7 +937,7 @@ async function videoScene(api) {
   fs.writeFileSync(path.join(dir, 'start'), '');
   await wait(1200);
 
-  caption('Worktree Graph: todas as worktrees dos seus agentes num painel');
+  caption('AgentYard: todas as worktrees dos seus agentes num painel');
   await vscode.commands.executeCommand('worktreeGraph.openGraph');
   await wait(4500);
 

@@ -52,9 +52,9 @@ export class AutoSync implements vscode.Disposable {
     this.statusBar.text = on ? `$(sync) Sync ${mode === 'notify' ? '(avisar)' : 'on'}${where}` : `$(sync-ignored) Sync off${where}`;
     this.statusBar.tooltip = on
       ? this.ctl.syncOwner
-        ? 'Worktree Graph: esta janela está mantendo as worktrees em dia com a base. Clique para desligar.'
-        : 'Worktree Graph: sync ligado (outra janela do mesmo repositório pode estar rodando). Clique para desligar.'
-      : 'Worktree Graph: sync automático desligado. Clique para ligar.';
+        ? 'AgentYard: esta janela está mantendo as worktrees em dia com a base. Clique para desligar.'
+        : 'AgentYard: sync ligado (outra janela do mesmo repositório pode estar rodando). Clique para desligar.'
+      : 'AgentYard: sync automático desligado. Clique para ligar.';
     this.statusBar.show();
   }
 

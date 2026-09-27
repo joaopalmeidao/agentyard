@@ -414,9 +414,11 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     ctl.scheduleRefresh(50);
     tree.fire();
     if (dir && open) {
-      const go = await vscode.window.showInformationMessage(`${p.ref} está na worktree ${localBranch}.`, 'Abrir em nova janela', 'Abrir terminal');
-      if (go === 'Abrir em nova janela') await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir), { forceNewWindow: true });
-      if (go === 'Abrir terminal') vscode.window.createTerminal({ name: localBranch, cwd: dir }).show();
+      // sem await: o comando termina quando a worktree existe; a pergunta fica na notificação
+      void vscode.window.showInformationMessage(`${p.ref} está na worktree ${localBranch}.`, 'Abrir em nova janela', 'Abrir terminal').then(go => {
+        if (go === 'Abrir em nova janela') vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir), { forceNewWindow: true });
+        if (go === 'Abrir terminal') vscode.window.createTerminal({ name: localBranch, cwd: dir }).show();
+      });
     }
     return dir;
   };

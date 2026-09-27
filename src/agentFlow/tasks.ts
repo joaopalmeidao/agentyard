@@ -89,6 +89,10 @@ export class TaskQueue implements vscode.Disposable {
   }
 
   async startNext(p: string) {
+    if (this.ctl.taskBlocked?.(p)) {
+      this.ctl.log(`Fila de tarefas: ${p} parada por orçamento estourado.`);
+      return;
+    }
     const next = this.queue(p)?.tasks.find(t => t.status === 'waiting');
     if (next) await this.run(p, next.id);
   }

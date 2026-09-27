@@ -12,11 +12,12 @@
 <div id="app"></div>
 <script src="../media/graph.js"></script>
 <script src="../docs/.tmp/state.js"></script>
+<script src="../docs/.tmp/details.js"></script>
 <script>
   const scene = location.hash.slice(1);
   const later = f => setTimeout(f, 50);
   // cenas de cards usam o layout empilhado; as de histórico, o padrão (abas no Histórico)
-  if (!['menu-commit', 'graph'].includes(scene)) window.postMessage({ type: 'ui', ui: { layout: 'rows', tab: 'a' } }, '*');
+  if (!['menu-commit', 'graph', 'historico', 'historico-detalhes', 'ci'].includes(scene)) window.postMessage({ type: 'ui', ui: { layout: 'rows', tab: 'a' } }, '*');
   window.__wtgraphSetState(window.__STATE);
   const fire = (el, type, x, y) => el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y }));
   if (scene === 'menu') {
@@ -27,6 +28,9 @@
   } else if (scene === 'drag') {
     document.body.classList.add('dragging');
     document.querySelector('.card[data-drop="master"]').classList.add('drop-over');
+  } else if (scene === 'historico-detalhes' && window.__DETAILS) {
+    // depois do 'ui' pendente: expande o commit e preenche com os detalhes reais do git
+    setTimeout(() => window.postMessage({ type: 'demo', scene: 'expand', index: window.__DETAILS.index, details: window.__DETAILS.details }, '*'), 100);
   } else if (scene === 'graph') {
     document.querySelector('.graph-section').scrollIntoView();
   }
