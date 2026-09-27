@@ -333,6 +333,17 @@
     return v && v.request;
   }
 
+  /** O agente terminou e deixou commits: clique abre a revisão. */
+  function reviewChip(w) {
+    return `<span class="chip ok link" data-action="reviewReady" data-path="${esc(w.path)}" data-branch="${esc(w.branch || '')}" title="O agente terminou${w.review.commits ? ` com ${w.review.commits} commit(s) novos` : ''}. Clique para revisar.">✓ pronto para revisar</span>`;
+  }
+
+  function tasksChip(w) {
+    const t = w.tasks;
+    const n = t.waiting + (t.running ? 1 : 0);
+    return `<span class="chip info link" data-action="openTasks" title="${t.running ? `Rodando: ${esc(t.running)}\n` : ''}${t.waiting} na fila">☰ ${n} tarefa(s)</span>`;
+  }
+
   const arrows = (behind, ahead) => [behind ? `↓${behind}` : '', ahead ? `↑${ahead}` : ''].filter(Boolean).join(' ');
 
   function chip(text, cls = '', title = '') {
@@ -414,7 +425,7 @@
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
-        <td class="c-chips">${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="c-chips">${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
@@ -449,6 +460,8 @@
         if (w.branch) chips.push(remoteChip(w));
         if (w.branch) chips.push(syncChip(w));
         if (w.agents && w.agents.length) chips.push(chip(`✦ ${w.agents.map(esc).join(', ')}`, 'agent', 'Terminal de agente aberto nesta worktree'));
+        if (w.review) chips.push(reviewChip(w));
+        if (w.tasks) chips.push(tasksChip(w));
         if (w.request) chips.push(requestChip(w.request));
         if (w.branch && pipelineFor(w.branch)) chips.push(pipelineChip(pipelineFor(w.branch)));
         if (w.claude) chips.push(claudeChip(w));
@@ -736,6 +749,7 @@
         items.push(item('mergeIntoBase', `↑ Mesclar em ${state.base}`, { branch: b }));
       }
       items.push(item('mergeInto', 'Mesclar em…', { branch: b }));
+      if (wt) items.push(item('addTask', '☰ Adicionar tarefa para o agente…', { path: wt.path, branch: b }));
       items.push(item('push', 'Push (enviar para o remoto)', { branch: b }));
       items.push('<hr>');
       if (wt) {

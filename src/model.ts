@@ -52,6 +52,10 @@ export interface WorktreeView extends Worktree {
   favorite: boolean;
   /** Sessões do Claude Code cujo cwd está nesta worktree (preenchido em segundo plano). */
   claude?: { sessions: number; tokens: number; last: number; lastId: string; /** custo estimado em US$ (preços configurados) */ usd?: number };
+  /** O agente terminou e deixou commits: "pronto para revisar" (src/agentFlow). */
+  review?: { at: number; commits: number };
+  /** Fila de tarefas do agente nesta worktree. */
+  tasks?: { waiting: number; running?: string };
   /** PR/MR aberto desta branch. */
   request?: ChangeRequest;
 }
