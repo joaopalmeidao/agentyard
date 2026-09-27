@@ -16,6 +16,9 @@ export class RequestService {
 
   constructor(private readonly ctl: Controller) {}
 
+  /** Preenchido pelo serviço de issues: "Closes #12"/"Refs #123" da issue ligada à branch. */
+  issueTrailers: (branch: string) => string[] = () => [];
+
   get label(): 'PR' | 'MR' {
     return this.remote?.kind === 'gitlab' ? 'MR' : 'PR';
   }
@@ -217,7 +220,7 @@ export class RequestService {
     if (!(await this.push(branch))) return;
     try {
       const created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Criando ${L}…` }, () =>
-        client.create({ source: branch, target: target.label, title, body: suggestBody(subjects, L), draft: kind.draft }),
+        client.create({ source: branch, target: target.label, title, body: suggestBody(subjects, L, this.issueTrailers(branch)), draft: kind.draft }),
       );
       this.byBranch.set(branch, created);
       this.ctl.log(`${L} ${created.ref} criado: ${created.url}`);

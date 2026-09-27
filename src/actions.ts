@@ -181,10 +181,17 @@ export async function mergeInto(ctl: Controller, arg: BranchArg) {
   if (target) await mergeBranches(ctl, source, target.label);
 }
 
-export async function createWorktree(ctl: Controller, opts: { startPoint?: string; existing?: string } = {}) {
+/**
+ * `branch`: nome já decidido (sem perguntar); `quiet`: sem a notificação final.
+ * Devolve a pasta criada.
+ */
+export async function createWorktree(
+  ctl: Controller,
+  opts: { startPoint?: string; existing?: string; branch?: string; quiet?: boolean } = {},
+): Promise<string | undefined> {
   const repo = repoOf(ctl);
   const { base } = await ctl.base();
-  let branch = opts.existing;
+  let branch = opts.existing ?? opts.branch;
   if (!branch) {
     const names = new Set((await repo.refs()).filter(r => r.kind === 'head').map(r => r.name));
     branch = await vscode.window.showInputBox({
@@ -216,9 +223,11 @@ export async function createWorktree(ctl: Controller, opts: { startPoint?: strin
     t.show(true);
     t.sendText(post);
   }
+  if (opts.quiet) return dir;
   const pick = await vscode.window.showInformationMessage(`Worktree ${branch} criada em ${dir}.`, 'Abrir em nova janela', 'Abrir terminal');
   if (pick === 'Abrir em nova janela') await openWorktree(ctl, branch);
   else if (pick === 'Abrir terminal') await openTerminal(ctl, branch);
+  return dir;
 }
 
 export async function openWorktree(ctl: Controller, arg: BranchArg | { path?: string }) {

@@ -47,6 +47,10 @@
         {
           "id": "worktreeGraph.worktrees",
           "name": "Worktrees"
+        },
+        {
+          "id": "worktreeGraph.issues",
+          "name": "Issues"
         }
       ]
     },
@@ -60,6 +64,10 @@
         "view": "worktreeGraph.worktrees",
         "contents": "Nenhum repositório git encontrado neste workspace.\n[Abrir pasta](command:vscode.openFolder)",
         "when": "worktreeGraph.state == noRepo"
+      },
+      {
+        "view": "worktreeGraph.issues",
+        "contents": "Issues do GitHub/GitLab do repositório e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao GitHub/GitLab](command:worktreeGraph.connectHosting)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
       }
     ],
     "commands": [
@@ -243,6 +251,67 @@
         "command": "worktreeGraph.compareWithBase",
         "title": "Comparar com a base",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.issues.refresh",
+        "title": "Atualizar issues",
+        "category": "Worktree Graph",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.issues.scopeAll",
+        "title": "Issues: mostrando as minhas (clique para ver todas)",
+        "category": "Worktree Graph",
+        "icon": "$(account)"
+      },
+      {
+        "command": "worktreeGraph.issues.scopeMine",
+        "title": "Issues: mostrando todas (clique para ver só as minhas)",
+        "category": "Worktree Graph",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "worktreeGraph.issues.start",
+        "title": "Começar com Claude",
+        "category": "Worktree Graph",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.issues.createWorktree",
+        "title": "Criar worktree sem agente",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.issues.openUrl",
+        "title": "Abrir no navegador",
+        "category": "Worktree Graph",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "worktreeGraph.issues.copyLink",
+        "title": "Copiar link",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.issues.show",
+        "title": "Ver issue",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.issues.pick",
+        "title": "Começar trabalho numa issue…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.connectRedmine",
+        "title": "Conectar ao Redmine",
+        "category": "Worktree Graph",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "worktreeGraph.disconnectRedmine",
+        "title": "Desconectar do Redmine (apagar chave)",
+        "category": "Worktree Graph"
       }
     ],
     "menus": {
@@ -311,6 +380,36 @@
           "command": "worktreeGraph.configureFlow",
           "when": "view == worktreeGraph.worktrees",
           "group": "4_hosting"
+        },
+        {
+          "command": "worktreeGraph.issues.scopeAll",
+          "when": "view == worktreeGraph.issues && worktreeGraph.issuesScope != all",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.issues.scopeMine",
+          "when": "view == worktreeGraph.issues && worktreeGraph.issuesScope == all",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.issues.refresh",
+          "when": "view == worktreeGraph.issues",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.connectRedmine",
+          "when": "view == worktreeGraph.issues",
+          "group": "1_connect"
+        },
+        {
+          "command": "worktreeGraph.connectHosting",
+          "when": "view == worktreeGraph.issues",
+          "group": "1_connect"
+        },
+        {
+          "command": "worktreeGraph.disconnectRedmine",
+          "when": "view == worktreeGraph.issues",
+          "group": "1_connect"
         }
       ],
       "view/item/context": [
@@ -428,6 +527,36 @@
           "command": "worktreeGraph.copyPath",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^wt(File|Folder)$/",
           "group": "2_path@2"
+        },
+        {
+          "command": "worktreeGraph.issues.start",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.issues.openUrl",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.issues.start",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "1_work@1"
+        },
+        {
+          "command": "worktreeGraph.issues.createWorktree",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "1_work@2"
+        },
+        {
+          "command": "worktreeGraph.issues.openUrl",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "2_link@1"
+        },
+        {
+          "command": "worktreeGraph.issues.copyLink",
+          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "group": "2_link@2"
         }
       ],
       "commandPalette": [
@@ -453,6 +582,26 @@
         },
         {
           "command": "worktreeGraph.addToExplorer",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.start",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.createWorktree",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.openUrl",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.copyLink",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.issues.show",
           "when": "false"
         }
       ]
@@ -694,6 +843,27 @@
           "type": "string",
           "default": "",
           "markdownDescription": "URL da API do GitHub Enterprise, se não for `<host>/api/v3`."
+        },
+        "worktreeGraph.redmine.url": {
+          "type": "string",
+          "default": "",
+          "description": "Endereço do Redmine (ex.: https://redmine.empresa.com). A chave de API fica no cofre do VS Code (comando Conectar ao Redmine)."
+        },
+        "worktreeGraph.redmine.projectId": {
+          "type": "string",
+          "default": "",
+          "description": "Identificador do projeto no Redmine. Vazio = todos os projetos."
+        },
+        "worktreeGraph.issues.branchPrefix": {
+          "type": "string",
+          "default": "issue",
+          "description": "Prefixo da branch criada para issues do GitHub/GitLab (as do Redmine usam \"redmine\")."
+        },
+        "worktreeGraph.prompts.issue": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "",
+          "markdownDescription": "Prompt enviado ao agente ao começar uma issue. Vazio = padrão. Variáveis: `${key}`, `${title}`, `${body}`, `${url}`, `${branch}`, `${base}`."
         }
       }
     }
@@ -703,7 +873,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && node test/issues.test.js && bash test/ci.test.sh && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
