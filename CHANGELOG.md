@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+- Nome novo: **AgentYard** (antes Worktree Graph), com logo e ícone novos: três trilhos de agentes
+  convergindo num merge, formando um Y. Repositório em github.com/joaopalmeidao/agentyard (o link
+  antigo redireciona). Comandos e configurações continuam com os mesmos IDs (`worktreeGraph.*`).
+
 ## 0.9.2
 - Repositórios com centenas de worktrees: menos processos git em paralelo (4), status das worktrees
   paradas menos frequente, painel redesenhado no máximo 1×/s e o grafo não é refeito enquanto as
