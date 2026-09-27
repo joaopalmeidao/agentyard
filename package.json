@@ -1,7 +1,7 @@
 {
   "name": "worktree-graph",
   "displayName": "AgentYard",
-  "description": "Central para desenvolver com agentes de IA em paralelo: worktrees e branches num grafo, merge e análise de merge, PR/MR com revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Redmine), Claude Code por worktree com sessões e uso, fila e agendamento de tarefas, e a base sempre em dia.",
+  "description": "%extension.description%",
   "version": "0.14.0",
   "publisher": "joaopalmeidao",
   "license": "SEE LICENSE IN LICENSE",
@@ -40,7 +40,7 @@
       "activitybar": [
         {
           "id": "worktreeGraph",
-          "title": "AgentYard",
+          "title": "%container.worktreeGraph.title%",
           "icon": "media/icon.svg"
         }
       ]
@@ -49,578 +49,578 @@
       "worktreeGraph": [
         {
           "id": "worktreeGraph.projects",
-          "name": "Projetos"
+          "name": "%view.projects.name%"
         },
         {
           "id": "worktreeGraph.worktrees",
-          "name": "Worktrees"
+          "name": "%view.worktrees.name%"
         },
         {
           "id": "worktreeGraph.issues",
-          "name": "Issues"
+          "name": "%view.issues.name%"
         },
         {
           "id": "worktreeGraph.agents",
-          "name": "Agentes abertos"
+          "name": "%view.agents.name%"
         },
         {
           "id": "worktreeGraph.claudeSessions",
-          "name": "Sessões Claude"
+          "name": "%view.claudeSessions.name%"
         },
         {
           "id": "worktreeGraph.claudeConfig",
-          "name": "Claude: configuração"
+          "name": "%view.claudeConfig.name%"
         },
         {
           "id": "worktreeGraph.pipelines",
-          "name": "Pipelines"
+          "name": "%view.pipelines.name%"
         },
         {
           "id": "worktreeGraph.tasks",
-          "name": "Fila de tarefas"
+          "name": "%view.tasks.name%"
         },
         {
           "id": "worktreeGraph.schedules",
-          "name": "Agendamentos"
+          "name": "%view.schedules.name%"
         },
         {
           "id": "worktreeGraph.mergeQueue",
-          "name": "Fila de merge"
+          "name": "%view.mergeQueue.name%"
         },
         {
           "id": "worktreeGraph.pullRequests",
-          "name": "Pull requests"
+          "name": "%view.pullRequests.name%"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "worktreeGraph.worktrees",
-        "contents": "Lendo o repositório…",
+        "contents": "%welcome.worktrees.1%",
         "when": "worktreeGraph.state == loading || !worktreeGraph.state"
       },
       {
         "view": "worktreeGraph.worktrees",
-        "contents": "Nenhum repositório git encontrado neste workspace.\n[Abrir pasta](command:vscode.openFolder)",
+        "contents": "%welcome.worktrees.2%",
         "when": "worktreeGraph.state == noRepo"
       },
       {
         "view": "worktreeGraph.projects",
-        "contents": "Gerencie vários repositórios nesta janela.\n[Adicionar projeto](command:worktreeGraph.addProject)"
+        "contents": "%welcome.projects.1%"
       },
       {
         "view": "worktreeGraph.issues",
-        "contents": "Issues do GitHub, GitLab, Bitbucket e Azure DevOps do repositório, do Jira e do Redmine, para começar o trabalho numa worktree com o Claude.\n[Conectar ao remoto](command:worktreeGraph.connectHosting)\n[Conectar ao GitLab (URL)](command:worktreeGraph.connectGitLab)\n[Conectar ao Jira](command:worktreeGraph.connectJira)\n[Conectar ao Redmine](command:worktreeGraph.connectRedmine)"
+        "contents": "%welcome.issues.1%"
       },
       {
         "view": "worktreeGraph.tasks",
-        "contents": "Tarefas em fila para os agentes, por worktree. Quando o agente termina uma, a próxima é enviada sozinha.\n[Adicionar tarefa](command:worktreeGraph.tasks.add)\n[Tentar várias abordagens](command:worktreeGraph.attempts.try)"
+        "contents": "%welcome.tasks.1%"
       },
       {
         "view": "worktreeGraph.schedules",
-        "contents": "Nenhum agendamento. Mande tarefas para os agentes em horários fixos (todo dia, dias úteis, a cada N horas ou cron).\n[Novo agendamento](command:worktreeGraph.schedules.new)"
+        "contents": "%welcome.schedules.1%"
       },
       {
         "view": "worktreeGraph.mergeQueue",
-        "contents": "Branches entram na base uma por vez: a base é trazida, os testes rodam e só então o merge acontece.\n[Pôr uma branch na fila](command:worktreeGraph.mergeQueue.add)"
+        "contents": "%welcome.mergeQueue.1%"
       }
     ],
     "commands": [
       {
         "command": "worktreeGraph.branchSummary",
-        "title": "Resumo: commits e alterações",
+        "title": "%command.branchSummary.title%",
         "category": "AgentYard",
         "icon": "$(list-unordered)"
       },
       {
         "command": "worktreeGraph.askAgentAboutBranch",
-        "title": "✦ Perguntar ao agente sobre a branch",
+        "title": "%command.askAgentAboutBranch.title%",
         "category": "AgentYard",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "worktreeGraph.copyBranchContext",
-        "title": "Copiar resumo da branch (para colar no Claude)",
+        "title": "%command.copyBranchContext.title%",
         "category": "AgentYard",
         "icon": "$(copy)"
       },
       {
         "command": "worktreeGraph.showCommitSha",
-        "title": "Ver arquivos do commit",
+        "title": "%command.showCommitSha.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.openGraph",
-        "title": "Abrir grafo",
+        "title": "%command.openGraph.title%",
         "category": "AgentYard",
         "icon": "$(git-merge)"
       },
       {
         "command": "worktreeGraph.refresh",
-        "title": "Atualizar",
+        "title": "%command.refresh.title%",
         "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.createWorktree",
-        "title": "Nova worktree",
+        "title": "%command.createWorktree.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.newWorktreeWithTask",
-        "title": "Nova worktree com tarefa para o agente…",
+        "title": "%command.newWorktreeWithTask.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.newWorktreeWithTaskFrom",
-        "title": "Nova worktree a partir desta, com tarefa para o agente…",
+        "title": "%command.newWorktreeWithTaskFrom.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.showUncommitted",
-        "title": "Ver alterações não commitadas",
+        "title": "%command.showUncommitted.title%",
         "category": "AgentYard",
         "icon": "$(diff)"
       },
       {
         "command": "worktreeGraph.openWorktree",
-        "title": "Abrir worktree em nova janela",
+        "title": "%command.openWorktree.title%",
         "category": "AgentYard",
         "icon": "$(empty-window)"
       },
       {
         "command": "worktreeGraph.launchAgent",
-        "title": "Abrir agente (Claude Code, Codex…) na worktree",
+        "title": "%command.launchAgent.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.launchAgentNew",
-        "title": "Abrir outro agente na worktree (novo terminal)",
+        "title": "%command.launchAgentNew.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.agents.pick",
-        "title": "Agentes abertos…",
+        "title": "%command.agents.pick.title%",
         "category": "AgentYard",
         "icon": "$(list-flat)"
       },
       {
         "command": "worktreeGraph.agents.show",
-        "title": "Mostrar terminal",
+        "title": "%command.agents.show.title%",
         "category": "AgentYard",
         "icon": "$(terminal)"
       },
       {
         "command": "worktreeGraph.agents.close",
-        "title": "Fechar terminal do agente",
+        "title": "%command.agents.close.title%",
         "category": "AgentYard",
         "icon": "$(close)"
       },
       {
         "command": "worktreeGraph.openFileInWorktree",
-        "title": "Abrir arquivo de outra worktree…",
+        "title": "%command.openFileInWorktree.title%",
         "category": "AgentYard",
         "icon": "$(go-to-file)"
       },
       {
         "command": "worktreeGraph.openTerminal",
-        "title": "Abrir terminal na worktree",
+        "title": "%command.openTerminal.title%",
         "category": "AgentYard",
         "icon": "$(terminal)"
       },
       {
         "command": "worktreeGraph.mergeBaseInto",
-        "title": "Trazer a base para esta branch",
+        "title": "%command.mergeBaseInto.title%",
         "category": "AgentYard",
         "icon": "$(arrow-down)"
       },
       {
         "command": "worktreeGraph.mergeIntoBase",
-        "title": "Mesclar esta branch na base",
+        "title": "%command.mergeIntoBase.title%",
         "category": "AgentYard",
         "icon": "$(git-merge)"
       },
       {
         "command": "worktreeGraph.mergeInto",
-        "title": "Mesclar esta branch em…",
+        "title": "%command.mergeInto.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.rechainMigrations",
-        "title": "Reencadear migrations após a base",
+        "title": "%command.rechainMigrations.title%",
         "category": "AgentYard",
         "icon": "$(list-ordered)"
       },
       {
         "command": "worktreeGraph.checkMigrations",
-        "title": "Conferir migrations das worktrees contra a base",
+        "title": "%command.checkMigrations.title%",
         "category": "AgentYard",
         "icon": "$(list-ordered)"
       },
       {
         "command": "worktreeGraph.diffWithBase",
-        "title": "Revisar alterações contra a base",
+        "title": "%command.diffWithBase.title%",
         "category": "AgentYard",
         "icon": "$(diff)"
       },
       {
         "command": "worktreeGraph.removeWorktree",
-        "title": "Remover worktree",
+        "title": "%command.removeWorktree.title%",
         "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.deleteBranch",
-        "title": "Excluir branch",
+        "title": "%command.deleteBranch.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.togglePauseSync",
-        "title": "Pausar/retomar sync desta branch",
+        "title": "%command.togglePauseSync.title%",
         "category": "AgentYard",
         "icon": "$(debug-pause)"
       },
       {
         "command": "worktreeGraph.toggleAutoSync",
-        "title": "Ligar/desligar sync automático",
+        "title": "%command.toggleAutoSync.title%",
         "category": "AgentYard",
         "icon": "$(sync)"
       },
       {
         "command": "worktreeGraph.syncNow",
-        "title": "Sincronizar agora",
+        "title": "%command.syncNow.title%",
         "category": "AgentYard",
         "icon": "$(sync)"
       },
       {
         "command": "worktreeGraph.generateCiWorkflow",
-        "title": "Gerar workflow de CI (GitHub Actions)",
+        "title": "%command.generateCiWorkflow.title%",
         "category": "AgentYard",
         "icon": "$(github-action)"
       },
       {
         "command": "worktreeGraph.showLog",
-        "title": "Mostrar log",
+        "title": "%command.showLog.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.chooseSyncWhere",
-        "title": "Escolher onde o sync roda (local, GitHub Actions, dividido, ambos)",
+        "title": "%command.chooseSyncWhere.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.cleanupWorktrees",
-        "title": "Limpar worktrees… (remoção em lote)",
+        "title": "%command.cleanupWorktrees.title%",
         "category": "AgentYard",
         "icon": "$(clear-all)"
       },
       {
         "command": "worktreeGraph.pruneWorktrees",
-        "title": "Remover worktrees órfãs (pasta apagada)",
+        "title": "%command.pruneWorktrees.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.toggleFavorite",
-        "title": "Favoritar / desfavoritar",
+        "title": "%command.toggleFavorite.title%",
         "category": "AgentYard",
         "icon": "$(star-empty)"
       },
       {
         "command": "worktreeGraph.publishRequest",
-        "title": "Publicar PR/MR…",
+        "title": "%command.publishRequest.title%",
         "category": "AgentYard",
         "icon": "$(git-pull-request-create)"
       },
       {
         "command": "worktreeGraph.analyzeMerge",
-        "title": "Analisar merge…",
+        "title": "%command.analyzeMerge.title%",
         "category": "AgentYard",
         "icon": "$(git-compare)"
       },
       {
         "command": "worktreeGraph.connectHosting",
-        "title": "Conectar ao GitHub/GitLab",
+        "title": "%command.connectHosting.title%",
         "category": "AgentYard",
         "icon": "$(plug)"
       },
       {
         "command": "worktreeGraph.disconnectHosting",
-        "title": "Desconectar do GitHub/GitLab (apagar token)",
+        "title": "%command.disconnectHosting.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.configureFlow",
-        "title": "Configurar fluxo de ambientes (dev → QA → homologação → produção)…",
+        "title": "%command.configureFlow.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.promotionMap",
-        "title": "Mapa de promoção: o que falta subir entre dev, QA, homologação e produção",
+        "title": "%command.promotionMap.title%",
         "category": "AgentYard",
         "icon": "$(git-compare)"
       },
       {
         "command": "worktreeGraph.addToExplorer",
-        "title": "Adicionar ao Explorer (workspace multi-root)",
+        "title": "%command.addToExplorer.title%",
         "category": "AgentYard",
         "icon": "$(files)"
       },
       {
         "command": "worktreeGraph.openToSide",
-        "title": "Abrir ao lado",
+        "title": "%command.openToSide.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.revealInOS",
-        "title": "Revelar no sistema de arquivos",
+        "title": "%command.revealInOS.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.copyPath",
-        "title": "Copiar caminho",
+        "title": "%command.copyPath.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.compareWithBase",
-        "title": "Comparar com a base",
+        "title": "%command.compareWithBase.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.resolveConflict",
-        "title": "Resolver conflito com o agente (traz a base e resolve)",
+        "title": "%command.resolveConflict.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.launchAgentWithPrompt",
-        "title": "Abrir agente com uma tarefa",
+        "title": "%command.launchAgentWithPrompt.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.addProject",
-        "title": "Adicionar projeto…",
+        "title": "%command.addProject.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.removeProject",
-        "title": "Remover projeto da lista",
+        "title": "%command.removeProject.title%",
         "category": "AgentYard",
         "icon": "$(close)"
       },
       {
         "command": "worktreeGraph.switchProject",
-        "title": "Trocar projeto…",
+        "title": "%command.switchProject.title%",
         "category": "AgentYard",
         "icon": "$(arrow-swap)"
       },
       {
         "command": "worktreeGraph.openProjectGraph",
-        "title": "Abrir grafo do projeto",
+        "title": "%command.openProjectGraph.title%",
         "category": "AgentYard",
         "icon": "$(git-merge)"
       },
       {
         "command": "worktreeGraph.openProjectWindow",
-        "title": "Abrir projeto numa nova janela",
+        "title": "%command.openProjectWindow.title%",
         "category": "AgentYard",
         "icon": "$(empty-window)"
       },
       {
         "command": "worktreeGraph.issues.refresh",
-        "title": "Atualizar issues",
+        "title": "%command.issues.refresh.title%",
         "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.issues.scopeAll",
-        "title": "Issues: mostrando as minhas (clique para ver todas)",
+        "title": "%command.issues.scopeAll.title%",
         "category": "AgentYard",
         "icon": "$(account)"
       },
       {
         "command": "worktreeGraph.issues.scopeMine",
-        "title": "Issues: mostrando todas (clique para ver só as minhas)",
+        "title": "%command.issues.scopeMine.title%",
         "category": "AgentYard",
         "icon": "$(organization)"
       },
       {
         "command": "worktreeGraph.issues.start",
-        "title": "Começar com Claude",
+        "title": "%command.issues.start.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.issues.createWorktree",
-        "title": "Criar worktree sem agente",
+        "title": "%command.issues.createWorktree.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.issues.openUrl",
-        "title": "Abrir no navegador",
+        "title": "%command.issues.openUrl.title%",
         "category": "AgentYard",
         "icon": "$(link-external)"
       },
       {
         "command": "worktreeGraph.issues.copyLink",
-        "title": "Copiar link",
+        "title": "%command.issues.copyLink.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.issues.show",
-        "title": "Ver issue",
+        "title": "%command.issues.show.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.issues.pick",
-        "title": "Começar trabalho numa issue…",
+        "title": "%command.issues.pick.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.connectRedmine",
-        "title": "Conectar ao Redmine",
+        "title": "%command.connectRedmine.title%",
         "category": "AgentYard",
         "icon": "$(plug)"
       },
       {
         "command": "worktreeGraph.disconnectRedmine",
-        "title": "Desconectar do Redmine (apagar chave)",
+        "title": "%command.disconnectRedmine.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claude.refreshSessions",
-        "title": "Reler sessões do Claude Code",
+        "title": "%command.claude.refreshSessions.title%",
         "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.claude.resume",
-        "title": "Retomar sessão",
+        "title": "%command.claude.resume.title%",
         "category": "AgentYard",
         "icon": "$(debug-continue)"
       },
       {
         "command": "worktreeGraph.claude.transcript",
-        "title": "Ver transcrição",
+        "title": "%command.claude.transcript.title%",
         "category": "AgentYard",
         "icon": "$(book)"
       },
       {
         "command": "worktreeGraph.claude.copySessionId",
-        "title": "Copiar id da sessão",
+        "title": "%command.claude.copySessionId.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claude.newSession",
-        "title": "Nova sessão do Claude aqui",
+        "title": "%command.claude.newSession.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.claude.commands",
-        "title": "Comandos do Claude Code…",
+        "title": "%command.claude.commands.title%",
         "category": "AgentYard",
         "icon": "$(terminal-cmd)"
       },
       {
         "command": "worktreeGraph.claude.usage",
-        "title": "Uso do Claude Code (janela de 5 h e semana)",
+        "title": "%command.claude.usage.title%",
         "category": "AgentYard",
         "icon": "$(pulse)"
       },
       {
         "command": "worktreeGraph.claudeConfig.refresh",
-        "title": "Claude: atualizar configuração",
+        "title": "%command.claudeConfig.refresh.title%",
         "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.claudeConfig.newSkill",
-        "title": "Claude: nova skill…",
+        "title": "%command.claudeConfig.newSkill.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.claudeConfig.copySkill",
-        "title": "Copiar para o outro escopo (usuário ↔ projeto)",
+        "title": "%command.claudeConfig.copySkill.title%",
         "category": "AgentYard",
         "icon": "$(copy)"
       },
       {
         "command": "worktreeGraph.claudeConfig.renameSkill",
-        "title": "Renomear…",
+        "title": "%command.claudeConfig.renameSkill.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claudeConfig.deleteSkill",
-        "title": "Excluir…",
+        "title": "%command.claudeConfig.deleteSkill.title%",
         "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.claudeConfig.revealSkill",
-        "title": "Revelar no sistema de arquivos",
+        "title": "%command.claudeConfig.revealSkill.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claudeConfig.openFile",
-        "title": "Abrir",
+        "title": "%command.claudeConfig.openFile.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claudeConfig.editPermissions",
-        "title": "Permissões (allow/ask/deny)…",
+        "title": "%command.claudeConfig.editPermissions.title%",
         "category": "AgentYard",
         "icon": "$(shield)"
       },
       {
         "command": "worktreeGraph.claudeConfig.setModel",
-        "title": "Modelo padrão…",
+        "title": "%command.claudeConfig.setModel.title%",
         "category": "AgentYard",
         "icon": "$(symbol-enum)"
       },
       {
         "command": "worktreeGraph.claudeConfig.showHooks",
-        "title": "Ver hooks",
+        "title": "%command.claudeConfig.showHooks.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.claudeConfig.newMemory",
-        "title": "Claude: nova memória…",
+        "title": "%command.claudeConfig.newMemory.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.claudeConfig.deleteMemory",
-        "title": "Excluir memória…",
+        "title": "%command.claudeConfig.deleteMemory.title%",
         "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.claudeConfig.checkMemoryIndex",
-        "title": "Verificar índice MEMORY.md",
+        "title": "%command.claudeConfig.checkMemoryIndex.title%",
         "category": "AgentYard",
         "icon": "$(checklist)"
       },
       {
         "command": "worktreeGraph.claudeConfig.revealMemory",
-        "title": "Revelar pasta de memória",
+        "title": "%command.claudeConfig.revealMemory.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pushBranch",
-        "title": "Push da branch (enviar para o remoto)",
+        "title": "%command.pushBranch.title%",
         "category": "AgentYard",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "worktreeGraph.pushMany",
-        "title": "Enviar branches com commits pendentes…",
+        "title": "%command.pushMany.title%",
         "category": "AgentYard",
         "icon": "$(cloud-upload)"
       },
@@ -638,552 +638,552 @@
       },
       {
         "command": "worktreeGraph.issues.create",
-        "title": "Nova issue…",
+        "title": "%command.issues.create.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.issues.createFromSelection",
-        "title": "Criar issue com a seleção",
+        "title": "%command.issues.createFromSelection.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pipelines.refresh",
-        "title": "Atualizar pipelines",
+        "title": "%command.pipelines.refresh.title%",
         "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.pipelines.scopeAll",
-        "title": "Pipelines: mostrar todas as branches",
+        "title": "%command.pipelines.scopeAll.title%",
         "category": "AgentYard",
         "icon": "$(list-flat)"
       },
       {
         "command": "worktreeGraph.pipelines.scopeWorktrees",
-        "title": "Pipelines: só branches com worktree",
+        "title": "%command.pipelines.scopeWorktrees.title%",
         "category": "AgentYard",
         "icon": "$(filter)"
       },
       {
         "command": "worktreeGraph.pipelines.open",
-        "title": "Abrir no navegador",
+        "title": "%command.pipelines.open.title%",
         "category": "AgentYard",
         "icon": "$(link-external)"
       },
       {
         "command": "worktreeGraph.pipelines.log",
-        "title": "Ver log",
+        "title": "%command.pipelines.log.title%",
         "category": "AgentYard",
         "icon": "$(output)"
       },
       {
         "command": "worktreeGraph.pipelines.retry",
-        "title": "Re-executar pipeline",
+        "title": "%command.pipelines.retry.title%",
         "category": "AgentYard",
         "icon": "$(debug-rerun)"
       },
       {
         "command": "worktreeGraph.pipelines.retryFailed",
-        "title": "Re-executar só os jobs que falharam",
+        "title": "%command.pipelines.retryFailed.title%",
         "category": "AgentYard",
         "icon": "$(debug-rerun)"
       },
       {
         "command": "worktreeGraph.pipelines.cancel",
-        "title": "Cancelar pipeline",
+        "title": "%command.pipelines.cancel.title%",
         "category": "AgentYard",
         "icon": "$(debug-stop)"
       },
       {
         "command": "worktreeGraph.pipelines.trigger",
-        "title": "Rodar pipeline numa branch…",
+        "title": "%command.pipelines.trigger.title%",
         "category": "AgentYard",
         "icon": "$(play)"
       },
       {
         "command": "worktreeGraph.pipelines.fix",
-        "title": "✦ Corrigir com o agente (log da falha)",
+        "title": "%command.pipelines.fix.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.pipelines.play",
-        "title": "Iniciar job manual",
+        "title": "%command.pipelines.play.title%",
         "category": "AgentYard",
         "icon": "$(debug-start)"
       },
       {
         "command": "worktreeGraph.connectGitLab",
-        "title": "Conectar ao GitLab (URL e token)…",
+        "title": "%command.connectGitLab.title%",
         "category": "AgentYard",
         "icon": "$(plug)"
       },
       {
         "command": "worktreeGraph.cleanupReminder",
-        "title": "Verificar worktrees mescladas e paradas",
+        "title": "%command.cleanupReminder.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.showChecksOutput",
-        "title": "Mostrar saída das checagens",
+        "title": "%command.showChecksOutput.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.reviewWithAgent",
-        "title": "✦ Revisar PR/MR com o agente",
+        "title": "%command.reviewWithAgent.title%",
         "category": "AgentYard",
         "icon": "$(eye)"
       },
       {
         "command": "worktreeGraph.openReview",
-        "title": "Abrir a última revisão do agente",
+        "title": "%command.openReview.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.activity",
-        "title": "Atividade (commits, sessões, tokens e custo por tarefa)",
+        "title": "%command.activity.title%",
         "category": "AgentYard",
         "icon": "$(pulse)"
       },
       {
         "command": "worktreeGraph.tasks.add",
-        "title": "Adicionar tarefa para o agente…",
+        "title": "%command.tasks.add.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.tasks.runNow",
-        "title": "Rodar agora",
+        "title": "%command.tasks.runNow.title%",
         "category": "AgentYard",
         "icon": "$(play)"
       },
       {
         "command": "worktreeGraph.tasks.moveUp",
-        "title": "Subir na fila",
+        "title": "%command.tasks.moveUp.title%",
         "category": "AgentYard",
         "icon": "$(arrow-up)"
       },
       {
         "command": "worktreeGraph.tasks.moveDown",
-        "title": "Descer na fila",
+        "title": "%command.tasks.moveDown.title%",
         "category": "AgentYard",
         "icon": "$(arrow-down)"
       },
       {
         "command": "worktreeGraph.tasks.remove",
-        "title": "Remover tarefa",
+        "title": "%command.tasks.remove.title%",
         "category": "AgentYard",
         "icon": "$(close)"
       },
       {
         "command": "worktreeGraph.tasks.markDone",
-        "title": "Marcar como pronta",
+        "title": "%command.tasks.markDone.title%",
         "category": "AgentYard",
         "icon": "$(pass)"
       },
       {
         "command": "worktreeGraph.tasks.markFailed",
-        "title": "Marcar como falhou",
+        "title": "%command.tasks.markFailed.title%",
         "category": "AgentYard",
         "icon": "$(error)"
       },
       {
         "command": "worktreeGraph.tasks.clearFinished",
-        "title": "Limpar tarefas terminadas",
+        "title": "%command.tasks.clearFinished.title%",
         "category": "AgentYard",
         "icon": "$(clear-all)"
       },
       {
         "command": "worktreeGraph.agents.checkReady",
-        "title": "Verificar se o agente terminou",
+        "title": "%command.agents.checkReady.title%",
         "category": "AgentYard",
         "icon": "$(check)"
       },
       {
         "command": "worktreeGraph.agents.dismissReady",
-        "title": "Tirar \"pronto para revisar\"",
+        "title": "%command.agents.dismissReady.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.attempts.try",
-        "title": "Tentar N abordagens…",
+        "title": "%command.attempts.try.title%",
         "category": "AgentYard",
         "icon": "$(beaker)"
       },
       {
         "command": "worktreeGraph.attempts.fromIssue",
-        "title": "Tentar N abordagens para esta issue…",
+        "title": "%command.attempts.fromIssue.title%",
         "category": "AgentYard",
         "icon": "$(beaker)"
       },
       {
         "command": "worktreeGraph.attempts.compare",
-        "title": "Comparar tentativas…",
+        "title": "%command.attempts.compare.title%",
         "category": "AgentYard",
         "icon": "$(split-horizontal)"
       },
       {
         "command": "worktreeGraph.pullBranch",
-        "title": "Pull da branch (trazer do remoto)",
+        "title": "%command.pullBranch.title%",
         "category": "AgentYard",
         "icon": "$(cloud-download)"
       },
       {
         "command": "worktreeGraph.pullMany",
-        "title": "Trazer do remoto as branches com novidades…",
+        "title": "%command.pullMany.title%",
         "category": "AgentYard",
         "icon": "$(cloud-download)"
       },
       {
         "command": "worktreeGraph.fetchNow",
-        "title": "Fetch agora",
+        "title": "%command.fetchNow.title%",
         "category": "AgentYard",
         "icon": "$(repo-fetch)"
       },
       {
         "command": "worktreeGraph.stashCreate",
-        "title": "Guardar alterações da worktree (stash)…",
+        "title": "%command.stashCreate.title%",
         "category": "AgentYard",
         "icon": "$(archive)"
       },
       {
         "command": "worktreeGraph.stashApply",
-        "title": "Aplicar stash em…",
+        "title": "%command.stashApply.title%",
         "category": "AgentYard",
         "icon": "$(check)"
       },
       {
         "command": "worktreeGraph.stashPop",
-        "title": "Aplicar e remover stash (pop) em…",
+        "title": "%command.stashPop.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.stashShow",
-        "title": "Ver diff do stash",
+        "title": "%command.stashShow.title%",
         "category": "AgentYard",
         "icon": "$(diff)"
       },
       {
         "command": "worktreeGraph.stashDrop",
-        "title": "Apagar stash",
+        "title": "%command.stashDrop.title%",
         "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.moveChanges",
-        "title": "Mover alterações para outra worktree…",
+        "title": "%command.moveChanges.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.showUncommittedPatch",
-        "title": "Ver patch das alterações não commitadas",
+        "title": "%command.showUncommittedPatch.title%",
         "category": "AgentYard",
         "icon": "$(diff)"
       },
       {
         "command": "worktreeGraph.discardChanges",
-        "title": "Descartar alterações não commitadas…",
+        "title": "%command.discardChanges.title%",
         "category": "AgentYard",
         "icon": "$(discard)"
       },
       {
         "command": "worktreeGraph.cherryPick",
-        "title": "Cherry-pick de um commit em…",
+        "title": "%command.cherryPick.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.reorganizeCommits",
-        "title": "Reorganizar commits (juntar, reordenar, descartar)…",
+        "title": "%command.reorganizeCommits.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.undoReorganize",
-        "title": "Desfazer a última reorganização de commits",
+        "title": "%command.undoReorganize.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.compareWith",
-        "title": "Comparar com outra branch/worktree…",
+        "title": "%command.compareWith.title%",
         "category": "AgentYard",
         "icon": "$(git-compare)"
       },
       {
         "command": "worktreeGraph.connectJira",
-        "title": "Conectar ao Jira",
+        "title": "%command.connectJira.title%",
         "category": "AgentYard",
         "icon": "$(plug)"
       },
       {
         "command": "worktreeGraph.disconnectJira",
-        "title": "Desconectar do Jira (apagar credenciais)",
+        "title": "%command.disconnectJira.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.removeMerged",
-        "title": "Remover worktrees já mescladas na base",
+        "title": "%command.removeMerged.title%",
         "category": "AgentYard",
         "icon": "$(git-merge)"
       },
       {
         "command": "worktreeGraph.removeMergedBranches",
-        "title": "Excluir branches sem worktree já mescladas na base",
+        "title": "%command.removeMergedBranches.title%",
         "category": "AgentYard",
         "icon": "$(git-branch)"
       },
       {
         "command": "worktreeGraph.schedules.new",
-        "title": "Novo agendamento…",
+        "title": "%command.schedules.new.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.schedules.edit",
-        "title": "Editar agendamento",
+        "title": "%command.schedules.edit.title%",
         "category": "AgentYard",
         "icon": "$(edit)"
       },
       {
         "command": "worktreeGraph.schedules.duplicate",
-        "title": "Duplicar agendamento",
+        "title": "%command.schedules.duplicate.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.schedules.toggle",
-        "title": "Pausar/retomar agendamento",
+        "title": "%command.schedules.toggle.title%",
         "category": "AgentYard",
         "icon": "$(debug-pause)"
       },
       {
         "command": "worktreeGraph.schedules.runNow",
-        "title": "Executar agendamento agora",
+        "title": "%command.schedules.runNow.title%",
         "category": "AgentYard",
         "icon": "$(play)"
       },
       {
         "command": "worktreeGraph.schedules.history",
-        "title": "Histórico dos agendamentos",
+        "title": "%command.schedules.history.title%",
         "category": "AgentYard",
         "icon": "$(history)"
       },
       {
         "command": "worktreeGraph.schedules.delete",
-        "title": "Excluir agendamento",
+        "title": "%command.schedules.delete.title%",
         "category": "AgentYard",
         "icon": "$(trash)"
       },
       {
         "command": "worktreeGraph.schedules.refresh",
-        "title": "Atualizar agendamentos",
+        "title": "%command.schedules.refresh.title%",
         "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.coord.showOverlaps",
-        "title": "Ver sobreposição de arquivos entre worktrees",
+        "title": "%command.coord.showOverlaps.title%",
         "category": "AgentYard",
         "icon": "$(warning)"
       },
       {
         "command": "worktreeGraph.mergeQueue.add",
-        "title": "Pôr na fila de merge",
+        "title": "%command.mergeQueue.add.title%",
         "category": "AgentYard",
         "icon": "$(add)"
       },
       {
         "command": "worktreeGraph.mergeQueue.remove",
-        "title": "Tirar da fila de merge",
+        "title": "%command.mergeQueue.remove.title%",
         "category": "AgentYard",
         "icon": "$(close)"
       },
       {
         "command": "worktreeGraph.mergeQueue.moveUp",
-        "title": "Subir na fila de merge",
+        "title": "%command.mergeQueue.moveUp.title%",
         "category": "AgentYard",
         "icon": "$(arrow-up)"
       },
       {
         "command": "worktreeGraph.mergeQueue.moveDown",
-        "title": "Descer na fila de merge",
+        "title": "%command.mergeQueue.moveDown.title%",
         "category": "AgentYard",
         "icon": "$(arrow-down)"
       },
       {
         "command": "worktreeGraph.mergeQueue.pause",
-        "title": "Pausar a fila de merge",
+        "title": "%command.mergeQueue.pause.title%",
         "category": "AgentYard",
         "icon": "$(debug-pause)"
       },
       {
         "command": "worktreeGraph.mergeQueue.resume",
-        "title": "Retomar a fila de merge",
+        "title": "%command.mergeQueue.resume.title%",
         "category": "AgentYard",
         "icon": "$(play)"
       },
       {
         "command": "worktreeGraph.mergeQueue.run",
-        "title": "Processar a fila de merge agora",
+        "title": "%command.mergeQueue.run.title%",
         "category": "AgentYard",
         "icon": "$(run-all)"
       },
       {
         "command": "worktreeGraph.mergeQueue.clearFinished",
-        "title": "Limpar mescladas e falhas da fila",
+        "title": "%command.mergeQueue.clearFinished.title%",
         "category": "AgentYard",
         "icon": "$(clear-all)"
       },
       {
         "command": "worktreeGraph.batchTask",
-        "title": "Enviar tarefa para várias worktrees…",
+        "title": "%command.batchTask.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
       },
       {
         "command": "worktreeGraph.showOverlaps",
-        "title": "Ver sobreposição (painel)",
+        "title": "%command.showOverlaps.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.mergeQueueAdd",
-        "title": "Pôr na fila de merge (painel)",
+        "title": "%command.mergeQueueAdd.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.templates.use",
-        "title": "✦ Usar modelo de tarefa…",
+        "title": "%command.templates.use.title%",
         "category": "AgentYard",
         "icon": "$(symbol-snippet)"
       },
       {
         "command": "worktreeGraph.templates.new",
-        "title": "Novo modelo de tarefa…",
+        "title": "%command.templates.new.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.templates.edit",
-        "title": "Editar modelo de tarefa…",
+        "title": "%command.templates.edit.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.env.configure",
-        "title": "Configurar ambiente desta worktree (.env, portas, dependências)",
+        "title": "%command.env.configure.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.env.runDev",
-        "title": "Rodar dev nesta worktree",
+        "title": "%command.env.runDev.title%",
         "category": "AgentYard",
         "icon": "$(play)"
       },
       {
         "command": "worktreeGraph.env.openBrowser",
-        "title": "Abrir a porta desta worktree no navegador",
+        "title": "%command.env.openBrowser.title%",
         "category": "AgentYard",
         "icon": "$(globe)"
       },
       {
         "command": "worktreeGraph.env.refreshSizes",
-        "title": "Recalcular espaço em disco das worktrees",
+        "title": "%command.env.refreshSizes.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.timeline",
-        "title": "Linha do tempo das branches",
+        "title": "%command.timeline.title%",
         "category": "AgentYard",
         "icon": "$(timeline-view-icon)"
       },
       {
         "command": "worktreeGraph.dailyReport",
-        "title": "Relatório do dia…",
+        "title": "%command.dailyReport.title%",
         "category": "AgentYard",
         "icon": "$(output)"
       },
       {
         "command": "worktreeGraph.prepareRelease",
-        "title": "Preparar versão (changelog e tag)…",
+        "title": "%command.prepareRelease.title%",
         "category": "AgentYard",
         "icon": "$(tag)"
       },
       {
         "command": "worktreeGraph.pullRequests.refresh",
-        "title": "Atualizar PRs/MRs",
+        "title": "%command.pullRequests.refresh.title%",
         "category": "AgentYard",
         "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.pullRequests.filter",
-        "title": "Filtrar PRs/MRs…",
+        "title": "%command.pullRequests.filter.title%",
         "category": "AgentYard",
         "icon": "$(filter)"
       },
       {
         "command": "worktreeGraph.pullRequests.clearFilter",
-        "title": "Limpar filtro de PRs/MRs",
+        "title": "%command.pullRequests.clearFilter.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pullRequests.openBrowser",
-        "title": "Abrir no navegador",
+        "title": "%command.pullRequests.openBrowser.title%",
         "category": "AgentYard",
         "icon": "$(link-external)"
       },
       {
         "command": "worktreeGraph.pullRequests.copyLink",
-        "title": "Copiar link",
+        "title": "%command.pullRequests.copyLink.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pullRequests.openWorktree",
-        "title": "Abrir worktree do PR",
+        "title": "%command.pullRequests.openWorktree.title%",
         "category": "AgentYard",
         "icon": "$(empty-window)"
       },
       {
         "command": "worktreeGraph.pullRequests.bringWorktree",
-        "title": "Trazer para uma worktree",
+        "title": "%command.pullRequests.bringWorktree.title%",
         "category": "AgentYard",
         "icon": "$(repo-pull)"
       },
       {
         "command": "worktreeGraph.pullRequests.reviewFiles",
-        "title": "Revisar arquivos do PR…",
+        "title": "%command.pullRequests.reviewFiles.title%",
         "category": "AgentYard",
         "icon": "$(diff)"
       },
       {
         "command": "worktreeGraph.pullRequests.reviewWithAgent",
-        "title": "✦ Revisar com o agente",
+        "title": "%command.pullRequests.reviewWithAgent.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pullRequests.analyzeMerge",
-        "title": "Analisar merge",
+        "title": "%command.pullRequests.analyzeMerge.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pullRequests.merge",
-        "title": "Mesclar PR/MR…",
+        "title": "%command.pullRequests.merge.title%",
         "category": "AgentYard",
         "icon": "$(git-merge)"
       },
       {
         "command": "worktreeGraph.pullRequests.ready",
-        "title": "Marcar pronto para revisão",
+        "title": "%command.pullRequests.ready.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pullRequests.draft",
-        "title": "Converter em rascunho",
+        "title": "%command.pullRequests.draft.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pullRequests.reveal",
-        "title": "Mostrar PR na lista",
+        "title": "%command.pullRequests.reveal.title%",
         "category": "AgentYard"
       },
       {
         "command": "worktreeGraph.pullRequests.openFileDiff",
-        "title": "Diff do arquivo do PR",
+        "title": "%command.pullRequests.openFileDiff.title%",
         "category": "AgentYard"
       }
     ],
@@ -2516,21 +2516,21 @@
         "worktreeGraph.baseBranch": {
           "type": "string",
           "default": "",
-          "description": "Branch base (ex.: master). Vazio = detecta pelo origin/HEAD, depois main/master/develop."
+          "description": "%config.baseBranch.description%"
         },
         "worktreeGraph.worktreeRoot": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Pasta onde novas worktrees são criadas (ex.: `G:\\worktrees`). Vazio = `<repo>.worktrees` ao lado do repositório."
+          "markdownDescription": "%config.worktreeRoot.markdownDescription%"
         },
         "worktreeGraph.postCreateCommand": {
           "type": "string",
           "default": "",
-          "description": "Comando rodado num terminal logo após criar uma worktree (ex.: npm install)."
+          "description": "%config.postCreateCommand.description%"
         },
         "worktreeGraph.agents": {
           "type": "array",
-          "markdownDescription": "CLIs de agente oferecidos no botão **Agente**. O primeiro é o padrão. Use `{prompt}` no comando para digitar a tarefa antes de abrir (ex.: `claude {prompt}`). O terminal recebe `WTGRAPH_BRANCH`, `WTGRAPH_BASE` e `WTGRAPH_WORKTREE`. `promptCommand` (opcional) é usado quando a extensão manda uma tarefa pronta (ex.: resolver conflito): `{prompt}` vira o texto.",
+          "markdownDescription": "%config.agents.markdownDescription%",
           "items": {
             "type": "object",
             "required": [
@@ -2579,12 +2579,12 @@
             "new"
           ],
           "enumDescriptions": [
-            "Perguntar: ir para um dos terminais já abertos ou abrir outro.",
-            "Trazer para frente o último terminal aberto do agente.",
-            "Abrir sempre um terminal novo."
+            "%config.agentWhenOpen.enumDescriptions.0%",
+            "%config.agentWhenOpen.enumDescriptions.1%",
+            "%config.agentWhenOpen.enumDescriptions.2%"
           ],
           "default": "ask",
-          "description": "O que o botão ✦ faz quando o agente já está aberto na worktree. Ctrl/Alt+clique no ✦ sempre abre outro."
+          "description": "%config.agentWhenOpen.description%"
         },
         "worktreeGraph.agentTerminalLocation": {
           "type": "string",
@@ -2593,61 +2593,61 @@
             "editor"
           ],
           "enumDescriptions": [
-            "No painel de terminais, embaixo.",
-            "Como aba no editor, lado a lado com o código."
+            "%config.agentTerminalLocation.enumDescriptions.0%",
+            "%config.agentTerminalLocation.enumDescriptions.1%"
           ],
           "default": "panel",
-          "description": "Onde abrir os terminais de agente."
+          "description": "%config.agentTerminalLocation.description%"
         },
         "worktreeGraph.noFastForwardIntoBase": {
           "type": "boolean",
           "default": true,
-          "description": "Usar --no-ff ao mesclar uma branch na base, preservando o 'formato' da branch no histórico."
+          "description": "%config.noFastForwardIntoBase.description%"
         },
         "worktreeGraph.migrations.checkOnMerge": {
           "type": "boolean",
           "default": true,
-          "description": "Antes de um merge, conferir se as migrations novas dos dois lados colidem (Django, Alembic, Flyway, golang-migrate e numeradas em pastas de migrations) e oferecer reencadear as da branch depois das do destino."
+          "description": "%config.migrations.checkOnMerge.description%"
         },
         "worktreeGraph.migrations.rechainOnSync": {
           "type": "boolean",
           "default": true,
-          "description": "No sync automático, reencadear (com um commit) as migrations da branch depois das da base antes de mesclá-la. Desligado, o sync para e avisa."
+          "description": "%config.migrations.rechainOnSync.description%"
         },
         "worktreeGraph.graph.maxCommits": {
           "type": "number",
           "default": 400,
-          "description": "Quantidade de commits carregados no grafo."
+          "description": "%config.graph.maxCommits.description%"
         },
         "worktreeGraph.graph.showRemoteBranches": {
           "type": "boolean",
           "default": true,
-          "description": "Mostrar branches remotas no grafo."
+          "description": "%config.graph.showRemoteBranches.description%"
         },
         "worktreeGraph.refreshIntervalSeconds": {
           "type": "number",
           "default": 15,
-          "description": "Intervalo de atualização automática (alterações feitas por agentes em outras worktrees)."
+          "description": "%config.refreshIntervalSeconds.description%"
         },
         "worktreeGraph.statusRefresh.activeSeconds": {
           "type": "number",
           "default": 60,
-          "description": "Idade máxima do git status de worktrees em uso (esta janela, favorita, com agente aberto ou com alterações)."
+          "description": "%config.statusRefresh.activeSeconds.description%"
         },
         "worktreeGraph.statusRefresh.idleSeconds": {
           "type": "number",
           "default": 600,
-          "description": "Idade máxima do git status das demais worktrees."
+          "description": "%config.statusRefresh.idleSeconds.description%"
         },
         "worktreeGraph.gitConcurrency": {
           "type": "number",
           "default": 4,
-          "description": "Quantos processos git rodam em paralelo ao detalhar worktrees."
+          "description": "%config.gitConcurrency.description%"
         },
         "worktreeGraph.autoSync.enabledByDefault": {
           "type": "boolean",
           "default": false,
-          "description": "Se o sync automático começa ligado em repositórios novos. Depois disso, o botão de ligar/desligar vale por repositório."
+          "description": "%config.autoSync.enabledByDefault.description%"
         },
         "worktreeGraph.autoSync.where": {
           "type": "string",
@@ -2658,13 +2658,13 @@
             "both"
           ],
           "enumDescriptions": [
-            "Só a extensão sincroniza, nas worktrees desta máquina.",
-            "Só o CI (GitHub Actions ou GitLab CI, gerado em Gerar CI); a extensão só mostra o estado.",
-            "Local para branches não publicadas, CI para as publicadas.",
-            "Os dois em todas as branches (pode gerar merges duplicados)."
+            "%config.autoSync.where.enumDescriptions.0%",
+            "%config.autoSync.where.enumDescriptions.1%",
+            "%config.autoSync.where.enumDescriptions.2%",
+            "%config.autoSync.where.enumDescriptions.3%"
           ],
           "default": "local",
-          "description": "Padrão de onde o sync da base roda. O botão 'onde' do painel escolhe por repositório."
+          "description": "%config.autoSync.where.description%"
         },
         "worktreeGraph.autoSync.mode": {
           "type": "string",
@@ -2673,11 +2673,11 @@
             "notify"
           ],
           "enumDescriptions": [
-            "Mescla a base automaticamente nas worktrees limpas.",
-            "Só avisa que a branch ficou para trás, com botão para mesclar."
+            "%config.autoSync.mode.enumDescriptions.0%",
+            "%config.autoSync.mode.enumDescriptions.1%"
           ],
           "default": "merge",
-          "description": "O que o sync automático faz quando a base anda."
+          "description": "%config.autoSync.mode.description%"
         },
         "worktreeGraph.autoSync.trigger": {
           "type": "string",
@@ -2686,11 +2686,11 @@
             "interval"
           ],
           "enumDescriptions": [
-            "A base é mesclada na branch só quando ela é enviada (push) pela extensão; a verificação periódica só atualiza o estado.",
-            "A base é mesclada nas worktrees limpas a cada verificação (autoSync.intervalSeconds)."
+            "%config.autoSync.trigger.enumDescriptions.0%",
+            "%config.autoSync.trigger.enumDescriptions.1%"
           ],
           "default": "push",
-          "description": "Quando o sync local mescla a base nas branches."
+          "description": "%config.autoSync.trigger.description%"
         },
         "worktreeGraph.autoSync.branches": {
           "type": "array",
@@ -2700,7 +2700,7 @@
           "default": [
             "**"
           ],
-          "description": "Padrões de branch que participam do sync (* = um segmento, ** = qualquer coisa). Ex.: [\"feat/**\", \"ai/**\"]."
+          "description": "%config.autoSync.branches.description%"
         },
         "worktreeGraph.autoSync.exclude": {
           "type": "array",
@@ -2708,36 +2708,36 @@
             "type": "string"
           },
           "default": [],
-          "description": "Padrões de branch que nunca são sincronizados."
+          "description": "%config.autoSync.exclude.description%"
         },
         "worktreeGraph.autoSync.intervalSeconds": {
           "type": "number",
           "default": 60,
-          "description": "Intervalo entre verificações do sync automático."
+          "description": "%config.autoSync.intervalSeconds.description%"
         },
         "worktreeGraph.autoSync.fetchRemote": {
           "type": "boolean",
           "default": false,
-          "description": "Fazer git fetch a cada verificação e sincronizar a partir de origin/<base> em vez da base local."
+          "description": "%config.autoSync.fetchRemote.description%"
         },
         "worktreeGraph.autoSync.testCommand": {
           "type": "string",
           "default": "",
-          "description": "Comando de verificação rodado na worktree depois do merge (ex.: npm test). Vazio = sem verificação."
+          "description": "%config.autoSync.testCommand.description%"
         },
         "worktreeGraph.autoSync.testTimeoutSeconds": {
           "type": "number",
           "default": 900,
-          "description": "Tempo máximo do comando de verificação."
+          "description": "%config.autoSync.testTimeoutSeconds.description%"
         },
         "worktreeGraph.autoSync.rollbackOnTestFailure": {
           "type": "boolean",
           "default": true,
-          "description": "Desfazer o merge (git reset --keep) quando a verificação falhar."
+          "description": "%config.autoSync.rollbackOnTestFailure.description%"
         },
         "worktreeGraph.flow": {
           "type": "array",
-          "markdownDescription": "Fluxo de ambientes em ordem de promoção, ex.: `[\"develop\", \"qa\", \"homolog\", \"main\"]` ou objetos `{ \"branch\": \"qa\", \"label\": \"QA\" }`. Vazio = usa o que foi salvo pelo comando *Configurar fluxo de ambientes*. O primeiro estágio vira a base, a menos que `baseBranch` esteja definido.",
+          "markdownDescription": "%config.flow.markdownDescription%",
           "items": {
             "anyOf": [
               {
@@ -2764,7 +2764,7 @@
         "worktreeGraph.remote": {
           "type": "string",
           "default": "origin",
-          "description": "Remoto usado para push e para PRs/MRs."
+          "description": "%config.remote.description%"
         },
         "worktreeGraph.gitlab.hosts": {
           "type": "array",
@@ -2772,12 +2772,12 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Endereços de GitLab self-hosted, ex.: `https://gitlab.empresa.com`, `https://git.empresa.com:8443` ou `https://empresa.com/gitlab` (instalação em subcaminho). O comando *Conectar ao GitLab (URL e token)* preenche isto. Hosts com \"gitlab\" no nome são reconhecidos sozinhos."
+          "markdownDescription": "%config.gitlab.hosts.markdownDescription%"
         },
         "worktreeGraph.gitlab.apiUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "URL da API do GitLab, se não for `<host>/api/v4`."
+          "markdownDescription": "%config.gitlab.apiUrl.markdownDescription%"
         },
         "worktreeGraph.github.hosts": {
           "type": "array",
@@ -2785,65 +2785,65 @@
             "type": "string"
           },
           "default": [],
-          "description": "Hosts de GitHub Enterprise Server."
+          "description": "%config.github.hosts.description%"
         },
         "worktreeGraph.github.apiUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "URL da API do GitHub Enterprise, se não for `<host>/api/v3`."
+          "markdownDescription": "%config.github.apiUrl.markdownDescription%"
         },
         "worktreeGraph.prompts.resolveConflict": {
           "type": "string",
           "editPresentation": "multilineText",
-          "default": "Na branch ${branch}, traga a ${base} (git merge ${base}) e resolva os conflitos em: ${files}. Preserve a intenção das duas mudanças, rode os testes do projeto e faça o commit do merge. Se algo for ambíguo, pergunte antes de decidir.",
-          "markdownDescription": "Tarefa enviada ao agente pelo botão *Resolver com …*. Placeholders: `${branch}`, `${base}`, `${files}`."
+          "default": "",
+          "markdownDescription": "%config.prompts.resolveConflict.markdownDescription%"
         },
         "worktreeGraph.prompts.mergeIntoBase": {
           "type": "string",
           "editPresentation": "multilineText",
-          "default": "A branch ${branch} conflita com ${base} e não pode ser mesclada nela ainda. Nesta worktree, traga a ${base} (git merge ${base}) e resolva os conflitos em: ${files}, preservando a intenção das duas mudanças. Rode os testes do projeto e faça o commit do merge, para que o merge de ${branch} em ${base} fique limpo. Não faça o merge em ${base} sem me perguntar. Se algo for ambíguo, pergunte antes de decidir.",
-          "markdownDescription": "Tarefa enviada ao agente quando o conflito aparece ao mesclar a branch na base. Placeholders: `${branch}`, `${base}`, `${files}`."
+          "default": "",
+          "markdownDescription": "%config.prompts.mergeIntoBase.markdownDescription%"
         },
         "worktreeGraph.redmine.url": {
           "type": "string",
           "default": "",
-          "description": "Endereço do Redmine (ex.: https://redmine.empresa.com). A chave de API fica no cofre do VS Code (comando Conectar ao Redmine)."
+          "description": "%config.redmine.url.description%"
         },
         "worktreeGraph.redmine.projectId": {
           "type": "string",
           "default": "",
-          "description": "Identificador do projeto no Redmine. Vazio = todos os projetos."
+          "description": "%config.redmine.projectId.description%"
         },
         "worktreeGraph.issues.branchPrefix": {
           "type": "string",
           "default": "issue",
-          "description": "Prefixo da branch criada para issues do GitHub/GitLab (as do Redmine usam \"redmine\")."
+          "description": "%config.issues.branchPrefix.description%"
         },
         "worktreeGraph.prompts.issue": {
           "type": "string",
           "editPresentation": "multilineText",
           "default": "",
-          "markdownDescription": "Prompt enviado ao agente ao começar uma issue. Vazio = padrão. Variáveis: `${key}`, `${title}`, `${body}`, `${url}`, `${branch}`, `${base}`."
+          "markdownDescription": "%config.prompts.issue.markdownDescription%"
         },
         "worktreeGraph.claude.configDir": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Pasta de dados do Claude Code. Vazio = `CLAUDE_CONFIG_DIR` ou `~/.claude`."
+          "markdownDescription": "%config.claude.configDir.markdownDescription%"
         },
         "worktreeGraph.claude.showUsageInStatusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Mostrar o uso estimado (janela de 5 h e semana) na barra de status."
+          "description": "%config.claude.showUsageInStatusBar.description%"
         },
         "worktreeGraph.claude.sessionBudgetTokens": {
           "type": "number",
           "default": 0,
-          "description": "Orçamento de tokens da janela de 5 h, para mostrar a porcentagem usada (0 = não mostrar). Os limites oficiais não ficam no disco; calibre pelo /usage do Claude Code."
+          "description": "%config.claude.sessionBudgetTokens.description%"
         },
         "worktreeGraph.claude.weeklyBudgetTokens": {
           "type": "number",
           "default": 0,
-          "description": "Orçamento semanal de tokens, para mostrar a porcentagem usada (0 = não mostrar)."
+          "description": "%config.claude.weeklyBudgetTokens.description%"
         },
         "worktreeGraph.claude.weekStart": {
           "type": "string",
@@ -2852,27 +2852,27 @@
             "monday"
           ],
           "enumDescriptions": [
-            "Últimos 7 dias corridos.",
-            "Desde segunda-feira 00:00."
+            "%config.claude.weekStart.enumDescriptions.0%",
+            "%config.claude.weekStart.enumDescriptions.1%"
           ],
           "default": "rolling",
-          "description": "Como contar a semana no uso estimado."
+          "description": "%config.claude.weekStart.description%"
         },
         "worktreeGraph.claude.blockHours": {
           "type": "number",
           "default": 5,
-          "description": "Duração da janela de uso (horas)."
+          "description": "%config.claude.blockHours.description%"
         },
         "worktreeGraph.claude.maxSessionsPerGroup": {
           "type": "number",
           "default": 50,
-          "description": "Quantas sessões mostrar por worktree na view Sessões Claude."
+          "description": "%config.claude.maxSessionsPerGroup.description%"
         },
         "worktreeGraph.prompts.fixPipeline": {
           "type": "string",
           "editPresentation": "multilineText",
           "default": "",
-          "markdownDescription": "Tarefa enviada ao agente em *✦ Corrigir* de um pipeline que falhou. Vazio = texto padrão. Placeholders: `${branch}`, `${pipeline}`, `${url}`, `${jobs}`, `${log}` (últimas ~150 linhas do job que falhou)."
+          "markdownDescription": "%config.prompts.fixPipeline.markdownDescription%"
         },
         "worktreeGraph.checks.mode": {
           "type": "string",
@@ -2882,12 +2882,12 @@
             "off"
           ],
           "enumDescriptions": [
-            "Falha impede o merge/push (dá para continuar mesmo assim, confirmando).",
-            "Falha só avisa.",
-            "Não roda checagens."
+            "%config.checks.mode.enumDescriptions.0%",
+            "%config.checks.mode.enumDescriptions.1%",
+            "%config.checks.mode.enumDescriptions.2%"
           ],
           "default": "block",
-          "description": "O que acontece quando as checagens antes de mesclar ou enviar falham."
+          "description": "%config.checks.mode.description%"
         },
         "worktreeGraph.checks.beforeMerge": {
           "type": "array",
@@ -2895,7 +2895,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Comandos rodados na worktree da branch de origem antes de mesclá-la (ex.: `[\"npm run lint\", \"npm test\"]`). Não roda quando é a base descendo para uma branch de trabalho."
+          "markdownDescription": "%config.checks.beforeMerge.markdownDescription%"
         },
         "worktreeGraph.checks.beforePush": {
           "type": "array",
@@ -2903,23 +2903,23 @@
             "type": "string"
           },
           "default": [],
-          "description": "Comandos rodados na worktree da branch antes do push e antes de abrir PR/MR."
+          "description": "%config.checks.beforePush.description%"
         },
         "worktreeGraph.checks.useTestCommand": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Sem comandos configurados, usar `worktreeGraph.autoSync.testCommand` nas checagens."
+          "markdownDescription": "%config.checks.useTestCommand.markdownDescription%"
         },
         "worktreeGraph.checks.timeoutSeconds": {
           "type": "number",
           "default": 900,
-          "description": "Tempo máximo de cada comando de checagem."
+          "description": "%config.checks.timeoutSeconds.description%"
         },
         "worktreeGraph.prompts.fixChecks": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "Tarefa enviada ao agente em \"✦ Corrigir\" quando as checagens falham. Placeholders: `${branch}`, `${action}`, `${commands}`, `${failed}`, `${log}`. Vazio = texto padrão."
+          "markdownDescription": "%config.prompts.fixChecks.markdownDescription%"
         },
         "worktreeGraph.protectedBranches": {
           "type": "array",
@@ -2927,7 +2927,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Branches protegidas (aceita `*`/`**`). Vazio = automático: a base, os estágios do fluxo de ambientes, `main` e `master`."
+          "markdownDescription": "%config.protectedBranches.markdownDescription%"
         },
         "worktreeGraph.protection.mode": {
           "type": "string",
@@ -2937,67 +2937,67 @@
             "off"
           ],
           "enumDescriptions": [
-            "Merge/push direto numa protegida pede para digitar o nome da branch.",
-            "Merge/push direto bloqueado; oferece abrir PR/MR.",
-            "Sem proteção."
+            "%config.protection.mode.enumDescriptions.0%",
+            "%config.protection.mode.enumDescriptions.1%",
+            "%config.protection.mode.enumDescriptions.2%"
           ],
           "default": "confirm",
-          "description": "Como tratar merge e push direto em branches protegidas. Push forçado numa protegida só passa com \"off\"."
+          "description": "%config.protection.mode.description%"
         },
         "worktreeGraph.cleanup.remindThreshold": {
           "type": "number",
           "default": 20,
-          "description": "Avisar quando houver pelo menos esta quantidade de worktrees mescladas e paradas (ou órfãs)."
+          "description": "%config.cleanup.remindThreshold.description%"
         },
         "worktreeGraph.cleanup.staleDays": {
           "type": "number",
           "default": 7,
-          "description": "Dias sem commit para uma worktree mesclada contar como parada."
+          "description": "%config.cleanup.staleDays.description%"
         },
         "worktreeGraph.prompts.review": {
           "type": "string",
           "editPresentation": "multilineText",
           "default": "",
-          "markdownDescription": "Tarefa enviada ao agente em *Revisar PR/MR com o agente*. Vazio = texto padrão. Placeholders: `${kind}`, `${title}`, `${url}`, `${branch}`, `${base}`, `${diffStat}`. O agente precisa gravar `.worktree-graph/review.json` no formato `{ summary, comments: [{ path, line, severity, body }] }`."
+          "markdownDescription": "%config.prompts.review.markdownDescription%"
         },
         "worktreeGraph.claude.pricePerMTokInput": {
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "markdownDescription": "US$ por milhão de tokens de entrada (e criação de cache), para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
+          "markdownDescription": "%config.claude.pricePerMTokInput.markdownDescription%"
         },
         "worktreeGraph.claude.pricePerMTokOutput": {
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "markdownDescription": "US$ por milhão de tokens de saída, para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
+          "markdownDescription": "%config.claude.pricePerMTokOutput.markdownDescription%"
         },
         "worktreeGraph.claude.pricePerMTokCacheRead": {
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "markdownDescription": "US$ por milhão de tokens de leitura de cache, para o custo estimado por tarefa. 0 em todos = sem estimativa de custo."
+          "markdownDescription": "%config.claude.pricePerMTokCacheRead.markdownDescription%"
         },
         "worktreeGraph.agents.idleMinutes": {
           "type": "number",
           "default": 3,
-          "description": "Minutos sem mudança no HEAD nem no índice da worktree para considerar que o agente terminou (quando o fim do comando não pode ser detectado pelo shell integration)."
+          "description": "%config.agents.idleMinutes.description%"
         },
         "worktreeGraph.agents.notifyReady": {
           "type": "boolean",
           "default": true,
-          "description": "Avisar quando um agente termina e a worktree fica pronta para revisar."
+          "description": "%config.agents.notifyReady.description%"
         },
         "worktreeGraph.tasks.autoAdvance": {
           "type": "boolean",
           "default": true,
-          "description": "Quando o agente termina uma tarefa da fila, enviar a próxima automaticamente."
+          "description": "%config.tasks.autoAdvance.description%"
         },
         "worktreeGraph.fetch.intervalMinutes": {
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "description": "Fetch automático a cada N minutos (0 = desligado), com aviso quando branches ganham novidades no remoto."
+          "description": "%config.fetch.intervalMinutes.description%"
         },
         "worktreeGraph.bitbucket.hosts": {
           "type": "array",
@@ -3005,7 +3005,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Hosts de Bitbucket Server/Data Center, ex.: `git.empresa.com` ou `https://git.empresa.com/bitbucket` (com o caminho de contexto, se houver). Endereços com \"bitbucket\" no nome são reconhecidos sozinhos."
+          "markdownDescription": "%config.bitbucket.hosts.markdownDescription%"
         },
         "worktreeGraph.azureDevOps.hosts": {
           "type": "array",
@@ -3013,32 +3013,32 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Hosts de Azure DevOps Server (on-premises), ex.: `tfs.empresa.com`. dev.azure.com e *.visualstudio.com são reconhecidos sozinhos."
+          "markdownDescription": "%config.azureDevOps.hosts.markdownDescription%"
         },
         "worktreeGraph.azureDevOps.workItemType": {
           "type": "string",
           "default": "Task",
-          "description": "Tipo de work item criado por \"Nova issue…\" no Azure DevOps (Task, Bug, User Story, Issue…)."
+          "description": "%config.azureDevOps.workItemType.description%"
         },
         "worktreeGraph.jira.url": {
           "type": "string",
           "default": "",
-          "description": "Endereço do Jira (Cloud ou Server/Data Center). As credenciais ficam no cofre do VS Code (comando Conectar ao Jira)."
+          "description": "%config.jira.url.description%"
         },
         "worktreeGraph.jira.projectKey": {
           "type": "string",
           "default": "",
-          "description": "Chave do projeto do Jira (ex.: PROJ). Vazio = o escolhido ao conectar."
+          "description": "%config.jira.projectKey.description%"
         },
         "worktreeGraph.jira.jql": {
           "type": "string",
           "default": "",
-          "markdownDescription": "JQL opcional que substitui o filtro padrão (projeto e `statusCategory != Done`). Em \"minhas\", a extensão acrescenta `assignee = currentUser()`."
+          "markdownDescription": "%config.jira.jql.markdownDescription%"
         },
         "worktreeGraph.jira.issueType": {
           "type": "string",
           "default": "Task",
-          "description": "Tipo de issue criado por \"Nova issue…\" no Jira."
+          "description": "%config.jira.issueType.description%"
         },
         "worktreeGraph.ciBranches": {
           "type": "array",
@@ -3046,7 +3046,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Branches extras para o filtro **CI** do histórico (além das achadas no fluxo de ambientes, na base e nos arquivos de CI: `.github/workflows`, `.gitlab-ci.yml`, `bitbucket-pipelines.yml`, `azure-pipelines.yml`). Aceita padrões com `*`."
+          "markdownDescription": "%config.ciBranches.markdownDescription%"
         },
         "worktreeGraph.pushStatusBar": {
           "type": "boolean",
@@ -3066,22 +3066,22 @@
         "worktreeGraph.mergeQueue.pushBase": {
           "type": "boolean",
           "default": false,
-          "description": "Fila de merge: fazer push da base depois de cada merge."
+          "description": "%config.mergeQueue.pushBase.description%"
         },
         "worktreeGraph.batch.maxParallel": {
           "type": "number",
           "default": 3,
-          "description": "Tarefa em lote: quantos agentes abertos ao mesmo tempo; os demais esperam vaga."
+          "description": "%config.batch.maxParallel.description%"
         },
         "worktreeGraph.budget.perWorktreeTokens": {
           "type": "number",
           "default": 0,
-          "description": "Orçamento de tokens por worktree (0 = sem limite). Aviso aos 80% e aos 100%."
+          "description": "%config.budget.perWorktreeTokens.description%"
         },
         "worktreeGraph.budget.perWorktreeUsd": {
           "type": "number",
           "default": 0,
-          "description": "Orçamento em US$ por worktree (0 = sem limite; usa os preços de worktreeGraph.claude.pricePerMTok*)."
+          "description": "%config.budget.perWorktreeUsd.description%"
         },
         "worktreeGraph.budget.action": {
           "type": "string",
@@ -3090,16 +3090,16 @@
             "pause-queue"
           ],
           "enumDescriptions": [
-            "Só avisa.",
-            "Avisa e não envia mais tarefas da fila/agendamento para a worktree que estourou."
+            "%config.budget.action.enumDescriptions.0%",
+            "%config.budget.action.enumDescriptions.1%"
           ],
           "default": "warn",
-          "description": "O que fazer quando uma worktree estoura o orçamento."
+          "description": "%config.budget.action.description%"
         },
         "worktreeGraph.taskTemplates": {
           "type": "array",
           "default": [],
-          "markdownDescription": "Modelos de tarefa extras `{ name, description?, prompt }`. Placeholders: `${branch}`, `${base}`, `${file}`, `${selection}`, `${issue}`. Também valem arquivos `.agentyard/templates/*.md` no repositório.",
+          "markdownDescription": "%config.taskTemplates.markdownDescription%",
           "items": {
             "type": "object",
             "required": [
@@ -3122,12 +3122,12 @@
         "worktreeGraph.readySummary.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Mostrar o resumo (commits, arquivos, +/−) quando um agente fica pronto para revisar."
+          "description": "%config.readySummary.enabled.description%"
         },
         "worktreeGraph.readySummary.useAgent": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Também pedir ao agente um resumo (o que mudou, riscos, o que testar) em `.worktree-graph/summary.md`, fora do git."
+          "markdownDescription": "%config.readySummary.useAgent.markdownDescription%"
         },
         "worktreeGraph.env.ports": {
           "type": [
@@ -3135,7 +3135,7 @@
             "null"
           ],
           "default": null,
-          "markdownDescription": "Portas por worktree, ex.: `{ \"base\": 3000, \"step\": 10, \"vars\": [\"PORT\", \"VITE_PORT\", \"API_PORT\"] }`. Cada worktree ganha um bloco estável; a 1ª variável recebe a porta, as seguintes +1, +2…",
+          "markdownDescription": "%config.env.ports.markdownDescription%",
           "properties": {
             "base": {
               "type": "number"
@@ -3154,7 +3154,7 @@
         "worktreeGraph.env.devCommand": {
           "type": "string",
           "default": "",
-          "description": "Comando de desenvolvimento rodado por \"Rodar dev\" (ex.: npm run dev), com as variáveis de porta da worktree."
+          "description": "%config.env.devCommand.description%"
         },
         "worktreeGraph.setup.nodeModules": {
           "type": "string",
@@ -3165,26 +3165,26 @@
           ],
           "default": "ask",
           "enumDescriptions": [
-            "Perguntar ao criar a worktree.",
-            "Instalar as dependências num terminal.",
-            "Compartilhar o node_modules da principal (junction/symlink)."
+            "%config.setup.nodeModules.enumDescriptions.0%",
+            "%config.setup.nodeModules.enumDescriptions.1%",
+            "%config.setup.nodeModules.enumDescriptions.2%"
           ],
-          "description": "O que fazer com as dependências Node ao criar uma worktree (postCreateCommand, se definido, vence)."
+          "description": "%config.setup.nodeModules.description%"
         },
         "worktreeGraph.diskUsage.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Calcular em segundo plano o espaço em disco de cada worktree."
+          "description": "%config.diskUsage.enabled.description%"
         },
         "worktreeGraph.diskUsage.secondsPerWorktree": {
           "type": "number",
           "default": 3,
-          "description": "Tempo máximo para contar o espaço de uma worktree (passando disso, o valor é um mínimo)."
+          "description": "%config.diskUsage.secondsPerWorktree.description%"
         },
         "worktreeGraph.report.agentSummary": {
           "type": "boolean",
           "default": false,
-          "description": "No Relatório do dia, oferecer \"✦ Redigir resumo com o agente\"."
+          "description": "%config.report.agentSummary.description%"
         },
         "worktreeGraph.pullRequests.mergeMethod": {
           "type": "string",
@@ -3194,7 +3194,7 @@
             "rebase"
           ],
           "default": "merge",
-          "description": "Método ao mesclar um PR/MR pela view Pull requests (o GitLab não faz rebase por aqui: usa merge)."
+          "description": "%config.pullRequests.mergeMethod.description%"
         }
       }
     }
@@ -3205,7 +3205,7 @@
     "package": "tsc -p ./ && node scripts/package-dist.js",
     "dist": "node scripts/dist.js",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
@@ -3225,5 +3225,6 @@
   "galleryBanner": {
     "color": "#1f1f1f",
     "theme": "dark"
-  }
+  },
+  "l10n": "./l10n"
 }

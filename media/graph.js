@@ -1,6 +1,12 @@
 // @ts-check
 (function () {
   const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : { postMessage() {}, getState() {}, setState() {} };
+  // Tradução: texto-fonte em inglês; a extensão injeta window.__L10N (src/graphPanel.ts) com o bundle do idioma.
+  // @ts-ignore
+  const L10N = window.__L10N || { bundle: {}, locale: 'en' };
+  /** @param {string} m @param {...(string|number)} a */
+  const t = (m, ...a) => (L10N.bundle[m] ?? m).replace(/\{(\d+)\}/g, (x, i) => (Number(i) < a.length ? String(a[Number(i)]) : x));
+  const LOCALE = L10N.locale;
   const ROW = 26;
   const COL = 16;
   const DOT = 4.5;
