@@ -241,7 +241,7 @@ export class Controller implements vscode.Disposable {
         });
         if (!this.loadedOnce && state.pending > 0) {
           await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Window, title: `Worktree Graph: detalhando ${state.pending} worktrees` },
+            { location: vscode.ProgressLocation.Window, title: `AgentYard: detalhando ${state.pending} worktrees` },
             () => run,
           );
         } else {

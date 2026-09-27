@@ -57,7 +57,7 @@ interface RunResult {
  * no fim do arquivo, que não fazem nada se as proteções não foram registradas.
  */
 export class Guards implements vscode.Disposable {
-  readonly out = vscode.window.createOutputChannel('Worktree Graph: checagens');
+  readonly out = vscode.window.createOutputChannel('AgentYard: checagens');
   readonly cache = new CheckCache();
   ui: GuardUi = vscodeUi;
   /** Últimos resultados, para os testes e o log. */

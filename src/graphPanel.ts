@@ -18,7 +18,7 @@ export class GraphPanel implements vscode.Disposable {
       GraphPanel.current.panel.reveal();
       return;
     }
-    const panel = vscode.window.createWebviewPanel('worktreeGraph', 'Worktree Graph', vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel('worktreeGraph', 'AgentYard', vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(ctl.ctx.extensionUri, 'media')],
@@ -33,7 +33,7 @@ export class GraphPanel implements vscode.Disposable {
       panel.onDidDispose(() => this.dispose()),
       ctl.onDidChange(s => {
         this.post();
-        if (s) panel.title = `Worktree Graph · ${s.repoName}`;
+        if (s) panel.title = `AgentYard · ${s.repoName}`;
       }),
       panel.onDidChangeViewState(e => e.webviewPanel.visible && ctl.scheduleRefresh(50)),
       panel.webview.onDidReceiveMessage(async msg => {
@@ -75,7 +75,7 @@ export class GraphPanel implements vscode.Disposable {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${w.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${w.cspSource} data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${media('graph.css')}">
-<title>Worktree Graph</title>
+<title>AgentYard</title>
 </head>
 <body data-vscode-context='{"preventDefaultContextMenuItems": true}'>
 <div id="app"><div class="empty">Carregando…</div></div>

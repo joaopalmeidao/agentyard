@@ -314,7 +314,7 @@ exports.run = async () => {
     await vscode.commands.executeCommand('worktreeGraph.openGraph');
     await wait(1500);
     const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-    assert.ok(tab.label.startsWith('Worktree Graph'), tab.label);
+    assert.ok(tab.label.startsWith('AgentYard'), tab.label);
   });
 
   await check('vários projetos: adicionar, trocar e voltar sem abrir outra janela', async () => {
@@ -644,7 +644,7 @@ async function videoScene(api) {
   fs.writeFileSync(path.join(dir, 'start'), '');
   await wait(1200);
 
-  caption('Worktree Graph: todas as worktrees dos seus agentes num painel');
+  caption('AgentYard: todas as worktrees dos seus agentes num painel');
   await vscode.commands.executeCommand('worktreeGraph.openGraph');
   await wait(4500);
 

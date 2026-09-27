@@ -80,7 +80,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
       try {
         await fn(...args);
       } catch (e) {
-        vscode.window.showErrorMessage(`Worktree Graph: ${(e as Error).message}`);
+        vscode.window.showErrorMessage(`AgentYard: ${(e as Error).message}`);
       }
     };
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));

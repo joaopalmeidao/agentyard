@@ -25,7 +25,7 @@ import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, 
 import { WorktreeTreeProvider } from './treeView';
 
 export async function activate(ctx: vscode.ExtensionContext) {
-  const out = vscode.window.createOutputChannel('Worktree Graph');
+  const out = vscode.window.createOutputChannel('AgentYard');
   const ctl = new Controller(ctx, out);
   ctx.subscriptions.push(out, ctl);
 
@@ -243,7 +243,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       try {
         await fn(...args);
       } catch (e) {
-        vscode.window.showErrorMessage(`Worktree Graph: ${(e as Error).message}`);
+        vscode.window.showErrorMessage(`AgentYard: ${(e as Error).message}`);
       }
     };
 
