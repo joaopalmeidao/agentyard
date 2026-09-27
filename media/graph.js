@@ -191,6 +191,7 @@
           ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : 'ligado') : 'desligado'}</button>
         <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só CI (GitHub Actions/GitLab CI), dividido ou ambos">onde: ${{ local: 'local', github: 'só CI', split: 'dividido', both: 'local + CI' }[s.where] || 'local'}</button>
         <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
+        ${toPull() ? `<button data-action="pullMany" title="Trazer do remoto as branches com novidades (lista para escolher)">☁↓ Trazer ${toPull()}</button>` : ''}
         ${toPush() ? `<button data-action="pushMany" title="Enviar branches com commits não enviados (lista para escolher)">☁↑ Enviar ${toPush()}</button>` : ''}
         <button data-action="generateCi" title="Gera o workflow de sync para o GitHub Actions ou o GitLab CI">Gerar CI</button>
         ${state.hosting && !state.hosting.connected ? `<button data-action="connectHosting" title="Para publicar e acompanhar ${state.hosting.label}s em ${esc(state.hosting.host)}">Conectar ${state.hosting.kind === 'gitlab' ? 'GitLab' : 'GitHub'}</button>` : ''}
@@ -270,6 +271,15 @@
   function pushButton(branch, r, compact) {
     const label = !r.published ? (compact ? '☁ publicar' : '☁ Publicar') : compact ? `☁↑${r.ahead}` : `☁ Push ↑${r.ahead}`;
     return `<button data-action="push" data-branch="${esc(branch)}" title="${!r.published ? 'git push -u (cria a branch no remoto)' : `Enviar ${r.ahead} commit(s)`}">${label}</button>`;
+  }
+
+  function pullButton(branch, behind, compact) {
+    return `<button data-action="pullBranch" data-branch="${esc(branch)}" title="Trazer ${behind} commit(s) do remoto (fast-forward; se divergir, pergunta merge ou rebase)">${compact ? `☁↓${behind}` : `☁↓ Trazer ${behind}`}</button>`;
+  }
+
+  /** Branches publicadas com commits no remoto que ainda não estão aqui. */
+  function toPull() {
+    return [...state.worktrees.filter(w => w.branch && !w.prunable), ...state.branches].filter(x => x.remote && x.remote.published && x.remote.behind > 0).length;
   }
 
   /** Branches publicadas com commits pendentes de envio. */
@@ -384,6 +394,7 @@
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="Abrir ${esc(agent)} nesta worktree">✦</button>` : ''}
           ${w.remote.ahead || !w.remote.published ? pushButton(w.branch, w.remote, true) : ''}
+          ${w.remote.published && w.remote.behind ? pullButton(w.branch, w.remote.behind, true) : ''}
           <button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>
           <button data-action="diffWithBase" data-branch="${b}" title="Revisar alterações × ${esc(state.base)}">Revisar</button>
           <button data-action="analyzeMerge" data-branch="${b}" title="Analisar o merge em ${esc(state.base)}">Analisar</button>
@@ -424,6 +435,7 @@
             ? `<button data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" class="agent" title="Abre ${esc(agent)} num terminal dentro desta worktree (botão direito no card para outros agentes)">✦ ${esc(agent)}</button>`
             : '',
           w.branch && (w.remote.ahead || !w.remote.published) && !w.prunable ? pushButton(w.branch, w.remote) : '',
+          w.branch && w.remote.published && w.remote.behind && !w.prunable ? pullButton(w.branch, w.remote.behind) : '',
           `<button data-action="openWorktree" data-path="${esc(w.path)}" title="Abrir em nova janela">Abrir</button>`,
           `<button data-action="openFile" data-path="${esc(w.path)}" title="Buscar e abrir um arquivo desta worktree aqui mesmo">Arquivos</button>`,
           `<button data-action="openTerminal" data-path="${esc(w.path)}" title="Terminal nesta pasta">Terminal</button>`,
@@ -546,7 +558,7 @@
             <span class="desc"><span class="subject">● ${esc(c.subject)}</span>
             <button class="link" data-action="diffWithBase" data-branch="${esc(c.branch || '')}">revisar</button></span>
             <span class="author"></span><span class="date">agora</span><span class="sha"></span></div>`;
-        return `<div class="row ${hide ? 'dim' : ''} ${c.boundary ? 'boundary' : ''}" data-sha="${c.sha}" style="padding-left:${W}px" ${c.boundary ? `title="Ponto de ${esc(state.base)} de onde branches pendentes saíram"` : ''}>
+        return `<div class="row ${hide ? 'dim' : ''} ${c.boundary ? 'boundary' : ''}" data-sha="${c.sha}" ${c.boundary ? '' : `draggable="true" data-drag-commit="${c.sha}" `}style="padding-left:${W}px" ${c.boundary ? `title="Ponto de ${esc(state.base)} de onde branches pendentes saíram"` : ''}>
           <span class="desc">${c.refs.map(badge).join('')}<span class="subject">${esc(c.subject)}</span></span>
           <span class="author">${esc(c.author)}</span>
           <span class="date">${ago(c.date)}</span>
@@ -616,6 +628,13 @@
 
   let dragging = '';
   document.addEventListener('dragstart', e => {
+    const commit = /** @type {HTMLElement} */ (e.target).closest?.('[data-drag-commit]');
+    if (commit) {
+      dragging = 'commit:' + /** @type {HTMLElement} */ (commit).dataset.dragCommit;
+      e.dataTransfer?.setData('text/plain', dragging);
+      document.body.classList.add('dragging');
+      return;
+    }
     const el = /** @type {HTMLElement} */ (e.target).closest?.('[data-drag]');
     if (!el) return;
     dragging = /** @type {HTMLElement} */ (el).dataset.drag || '';
@@ -639,7 +658,8 @@
     if (!el || !dragging) return;
     e.preventDefault();
     const target = /** @type {HTMLElement} */ (el).dataset.drop;
-    if (target && target !== dragging) send('mergeBranches', { source: dragging, target });
+    if (target && dragging.startsWith('commit:')) send('cherryPick', { sha: dragging.slice(7), target });
+    else if (target && target !== dragging) send('mergeBranches', { source: dragging, target });
   });
 
   // divisor entre worktrees e histórico
@@ -690,6 +710,13 @@
       }
       items.push(item('mergeInto', 'Mesclar em…', { branch: b }));
       items.push(item('push', 'Push (enviar para o remoto)', { branch: b }));
+      items.push(item('pullBranch', 'Pull (trazer do remoto)', { branch: b }));
+      items.push(item('compareWith', 'Comparar com…', { branch: b }));
+      if (wt) {
+        items.push(item('stashCreate', 'Guardar alterações (stash)…', { path: wt.path }));
+        items.push(item('moveChanges', 'Mover alterações para outra worktree…', { path: wt.path }));
+        if (!isBase) items.push(item('reorganizeCommits', 'Reorganizar commits (juntar, reordenar, descartar)…', { path: wt.path }));
+      }
       items.push('<hr>');
       if (wt) {
         for (const a of state.agentNames || []) items.push(item('launchAgent', `✦ ${a}`, { path: wt.path, branch: b, agent: a }, 'agent'));
@@ -720,6 +747,7 @@
       const sha = row.dataset.sha;
       items.push(`<div class="menu-title">${sha.slice(0, 10)}</div>`);
       items.push(item('copy', 'Copiar hash', { text: sha }));
+      items.push(item('cherryPick', 'Cherry-pick em…', { sha }));
       items.push(item('createWorktree', 'Nova branch + worktree a partir deste commit', { startPoint: sha }));
     }
     if (!items.length) return;

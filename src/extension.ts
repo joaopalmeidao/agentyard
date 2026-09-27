@@ -9,6 +9,7 @@ import { GitShowProvider, SCHEME } from './diff';
 import { GraphPanel } from './graphPanel';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
+import { registerGitOps } from './gitops/register';
 import { WorktreeDecorations } from './decorations';
 import { configureFlow, promote } from './flow';
 import { MergePanel } from './mergePanel';
@@ -200,6 +201,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return actions.copyText(a.text);
       case 'showLog':
         return out.show();
+      default:
+        // ações de módulos registrados à parte (ex.: src/gitops): mesmo nome do comando
+        return vscode.commands.executeCommand(`worktreeGraph.${action}`, a) as Promise<void>;
     }
   };
 
@@ -308,6 +312,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const issues = registerIssues(ctx, ctl, guard);
   const pipelines = registerPipelines(ctx, ctl, guard);
+  const gitOps = registerGitOps(ctx, ctl, guard);
 
   // Registra tudo antes de ler o repositório: a leitura pode levar segundos em repositórios grandes.
   const ready = ctl.init().then(() => {
@@ -318,7 +323,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Usado pelos testes de integração (test/).
   const claudeConfig = registerClaudeConfig(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, gitOps };
 }
 
 export function deactivate() {}

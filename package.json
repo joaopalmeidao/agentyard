@@ -582,6 +582,79 @@
         "title": "Iniciar job manual",
         "category": "Worktree Graph",
         "icon": "$(debug-start)"
+      },
+      {
+        "command": "worktreeGraph.pullBranch",
+        "title": "Pull da branch (trazer do remoto)",
+        "category": "Worktree Graph",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "worktreeGraph.pullMany",
+        "title": "Trazer do remoto as branches com novidades…",
+        "category": "Worktree Graph",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "worktreeGraph.fetchNow",
+        "title": "Fetch agora",
+        "category": "Worktree Graph",
+        "icon": "$(repo-fetch)"
+      },
+      {
+        "command": "worktreeGraph.stashCreate",
+        "title": "Guardar alterações da worktree (stash)…",
+        "category": "Worktree Graph",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "worktreeGraph.stashApply",
+        "title": "Aplicar stash em…",
+        "category": "Worktree Graph",
+        "icon": "$(check)"
+      },
+      {
+        "command": "worktreeGraph.stashPop",
+        "title": "Aplicar e remover stash (pop) em…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.stashShow",
+        "title": "Ver diff do stash",
+        "category": "Worktree Graph",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreeGraph.stashDrop",
+        "title": "Apagar stash",
+        "category": "Worktree Graph",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreeGraph.moveChanges",
+        "title": "Mover alterações para outra worktree…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.cherryPick",
+        "title": "Cherry-pick de um commit em…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.reorganizeCommits",
+        "title": "Reorganizar commits (juntar, reordenar, descartar)…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.undoReorganize",
+        "title": "Desfazer a última reorganização de commits",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.compareWith",
+        "title": "Comparar com outra branch/worktree…",
+        "category": "Worktree Graph",
+        "icon": "$(git-compare)"
       }
     ],
     "menus": {
@@ -750,6 +823,16 @@
           "command": "worktreeGraph.pipelines.scopeWorktrees",
           "when": "view == worktreeGraph.pipelines && worktreeGraph.pipelinesScope == all",
           "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.fetchNow",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "1_sync"
+        },
+        {
+          "command": "worktreeGraph.pullMany",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "1_sync"
         }
       ],
       "view/item/context": [
@@ -1107,6 +1190,71 @@
           "command": "worktreeGraph.pipelines.fix",
           "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
           "group": "3_fix@1"
+        },
+        {
+          "command": "worktreeGraph.pullBranch",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_merge@7"
+        },
+        {
+          "command": "worktreeGraph.compareWith",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@6"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@1"
+        },
+        {
+          "command": "worktreeGraph.moveChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@2"
+        },
+        {
+          "command": "worktreeGraph.reorganizeCommits",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "4_changes@3"
+        },
+        {
+          "command": "worktreeGraph.undoReorganize",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "4_changes@4"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem == stashGroup",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeGraph.stashApply",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.stashDrop",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.stashApply",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "1_stash@1"
+        },
+        {
+          "command": "worktreeGraph.stashPop",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "1_stash@2"
+        },
+        {
+          "command": "worktreeGraph.stashShow",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "1_stash@3"
+        },
+        {
+          "command": "worktreeGraph.stashDrop",
+          "when": "view == worktreeGraph.worktrees && viewItem == stash",
+          "group": "9_danger"
         }
       ],
       "commandPalette": [
@@ -1244,6 +1392,18 @@
         },
         {
           "command": "worktreeGraph.pipelines.fix",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.cherryPick",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.stashShow",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.stashDrop",
           "when": "false"
         }
       ],
@@ -1580,6 +1740,12 @@
           "editPresentation": "multilineText",
           "default": "",
           "markdownDescription": "Tarefa enviada ao agente em *✦ Corrigir* de um pipeline que falhou. Vazio = texto padrão. Placeholders: `${branch}`, `${pipeline}`, `${url}`, `${jobs}`, `${log}` (últimas ~150 linhas do job que falhou)."
+        },
+        "worktreeGraph.fetch.intervalMinutes": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Fetch automático a cada N minutos (0 = desligado), com aviso quando branches ganham novidades no remoto."
         }
       }
     }
@@ -1589,7 +1755,7 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/gitOps.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

@@ -14,7 +14,7 @@ export class GitError extends Error {
   }
 }
 
-export function runGit(cwd: string, args: string[], timeoutMs = 60_000): Promise<GitResult> {
+export function runGit(cwd: string, args: string[], timeoutMs = 60_000, extraEnv?: Record<string, string>): Promise<GitResult> {
   return new Promise(resolve => {
     execFile(
       'git',
@@ -24,7 +24,7 @@ export function runGit(cwd: string, args: string[], timeoutMs = 60_000): Promise
         maxBuffer: 64 * 1024 * 1024,
         windowsHide: true,
         timeout: timeoutMs,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', ...extraEnv },
       },
       (err, stdout, stderr) => {
         let code = 0;
@@ -96,8 +96,8 @@ export class Repo {
     return new Repo(path.normalize(top), path.normalize(common));
   }
 
-  run(args: string[], cwd = this.root, timeoutMs?: number): Promise<GitResult> {
-    return runGit(cwd, args, timeoutMs);
+  run(args: string[], cwd = this.root, timeoutMs?: number, extraEnv?: Record<string, string>): Promise<GitResult> {
+    return runGit(cwd, args, timeoutMs, extraEnv);
   }
 
   async exec(args: string[], cwd = this.root, timeoutMs?: number): Promise<string> {
