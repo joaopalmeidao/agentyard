@@ -28,6 +28,8 @@ export class WorktreeItem extends vscode.TreeItem {
     if (!wt.isBase && wt.behind) parts.push(`↓${wt.behind}`);
     if (!wt.isBase && wt.ahead) parts.push(`↑${wt.ahead}`);
     if (wt.changes) parts.push(`●${wt.changes}`);
+    if (wt.branch && !wt.isBase && !wt.remote.published) parts.push('☁ não publicada');
+    else if (wt.remote.ahead) parts.push(`☁↑${wt.remote.ahead}`);
     if (wt.operation) parts.push(wt.operation);
     if (wt.preview?.conflict) parts.push('⚠ conflito');
     if (wt.agents.length) parts.push(`✦ ${wt.agents.join(', ')}`);
@@ -57,6 +59,7 @@ export class WorktreeItem extends vscode.TreeItem {
     if (wt.subject) md.appendMarkdown(`Último commit: ${wt.subject}\n\n`);
     if (!wt.isBase) md.appendMarkdown(`${wt.behind} atrás e ${wt.ahead} à frente de \`${baseRef}\`\n\n`);
     md.appendMarkdown(wt.changes ? `${wt.changes} alteração(ões) não commitada(s)\n\n` : 'Worktree limpa\n\n');
+    if (wt.branch) md.appendMarkdown(!wt.remote.published ? 'Não publicada no remoto\n\n' : wt.remote.ahead || wt.remote.behind ? `Remoto: ${wt.remote.ahead} a enviar, ${wt.remote.behind} a receber\n\n` : 'Em dia com o remoto\n\n');
     if (wt.preview?.conflict) md.appendMarkdown(`⚠ Mesclar \`${base}\` conflita em: ${wt.preview.files.join(', ')}\n\n`);
     if (wt.agents.length) md.appendMarkdown(`Agentes abertos: ${wt.agents.join(', ')}\n\n`);
     if (wt.sync) md.appendMarkdown(`Sync: ${wt.sync.message}\n\n`);

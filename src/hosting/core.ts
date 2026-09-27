@@ -1,4 +1,4 @@
-import { Issue, IssueScope, mapGitHubIssue, mapGitLabIssue } from '../issues/core';
+import { Issue, IssueScope, mapGitHubIssue, mapGitLabIssue, NewIssue } from '../issues/core';
 
 /**
  * GitHub (incl. Enterprise) e GitLab (incl. self-hosted) via REST, sem depender da API do VS Code
@@ -47,6 +47,7 @@ export interface HostClient {
   /** Confere o token; devolve o nome do usuário. */
   whoami(): Promise<string>;
   listIssues(scope: IssueScope): Promise<Issue[]>;
+  createIssue(n: NewIssue): Promise<Issue>;
 }
 
 export class HostError extends Error {
@@ -197,6 +198,10 @@ export class GitHubClient implements HostClient {
     return list.filter(i => !i.pull_request).map(mapGitHubIssue);
   }
 
+  async createIssue(n: NewIssue): Promise<Issue> {
+    return mapGitHubIssue(await this.req<any>('POST', '/issues', { title: n.title, body: n.body, ...(n.labels?.length ? { labels: n.labels } : {}) }));
+  }
+
   async whoami() {
     const u = await call<any>(this.f, `${this.api}/user`, {
       headers: { Authorization: `Bearer ${this.token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'worktree-graph' },
@@ -267,6 +272,12 @@ export class GitLabClient implements HostClient {
       `/projects/${this.project}/issues?state=opened&per_page=50&order_by=updated_at&scope=${scope === 'mine' ? 'assigned_to_me' : 'all'}`,
     );
     return list.map(mapGitLabIssue);
+  }
+
+  async createIssue(n: NewIssue): Promise<Issue> {
+    return mapGitLabIssue(
+      await this.req<any>('POST', `/projects/${this.project}/issues`, { title: n.title, description: n.body, ...(n.labels?.length ? { labels: n.labels.join(',') } : {}) }),
+    );
   }
 
   async whoami() {

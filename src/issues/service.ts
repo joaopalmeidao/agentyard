@@ -222,6 +222,74 @@ export class IssueService implements vscode.Disposable {
   /**
    * Cria (ou reaproveita) a worktree da issue e, com `withAgent`, abre o agente com o prompt da issue.
    */
+  /**
+   * Nova issue no GitHub/GitLab do repositório ou no Redmine. `context` é um texto pronto para a
+   * descrição (ex.: trecho de código selecionado), que entra depois do que a pessoa escrever.
+   */
+  async create(context?: string) {
+    type Target = { label: string; description: string; where: 'host' | 'redmine' };
+    const targets: Target[] = [];
+    const remote = await this.ctl.requests.detectRemote();
+    if (remote) targets.push({ label: remote.kind === 'gitlab' ? 'GitLab' : 'GitHub', description: `${remote.host}/${remote.projectPath}`, where: 'host' });
+    if (this.redmineUrl()) targets.push({ label: 'Redmine', description: this.redmineUrl(), where: 'redmine' });
+    if (!targets.length) {
+      const go = await vscode.window.showWarningMessage(
+        'Nenhum lugar para criar issues: o remoto não é GitHub/GitLab reconhecido e o Redmine não está configurado.',
+        'Conectar ao Redmine',
+        'Conectar ao GitHub/GitLab',
+      );
+      if (go === 'Conectar ao Redmine') await this.connectRedmine();
+      if (go === 'Conectar ao GitHub/GitLab') await this.ctl.requests.connect();
+      return;
+    }
+    const target = targets.length === 1 ? targets[0] : await vscode.window.showQuickPick(targets, { title: 'Nova issue: onde?' });
+    if (!target) return;
+
+    const title = await vscode.window.showInputBox({ title: `Nova issue no ${target.label}`, prompt: 'Título', ignoreFocusOut: true, validateInput: v => (v.trim() ? undefined : 'Informe um título.') });
+    if (!title) return;
+    const text = await vscode.window.showInputBox({
+      title: `Nova issue: ${title}`,
+      prompt: context ? 'Descrição (o trecho selecionado entra logo abaixo). Enter vazio para só o trecho.' : 'Descrição (opcional; dá para completar depois no navegador)',
+      ignoreFocusOut: true,
+    });
+    if (text === undefined) return;
+    const body = [text.trim(), context ?? ''].filter(Boolean).join('\n\n');
+
+    let created: Issue;
+    try {
+      if (target.where === 'host') {
+        const client = await this.ctl.requests.client(true);
+        if (!client) return;
+        const labelsRaw = await vscode.window.showInputBox({ title: `Nova issue: ${title}`, prompt: 'Labels separadas por vírgula (opcional)', ignoreFocusOut: true });
+        if (labelsRaw === undefined) return;
+        const labels = labelsRaw.split(',').map(l => l.trim()).filter(Boolean);
+        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Criando issue…' }, () => client.createIssue({ title: title.trim(), body, labels }));
+      } else {
+        const client = await this.redmineClient();
+        if (!client) return this.connectRedmine();
+        let projectId = this.redmineProject();
+        if (!projectId) {
+          const projects = await client.projects();
+          const pick = await vscode.window.showQuickPick(projects.map(p => ({ label: p.name, description: p.identifier, id: p.identifier })), { title: 'Redmine: em qual projeto?' });
+          if (!pick) return;
+          projectId = pick.id;
+        }
+        created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Criando issue…' }, () =>
+          client.createIssue({ projectId: projectId!, title: title.trim(), body }),
+        );
+      }
+    } catch (e) {
+      vscode.window.showErrorMessage(`Não consegui criar a issue: ${(e as Error).message}`);
+      return;
+    }
+    this.ctl.log(`Issue ${created.key} criada: ${created.url}`);
+    void this.refresh(true);
+    const go = await vscode.window.showInformationMessage(`Issue ${created.key} criada: ${created.title}`, '✦ Começar com Claude', 'Abrir no navegador', 'Copiar link');
+    if (go === '✦ Começar com Claude') await this.start(created, true);
+    if (go === 'Abrir no navegador') vscode.env.openExternal(vscode.Uri.parse(created.url));
+    if (go === 'Copiar link') vscode.env.clipboard.writeText(created.url);
+  }
+
   async start(issue: Issue, withAgent: boolean) {
     const repo = this.ctl.repo;
     if (!repo) throw new Error('Nenhum repositório git aberto.');

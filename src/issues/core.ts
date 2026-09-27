@@ -96,6 +96,13 @@ export function mapRedmineIssue(i: any, baseUrl: string): Issue {
   };
 }
 
+export interface NewIssue {
+  title: string;
+  body: string;
+  /** GitHub/GitLab; o Redmine ignora. */
+  labels?: string[];
+}
+
 export class RedmineClient {
   readonly base: string;
 
@@ -118,6 +125,15 @@ export class RedmineClient {
     if (projectId) q.set('project_id', projectId);
     const r = await this.req<any>(`/issues.json?${q}`);
     return (r.issues ?? []).map((i: any) => mapRedmineIssue(i, this.base));
+  }
+
+  async createIssue(n: NewIssue & { projectId: string }): Promise<Issue> {
+    const r = await callJson<any>(this.f, `${this.base}/issues.json`, {
+      method: 'POST',
+      headers: { 'X-Redmine-API-Key': this.apiKey, Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issue: { project_id: n.projectId, subject: n.title, description: n.body } }),
+    });
+    return mapRedmineIssue(r.issue, this.base);
   }
 
   async projects(): Promise<{ id: number; identifier: string; name: string }[]> {

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+- Push fácil: botão "☁ Push ↑n" nos cards e na tabela quando há commits não enviados, "☁ Publicar"
+  (push -u) para branches que ainda não estão no remoto, chip com a situação no remoto (↑ a enviar,
+  ↓ a receber, apagada) e ícone na árvore.
+- Push recusado: oferece trazer do remoto e tentar de novo, ou forçar com --force-with-lease.
+- "☁↑ Enviar n": envia em lote as branches com commits pendentes (lista já marcada).
+- Nova issue no GitHub, GitLab (inclusive self-hosted) ou Redmine, pela view Issues ou com o botão
+  direito numa seleção do editor ("Criar issue com a seleção", que leva arquivo, linhas e código);
+  a notificação oferece "✦ Começar com Claude".
+
 ## 0.6.1
 - View "Claude: configuração": skills, comandos, configurações e memória do Claude Code, do usuário
   e do projeto ativo, num lugar só.

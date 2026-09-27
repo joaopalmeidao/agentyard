@@ -312,6 +312,29 @@ export class Repo {
   }
 }
 
+export interface RemoteTrack {
+  /** Tem upstream configurado e ele existe no remoto. */
+  published: boolean;
+  /** Commits locais que o remoto não tem. */
+  ahead: number;
+  /** Commits do remoto que a branch local não tem. */
+  behind: number;
+  /** O upstream foi apagado no remoto. */
+  gone: boolean;
+}
+
+/** Lê o `%(upstream:track,nobracket)` do for-each-ref: "ahead 2, behind 1", "gone" ou vazio. */
+export function parseTrack(upstream: string | undefined, track: string | undefined): RemoteTrack {
+  const t = track ?? '';
+  const gone = /gone/.test(t);
+  return {
+    published: !!upstream && !gone,
+    ahead: Number(/ahead (\d+)/.exec(t)?.[1] ?? 0),
+    behind: Number(/behind (\d+)/.exec(t)?.[1] ?? 0),
+    gone,
+  };
+}
+
 /** Diretório git de uma worktree: `.git` da principal, ou o apontado pelo arquivo `.git` das demais. */
 export function gitDirOf(worktreePath: string): string | undefined {
   const dotGit = path.join(worktreePath, '.git');
