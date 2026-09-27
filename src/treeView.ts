@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { agentsLabel } from './agents';
 import { Controller } from './controller';
 import { gitUri } from './diff';
 import { BranchView, WorktreeView } from './model';
@@ -42,7 +43,7 @@ export class WorktreeItem extends vscode.TreeItem {
     else if (wt.remote.ahead) parts.push(`☁↑${wt.remote.ahead}`);
     if (wt.operation) parts.push(wt.operation);
     if (wt.preview?.conflict) parts.push('⚠ conflito');
-    if (wt.agents.length) parts.push(`✦ ${wt.agents.join(', ')}`);
+    if (wt.agents.length) parts.push(`✦ ${agentsLabel(wt.agents)}`);
     if (wt.review) parts.push('✓ revisar');
     if (wt.tasks) parts.push(`☰${wt.tasks.waiting + (wt.tasks.running ? 1 : 0)}`);
     if (wt.overlap) parts.push(`⚠ sobrepõe ${wt.overlap.with.length}`);
@@ -79,7 +80,7 @@ export class WorktreeItem extends vscode.TreeItem {
     md.appendMarkdown(wt.changes ? `${wt.changes} alteração(ões) não commitada(s)\n\n` : 'Worktree limpa\n\n');
     if (wt.branch) md.appendMarkdown(!wt.remote.published ? 'Não publicada no remoto\n\n' : wt.remote.ahead || wt.remote.behind ? `Remoto: ${wt.remote.ahead} a enviar, ${wt.remote.behind} a receber\n\n` : 'Em dia com o remoto\n\n');
     if (wt.preview?.conflict) md.appendMarkdown(`⚠ Mesclar \`${base}\` conflita em: ${wt.preview.files.join(', ')}\n\n`);
-    if (wt.agents.length) md.appendMarkdown(`Agentes abertos: ${wt.agents.join(', ')}\n\n`);
+    if (wt.agents.length) md.appendMarkdown(`Agentes abertos: ${agentsLabel(wt.agents)}\n\n`);
     if (wt.sync) md.appendMarkdown(`Sync: ${wt.sync.message}\n\n`);
     if (wt.request) md.appendMarkdown(`[${wt.request.ref} ${wt.request.title}](${wt.request.url})\n\n`);
     this.tooltip = md;
