@@ -1,0 +1,104 @@
+# Gerado pela extensão Worktree Graph.
+#
+# Sempre que __BASE__ recebe commits, este workflow mescla __BASE__ em cada branch remota que casa
+# com BRANCH_PATTERNS, roda a verificação e faz push do resultado. Branch com conflito ou com a
+# verificação falhando não é alterada; o resumo da execução (aba "Summary") lista cada uma.
+#
+# Observações:
+# - Push feito com o GITHUB_TOKEN não dispara outros workflows. Se você quer que o CI da branch rode
+#   depois do sync, crie um PAT com permissão de "contents: write", salve como secret SYNC_TOKEN e
+#   descomente a linha "token:" do checkout do job "sync".
+# - Branches protegidas precisam permitir push do github-actions[bot] (ou do dono do PAT).
+# - Se o sync local da extensão também estiver ligado para as mesmas branches, os dois podem criar
+#   merges diferentes da mesma base. Prefira o CI para branches compartilhadas e o sync local para
+#   worktrees que ainda não foram publicadas.
+name: Sync __BASE__ into branches
+
+on:
+  push:
+    branches: [__BASE__]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-__BASE__-into-branches
+  cancel-in-progress: false
+
+env:
+  BASE_BRANCH: __BASE__
+  # Padrões separados por espaço, no estilo "case" do bash: "*" casa qualquer coisa, inclusive "/".
+  BRANCH_PATTERNS: "__PATTERNS__"
+  EXCLUDE_PATTERNS: "__EXCLUDE__"
+
+jobs:
+  list:
+    name: Listar branches atrás de __BASE__
+    runs-on: ubuntu-latest
+    outputs:
+      branches: ${{ steps.list.outputs.branches }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: list
+        shell: bash
+        run: |
+          set -f
+          selected=()
+          for ref in $(git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin); do
+            [ "$ref" = "HEAD" ] && continue
+            [ "$ref" = "$BASE_BRANCH" ] && continue
+            match=0
+            for p in $BRANCH_PATTERNS; do case "$ref" in $p) match=1 ;; esac; done
+            for p in $EXCLUDE_PATTERNS; do case "$ref" in $p) match=0 ;; esac; done
+            [ "$match" = 1 ] || continue
+            if git merge-base --is-ancestor "origin/$BASE_BRANCH" "origin/$ref"; then continue; fi
+            selected+=("$ref")
+          done
+          json=$(printf '%s\n' "${selected[@]}" | jq -R . | jq -cs 'map(select(length > 0))')
+          echo "branches=$json" >> "$GITHUB_OUTPUT"
+          echo "Branches a sincronizar: $json"
+
+  sync:
+    name: Sync ${{ matrix.branch }}
+    needs: list
+    if: needs.list.outputs.branches != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        branch: ${{ fromJson(needs.list.outputs.branches) }}
+    env:
+      BRANCH: ${{ matrix.branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 0
+          # token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Mesclar __BASE__
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git merge --no-edit -m "Merge $BASE_BRANCH into $BRANCH (sync automático)" "origin/$BASE_BRANCH"; then
+            {
+              echo "### ⚠️ \`$BRANCH\`: conflito ao mesclar \`$BASE_BRANCH\`"
+              echo ""
+              git diff --name-only --diff-filter=U | sed 's/^/- /'
+            } >> "$GITHUB_STEP_SUMMARY"
+            git merge --abort
+            exit 1
+          fi
+
+__TEST_STEPS__
+
+      - name: Push
+        shell: bash
+        run: |
+          git push origin "HEAD:$BRANCH"
+          echo "### ✅ \`$BRANCH\` atualizada com \`$BASE_BRANCH\`" >> "$GITHUB_STEP_SUMMARY"

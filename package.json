@@ -1,0 +1,370 @@
+{
+  "name": "worktree-graph",
+  "displayName": "Worktree Graph",
+  "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
+  "version": "0.1.0",
+  "publisher": "jp-08",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Visualization"
+  ],
+  "keywords": [
+    "git",
+    "worktree",
+    "graph",
+    "merge",
+    "ai"
+  ],
+  "icon": "media/logo.png",
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:.git"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "worktreeGraph",
+          "title": "Worktree Graph",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "worktreeGraph": [
+        {
+          "id": "worktreeGraph.worktrees",
+          "name": "Worktrees"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "worktreeGraph.worktrees",
+        "contents": "Nenhum repositório git encontrado neste workspace.\n[Abrir pasta](command:vscode.openFolder)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "worktreeGraph.openGraph",
+        "title": "Abrir grafo",
+        "category": "Worktree Graph",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "worktreeGraph.refresh",
+        "title": "Atualizar",
+        "category": "Worktree Graph",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeGraph.createWorktree",
+        "title": "Nova worktree",
+        "category": "Worktree Graph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.openWorktree",
+        "title": "Abrir worktree em nova janela",
+        "category": "Worktree Graph",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "worktreeGraph.openTerminal",
+        "title": "Abrir terminal na worktree",
+        "category": "Worktree Graph",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "worktreeGraph.mergeBaseInto",
+        "title": "Trazer a base para esta branch",
+        "category": "Worktree Graph",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "worktreeGraph.mergeIntoBase",
+        "title": "Mesclar esta branch na base",
+        "category": "Worktree Graph",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "worktreeGraph.mergeInto",
+        "title": "Mesclar esta branch em…",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.diffWithBase",
+        "title": "Revisar alterações contra a base",
+        "category": "Worktree Graph",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreeGraph.removeWorktree",
+        "title": "Remover worktree",
+        "category": "Worktree Graph",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreeGraph.deleteBranch",
+        "title": "Excluir branch",
+        "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.togglePauseSync",
+        "title": "Pausar/retomar sync desta branch",
+        "category": "Worktree Graph",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "worktreeGraph.toggleAutoSync",
+        "title": "Ligar/desligar sync automático",
+        "category": "Worktree Graph",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "worktreeGraph.syncNow",
+        "title": "Sincronizar agora",
+        "category": "Worktree Graph",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "worktreeGraph.generateCiWorkflow",
+        "title": "Gerar workflow de CI (GitHub Actions)",
+        "category": "Worktree Graph",
+        "icon": "$(github-action)"
+      },
+      {
+        "command": "worktreeGraph.showLog",
+        "title": "Mostrar log",
+        "category": "Worktree Graph"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "worktreeGraph.openGraph",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.createWorktree",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.toggleAutoSync",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.refresh",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "navigation@4"
+        },
+        {
+          "command": "worktreeGraph.syncNow",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "1_sync"
+        },
+        {
+          "command": "worktreeGraph.generateCiWorkflow",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "1_sync"
+        },
+        {
+          "command": "worktreeGraph.showLog",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "2_log"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "worktreeGraph.openWorktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.mergeBaseInto",
+          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.mergeIntoBase",
+          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.openWorktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "worktreeGraph.openTerminal",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "worktreeGraph.diffWithBase",
+          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "group": "1_open@3"
+        },
+        {
+          "command": "worktreeGraph.mergeBaseInto",
+          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "group": "2_merge@1"
+        },
+        {
+          "command": "worktreeGraph.mergeIntoBase",
+          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "group": "2_merge@2"
+        },
+        {
+          "command": "worktreeGraph.mergeInto",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_merge@3"
+        },
+        {
+          "command": "worktreeGraph.togglePauseSync",
+          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "group": "3_sync"
+        },
+        {
+          "command": "worktreeGraph.removeWorktree",
+          "when": "view == worktreeGraph.worktrees && viewItem == worktree",
+          "group": "9_danger"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "worktreeGraph.togglePauseSync",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Worktree Graph",
+      "properties": {
+        "worktreeGraph.baseBranch": {
+          "type": "string",
+          "default": "",
+          "description": "Branch base (ex.: master). Vazio = detecta pelo origin/HEAD, depois main/master/develop."
+        },
+        "worktreeGraph.worktreeRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Pasta onde novas worktrees são criadas (ex.: `G:\\worktrees`). Vazio = `<repo>.worktrees` ao lado do repositório."
+        },
+        "worktreeGraph.postCreateCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Comando rodado num terminal logo após criar uma worktree (ex.: npm install)."
+        },
+        "worktreeGraph.noFastForwardIntoBase": {
+          "type": "boolean",
+          "default": true,
+          "description": "Usar --no-ff ao mesclar uma branch na base, preservando o 'formato' da branch no histórico."
+        },
+        "worktreeGraph.graph.maxCommits": {
+          "type": "number",
+          "default": 400,
+          "description": "Quantidade de commits carregados no grafo."
+        },
+        "worktreeGraph.graph.showRemoteBranches": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostrar branches remotas no grafo."
+        },
+        "worktreeGraph.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 15,
+          "description": "Intervalo de atualização automática (alterações feitas por agentes em outras worktrees)."
+        },
+        "worktreeGraph.autoSync.enabledByDefault": {
+          "type": "boolean",
+          "default": false,
+          "description": "Se o sync automático começa ligado em repositórios novos. Depois disso, o botão de ligar/desligar vale por repositório."
+        },
+        "worktreeGraph.autoSync.mode": {
+          "type": "string",
+          "enum": [
+            "merge",
+            "notify"
+          ],
+          "enumDescriptions": [
+            "Mescla a base automaticamente nas worktrees limpas.",
+            "Só avisa que a branch ficou para trás, com botão para mesclar."
+          ],
+          "default": "merge",
+          "description": "O que o sync automático faz quando a base anda."
+        },
+        "worktreeGraph.autoSync.branches": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**"
+          ],
+          "description": "Padrões de branch que participam do sync (* = um segmento, ** = qualquer coisa). Ex.: [\"feat/**\", \"ai/**\"]."
+        },
+        "worktreeGraph.autoSync.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Padrões de branch que nunca são sincronizados."
+        },
+        "worktreeGraph.autoSync.intervalSeconds": {
+          "type": "number",
+          "default": 60,
+          "description": "Intervalo entre verificações do sync automático."
+        },
+        "worktreeGraph.autoSync.fetchRemote": {
+          "type": "boolean",
+          "default": false,
+          "description": "Fazer git fetch a cada verificação e sincronizar a partir de origin/<base> em vez da base local."
+        },
+        "worktreeGraph.autoSync.testCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Comando de verificação rodado na worktree depois do merge (ex.: npm test). Vazio = sem verificação."
+        },
+        "worktreeGraph.autoSync.testTimeoutSeconds": {
+          "type": "number",
+          "default": 900,
+          "description": "Tempo máximo do comando de verificação."
+        },
+        "worktreeGraph.autoSync.rollbackOnTestFailure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Desfazer o merge (git reset --keep) quando a verificação falhar."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joaopalmeidao/worktree-graph.git"
+  },
+  "homepage": "https://github.com/joaopalmeidao/worktree-graph#readme",
+  "bugs": {
+    "url": "https://github.com/joaopalmeidao/worktree-graph/issues"
+  }
+}

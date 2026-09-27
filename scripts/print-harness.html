@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<!-- Renderiza o painel fora do VS Code, com variáveis do tema Dark Modern, para gerar os prints da documentação. -->
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<link rel="stylesheet" href="../media/graph.css">
+<style>
+:root{--vscode-editor-background:#1f1f1f;--vscode-foreground:#cccccc;--vscode-descriptionForeground:#9d9d9d;--vscode-widget-border:#313131;
+--vscode-sideBar-background:#181818;--vscode-list-hoverBackground:#2a2d2e;--vscode-focusBorder:#0078d4;--vscode-button-secondaryBackground:#313131;
+--vscode-button-secondaryForeground:#cccccc;--vscode-button-secondaryHoverBackground:#3c3c3c;--vscode-button-background:#0078d4;--vscode-button-foreground:#ffffff;
+--vscode-testing-iconPassed:#73c991;--vscode-editorWarning-foreground:#cca700;--vscode-errorForeground:#f85149;--vscode-textLink-foreground:#4daafc;
+--vscode-font-family:"Segoe UI",sans-serif;--vscode-editor-font-family:Consolas,monospace;--vscode-input-background:#313131;--vscode-menu-background:#1f1f1f;--vscode-menu-border:#454545;--vscode-menu-selectionBackground:#0078d4}
+</style></head><body>
+<div id="app"></div>
+<script src="../media/graph.js"></script>
+<script src="../docs/.tmp/state.js"></script>
+<script>
+  const scene = location.hash.slice(1);
+  window.__wtgraphSetState(window.__STATE);
+  const fire = (el, type, x, y) => el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+  if (scene === 'menu') {
+    const card = document.querySelector('[data-menu="ai/login-oauth"] .branch');
+    const r = card.getBoundingClientRect(); fire(card, 'contextmenu', r.left + 60, r.top + 10);
+  } else if (scene === 'menu-commit') {
+    const row = document.querySelectorAll('.row')[3]; const r = row.getBoundingClientRect(); fire(row, 'contextmenu', r.left + 420, r.top + 13);
+  } else if (scene === 'drag') {
+    document.body.classList.add('dragging');
+    document.querySelector('.card[data-drop="master"]').classList.add('drop-over');
+  } else if (scene === 'graph') {
+    document.querySelector('.graph-section').scrollIntoView();
+  }
+</script></body></html>

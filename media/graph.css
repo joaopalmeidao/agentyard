@@ -1,0 +1,111 @@
+:root {
+  --bg: var(--vscode-editor-background, #1e1e1e);
+  --fg: var(--vscode-foreground, #cccccc);
+  --muted: var(--vscode-descriptionForeground, #9d9d9d);
+  --border: var(--vscode-widget-border, var(--vscode-panel-border, #3c3c3c));
+  --card: var(--vscode-sideBar-background, #252526);
+  --hover: var(--vscode-list-hoverBackground, #2a2d2e);
+  --accent: var(--vscode-focusBorder, #007fd4);
+  --btn-bg: var(--vscode-button-secondaryBackground, #3a3d41);
+  --btn-fg: var(--vscode-button-secondaryForeground, #cccccc);
+  --btn-hover: var(--vscode-button-secondaryHoverBackground, #45494e);
+  --primary-bg: var(--vscode-button-background, #0e639c);
+  --primary-fg: var(--vscode-button-foreground, #ffffff);
+  --primary-hover: var(--vscode-button-hoverBackground, #1177bb);
+  --ok: var(--vscode-testing-iconPassed, #73c991);
+  --warn: var(--vscode-editorWarning-foreground, #cca700);
+  --bad: var(--vscode-errorForeground, #f48771);
+  --info: var(--vscode-textLink-foreground, #3794ff);
+  --font: var(--vscode-font-family, -apple-system, 'Segoe UI', sans-serif);
+  --mono: var(--vscode-editor-font-family, Consolas, monospace);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; padding: 0 16px 16px; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 13px; }
+body.busy { cursor: progress; }
+button { font: inherit; }
+
+.toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 12px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+.toolbar .title { display: flex; gap: 8px; align-items: center; }
+.toolbar .repo { font-size: 15px; font-weight: 600; }
+.tools { display: flex; flex-wrap: wrap; gap: 6px; }
+
+button { background: var(--btn-bg); color: var(--btn-fg); border: 1px solid transparent; border-radius: 3px; padding: 3px 9px; cursor: pointer; white-space: nowrap; }
+button:hover:not(:disabled) { background: var(--btn-hover); }
+button.primary { background: var(--primary-bg); color: var(--primary-fg); }
+button.primary:hover:not(:disabled) { background: var(--primary-hover); }
+button.on { border-color: var(--ok); color: var(--ok); }
+button.danger:hover:not(:disabled) { color: var(--bad); }
+button:disabled { opacity: .4; cursor: default; }
+
+section { margin-top: 16px; }
+h2 { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+h2 .count { background: var(--btn-bg); color: var(--fg); border-radius: 8px; padding: 0 6px; font-size: 11px; letter-spacing: 0; }
+h2 .hint { font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: auto; }
+details > summary { list-style: none; cursor: pointer; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary h2::before { content: '▸'; }
+details[open] > summary h2::before { content: '▾'; }
+.muted { color: var(--muted); }
+.empty { color: var(--muted); padding: 24px 0; }
+.error { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--bad); background: var(--card); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
+.card { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--ok); border-radius: 4px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.card.dirty { border-left-color: var(--warn); }
+.card.conflict { border-left-color: var(--bad); }
+.card.base { border-left-color: var(--info); }
+.card.current { box-shadow: 0 0 0 1px var(--accent) inset; }
+.card-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.branch { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+.tag.accent { color: var(--accent); border-color: var(--accent); }
+.path { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 11px; border-radius: 10px; padding: 1px 7px; border: 1px solid var(--border); white-space: nowrap; }
+.chip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.chip.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.chip.info { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, transparent); }
+.chip.muted { color: var(--muted); }
+.last { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.actions button, .row-actions button { font-size: 12px; padding: 2px 7px; }
+
+table.branches { width: 100%; border-collapse: collapse; }
+table.branches td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.branches td.subject { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1px; width: 100%; }
+table.branches tr:hover { background: var(--hover); }
+.row-actions { text-align: right; }
+
+.graph-section h2 input { margin-left: auto; width: 320px; max-width: 50%; background: var(--vscode-input-background, #3c3c3c); color: var(--vscode-input-foreground, #ccc); border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; padding: 3px 6px; font: inherit; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.graph-scroll { border: 1px solid var(--border); border-radius: 4px; overflow: auto; max-height: 70vh; }
+.graph { position: relative; min-width: 640px; }
+.lanes { position: absolute; left: 0; top: 0; pointer-events: none; }
+.row { height: 26px; display: flex; align-items: center; gap: 12px; padding-right: 10px; white-space: nowrap; }
+.row:hover { background: var(--hover); }
+.row.dim { opacity: .25; }
+.row .desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
+.row .subject { overflow: hidden; text-overflow: ellipsis; }
+.row .author { width: 130px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.row .date { width: 70px; color: var(--muted); text-align: right; }
+.row .sha { width: 60px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+.ref { display: inline-block; font-size: 11px; line-height: 16px; padding: 0 5px; border-radius: 3px; border: 1px solid; white-space: nowrap; flex-shrink: 0; }
+.ref-head { color: #89d185; border-color: #89d18588; background: #89d1851a; cursor: grab; }
+.ref-wt { color: #4fc1ff; border-color: #4fc1ff88; background: #4fc1ff1a; font-weight: 600; }
+.ref-base { color: #e5c07b; border-color: #e5c07b88; background: #e5c07b1a; font-weight: 600; }
+.ref-remote { color: var(--muted); border-color: var(--border); cursor: grab; }
+.ref-tag { color: #c586c0; border-color: #c586c088; }
+.ref-detached { color: #f48771; border-color: #f4877188; }
+.ref-current { box-shadow: 0 0 0 1px currentColor; }
+
+body.dragging [data-drop] { outline: 1px dashed var(--muted); outline-offset: 1px; }
+.drop-over { outline: 2px solid var(--accent) !important; background: color-mix(in srgb, var(--accent) 20%, transparent) !important; }
+
+.menu { position: fixed; display: none; z-index: 20; min-width: 240px; background: var(--vscode-menu-background, #252526); color: var(--vscode-menu-foreground, #ccc); border: 1px solid var(--vscode-menu-border, #454545); border-radius: 5px; padding: 4px 0; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+.menu-title { padding: 4px 12px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.menu-item { padding: 4px 12px; cursor: pointer; }
+.menu-item:hover { background: var(--vscode-menu-selectionBackground, #04395e); color: var(--vscode-menu-selectionForeground, #fff); }
+.menu-item.danger { color: var(--bad); }
+.menu hr { border: 0; border-top: 1px solid var(--vscode-menu-separatorBackground, #454545); margin: 4px 0; }
