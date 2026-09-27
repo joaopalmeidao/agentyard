@@ -1,7 +1,9 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { agents } from './agents';
 import { Repo } from './git';
-import { buildState, GraphState, resolveBase, SyncStatus } from './model';
+import { buildState, GraphState, resolveBase, SyncStatus, SyncWhere } from './model';
 
 /** Dono do repositório aberto e do estado mostrado na árvore e no grafo. */
 export class Controller implements vscode.Disposable {
@@ -106,6 +108,7 @@ export class Controller implements vscode.Disposable {
           mode: c.get('autoSync.mode', 'merge'),
           testCommand: c.get('autoSync.testCommand', ''),
           owner: this.syncOwner,
+          where: this.syncWhere(),
         },
         agentNames: agents(this).map(a => a.name),
         agentsRunning: this.agentsRunning?.(),
@@ -143,6 +146,24 @@ export class Controller implements vscode.Disposable {
   async setAutoSyncEnabled(v: boolean) {
     if (!this.repo) return;
     await this.ctx.globalState.update(`autoSync:${this.repo.commonDir.toLowerCase()}`, v);
+  }
+
+  syncWhere(): SyncWhere {
+    const v = this.repo && this.ctx.globalState.get<SyncWhere>(`syncWhere:${this.repo.commonDir.toLowerCase()}`);
+    return v ?? this.cfg().get<SyncWhere>('autoSync.where', 'local');
+  }
+
+  async setSyncWhere(v: SyncWhere) {
+    if (this.repo) await this.ctx.globalState.update(`syncWhere:${this.repo.commonDir.toLowerCase()}`, v);
+  }
+
+  hasCiWorkflow(): boolean {
+    if (!this.repo) return false;
+    try {
+      return fs.readdirSync(path.join(this.repo.root, '.github', 'workflows')).some(f => /^sync-.*-into-branches\.ya?ml$/.test(f));
+    } catch {
+      return false;
+    }
   }
 
   dispose() {

@@ -103,6 +103,7 @@ exports.run = async () => {
   });
 
   if (process.env.WTGRAPH_PRINT) await printScene(ctl, tree);
+  if (process.env.WTGRAPH_VIDEO) await videoScene(api);
   console.log('\n' + results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) throw new Error('falhas nos testes');
 };
@@ -125,4 +126,79 @@ async function printScene(ctl) {
   await wait(4000);
   fs.writeFileSync(process.env.WTGRAPH_PRINT, 'ready');
   await wait(12000);
+}
+
+/**
+ * Roteiro do vídeo. scripts/record-vscode.ps1 grava a janela entre os marcadores start/stop e
+ * scripts/make-video.sh monta o MP4 com as legendas registradas aqui.
+ */
+async function videoScene(api) {
+  const fs = require('fs');
+  const path = require('path');
+  const { ctl, treeView, tree, actions, sync, GraphPanel } = api;
+  const dir = process.env.WTGRAPH_VIDEO;
+  const captions = [];
+  const caption = text => captions.push({ t: Date.now(), text });
+
+  const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+  await cfg.update('agents', [{ name: 'Claude Code', command: 'claude --version' }, { name: 'Codex CLI', command: 'codex' }], vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration('workbench').update('colorTheme', 'Default Dark Modern', vscode.ConfigurationTarget.Global);
+  vscode.window.terminals.forEach(t => t.dispose());
+  await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  await vscode.commands.executeCommand('workbench.action.closePanel');
+  await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
+  await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph');
+  await wait(1500);
+  fs.writeFileSync(path.join(dir, 'start'), '');
+  await wait(1200);
+
+  caption('Worktree Graph: todas as worktrees dos seus agentes num painel');
+  await vscode.commands.executeCommand('worktreeGraph.openGraph');
+  await wait(4500);
+
+  caption('Cada card mostra se está limpa, quanto está atrás da master e se vai conflitar');
+  await wait(4500);
+
+  caption('Botão direito: merge, agentes, arquivos e revisão');
+  GraphPanel.demo({ scene: 'menu', branch: 'ai/login-oauth' });
+  await wait(4000);
+  GraphPanel.demo({ scene: 'hide' });
+
+  caption('✦ Abre o Claude Code já dentro da worktree');
+  const wt = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
+  await vscode.commands.executeCommand('worktreeGraph.launchAgent', { path: wt.path, branch: wt.branch }, 'Claude Code');
+  await wait(4500);
+
+  caption('Na barra lateral: o que o agente mudou, com diff, sem trocar de janela');
+  const root = await tree.getChildren();
+  const node = root.find(n => n.branch === 'ai/refatorar-api');
+  await treeView.reveal(node, { expand: true, select: true });
+  await wait(800);
+  const changes = (await tree.getChildren(node))[0];
+  await treeView.reveal(changes, { expand: true });
+  await wait(1200);
+  const files = await tree.getChildren(changes);
+  const apiFile = files.find(f => f.label === 'api.ts');
+  await vscode.commands.executeCommand(apiFile.command.command, ...apiFile.command.arguments);
+  await wait(4500);
+
+  caption('Trazer a master para a branch com um clique');
+  await vscode.commands.executeCommand('worktreeGraph.openGraph');
+  await wait(1500);
+  await actions.mergeBranches(ctl, 'master', 'ai/login-oauth', { confirm: false, quiet: true });
+  await ctl.refresh();
+  await wait(4500);
+
+  caption('Sync automático: mescla onde é seguro e espera onde o agente ainda trabalha');
+  await ctl.setAutoSyncEnabled(true);
+  sync.reschedule();
+  await sync.tick(true);
+  await ctl.refresh();
+  await wait(5500);
+
+  caption('github.com/joaopalmeidao/worktree-graph');
+  await wait(3000);
+  fs.writeFileSync(path.join(dir, 'captions.json'), JSON.stringify(captions));
+  fs.writeFileSync(path.join(dir, 'stop'), '');
+  await wait(1500);
 }

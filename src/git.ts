@@ -238,6 +238,11 @@ export class Repo {
     return r.code === 0 ? [...new Set(r.stdout.split(/\r?\n/).filter(Boolean))] : [];
   }
 
+  async upstream(branch: string): Promise<string | undefined> {
+    const r = await this.run(['rev-parse', '--abbrev-ref', `${branch}@{upstream}`]);
+    return r.code === 0 ? r.stdout.trim() : undefined;
+  }
+
   async revParse(rev: string, cwd = this.root): Promise<string | undefined> {
     const r = await runGit(cwd, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`]);
     return r.code === 0 ? r.stdout.trim() : undefined;

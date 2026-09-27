@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+- Escolha de onde o sync roda, por repositório: só local, só GitHub Actions, dividido (local para branches não publicadas, CI para as publicadas) ou ambos.
+- Vídeo de demonstração gravado num VS Code real (`scripts/make-video.sh`).
+
 ## 0.2.0
 - Botão de agente em cada worktree: abre Claude Code, Codex, Gemini ou qualquer CLI configurado num terminal dentro da worktree, com `{prompt}` opcional.
 - Barra lateral navegável: alterações × base com diff, árvore de pastas de cada worktree e conteúdo de branches sem worktree.

@@ -8,6 +8,11 @@ export class GraphPanel implements vscode.Disposable {
   private static current?: GraphPanel;
   private readonly disposables: vscode.Disposable[] = [];
 
+  /** Usado pelo roteiro do vídeo (test/suite.js) para simular interações dentro do painel. */
+  static demo(msg: unknown) {
+    GraphPanel.current?.panel.webview.postMessage({ type: 'demo', ...(msg as object) });
+  }
+
   static show(ctl: Controller, handler: ActionHandler) {
     if (GraphPanel.current) {
       GraphPanel.current.panel.reveal();

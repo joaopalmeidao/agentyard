@@ -29,6 +29,8 @@
     if (m.type === 'state') {
       state = m.state;
       render();
+    } else if (m.type === 'demo') {
+      demo(m);
     } else if (m.type === 'busy') {
       document.body.classList.toggle('busy', !!m.busy);
     }
@@ -129,6 +131,7 @@
         <button data-action="createWorktree" class="primary">＋ Nova worktree</button>
         <button data-action="toggleAutoSync" class="${s.enabled ? 'on' : ''}" title="Mescla a base automaticamente nas worktrees limpas">
           ⟳ Sync ${s.enabled ? (s.mode === 'notify' ? 'ligado (avisar)' : 'ligado') : 'desligado'}</button>
+        <button data-action="chooseSyncWhere" title="Escolher onde o sync roda: só local, só GitHub Actions, dividido ou ambos">onde: ${{ local: 'local', github: 'GitHub Actions', split: 'dividido', both: 'local + GitHub' }[s.where] || 'local'}</button>
         <button data-action="syncNow" title="Roda o sync uma vez agora">Sincronizar agora</button>
         <button data-action="generateCi" title="Gera .github/workflows para fazer o mesmo no GitHub">Gerar CI</button>
         <button data-action="refresh" title="Atualizar">↻</button>
@@ -157,6 +160,7 @@
       testing: ['⟳ testando…', 'info'],
       'test-failed': ['⟳ testes falharam', 'bad'],
       paused: ['‖ pausado', 'muted'],
+      remote: ['⟳ via GitHub Actions', 'muted'],
       error: ['⟳ erro', 'bad'],
     };
     const [t, c] = map[s.kind] || [s.kind, ''];
@@ -414,7 +418,20 @@
   document.addEventListener('keydown', e => e.key === 'Escape' && hideMenu(null));
   window.addEventListener('blur', () => hideMenu(null));
 
-  // usado pelos prints da documentação (docs/make-prints.mjs)
+  function demo(m) {
+    if (m.scene === 'menu') {
+      const el = document.querySelector(`.card[data-menu="${m.branch}"] .branch`);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 80, clientY: r.top + 12 }));
+    } else if (m.scene === 'hide') {
+      hideMenu(null);
+    } else if (m.scene === 'scroll') {
+      document.querySelector(m.selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  // usado pelos prints da documentação (scripts/make-prints.sh)
   // @ts-ignore
   window.__wtgraphSetState = s => {
     state = s;

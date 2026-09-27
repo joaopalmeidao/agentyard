@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { mergeBranches, openWorktree } from './actions';
 import { Controller } from './controller';
 import { branchMatches, Repo, Worktree } from './git';
-import { SyncKind } from './model';
+import { SyncKind, SyncWhere } from './model';
 
 const LOCK_FILE = 'worktree-graph-sync.lock';
 const LOCK_STALE_MS = 5 * 60_000;
@@ -47,7 +47,8 @@ export class AutoSync implements vscode.Disposable {
     }
     const on = this.ctl.autoSyncEnabled();
     const mode = this.ctl.cfg().get<string>('autoSync.mode', 'merge');
-    this.statusBar.text = on ? `$(sync) Sync ${mode === 'notify' ? '(avisar)' : 'on'}` : '$(sync-ignored) Sync off';
+    const where = { local: '', github: ' · GitHub', split: ' · dividido', both: ' · local+GitHub' }[this.ctl.syncWhere()];
+    this.statusBar.text = on ? `$(sync) Sync ${mode === 'notify' ? '(avisar)' : 'on'}${where}` : `$(sync-ignored) Sync off${where}`;
     this.statusBar.tooltip = on
       ? this.ctl.syncOwner
         ? 'Worktree Graph: esta janela está mantendo as worktrees em dia com a base. Clique para desligar.'
@@ -61,6 +62,28 @@ export class AutoSync implements vscode.Disposable {
     await this.ctl.setAutoSyncEnabled(v);
     vscode.window.showInformationMessage(v ? 'Sync automático ligado para este repositório.' : 'Sync automático desligado para este repositório.');
     this.reschedule();
+    this.ctl.scheduleRefresh(50);
+  }
+
+  async chooseWhere() {
+    const current = this.ctl.syncWhere();
+    const items: (vscode.QuickPickItem & { value: SyncWhere })[] = [
+      { value: 'local', label: 'Só local', detail: 'A extensão mescla a base nas worktrees desta máquina. O workflow do GitHub não é usado.' },
+      { value: 'github', label: 'Só GitHub Actions', detail: 'A extensão não mexe nas worktrees; o workflow gerado em "Gerar CI" sincroniza as branches publicadas.' },
+      { value: 'split', label: 'Dividido', detail: 'Local para branches ainda não publicadas; GitHub Actions para as publicadas. Nenhuma branch é sincronizada pelos dois.' },
+      { value: 'both', label: 'Ambos', detail: 'Local e GitHub Actions em todas as branches. Pode gerar dois merges diferentes da mesma base.' },
+    ];
+    for (const i of items) if (i.value === current) i.description = '(atual)';
+    const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Onde o sync da base deve rodar neste repositório?' });
+    if (!pick) return;
+    await this.ctl.setSyncWhere(pick.value);
+    this.ctl.statuses.clear();
+    if (pick.value !== 'local' && !this.ctl.hasCiWorkflow()) {
+      const go = await vscode.window.showInformationMessage('Este repositório ainda não tem o workflow de sync. Gerar agora?', 'Gerar CI');
+      if (go) await vscode.commands.executeCommand('worktreeGraph.generateCiWorkflow');
+    }
+    this.reschedule();
+    if (this.ctl.autoSyncEnabled()) await this.tick(true);
     this.ctl.scheduleRefresh(50);
   }
 
@@ -83,9 +106,20 @@ export class AutoSync implements vscode.Disposable {
       const include = c.get<string[]>('autoSync.branches', ['**']);
       const exclude = c.get<string[]>('autoSync.exclude', []);
       const paused = new Set(this.ctl.paused());
+      const where = this.ctl.syncWhere();
       for (const wt of await repo.worktrees()) {
         if (!wt.branch || wt.bare || wt.prunable || wt.branch === base) continue;
         if (!branchMatches(wt.branch, include) || branchMatches(wt.branch, exclude)) continue;
+        if (where === 'github' || (where === 'split' && (await repo.upstream(wt.branch)))) {
+          this.set(
+            wt.branch,
+            'remote',
+            where === 'github'
+              ? 'Sync configurado para rodar só no GitHub Actions.'
+              : 'Branch publicada: quem sincroniza é o GitHub Actions (modo dividido).',
+          );
+          continue;
+        }
         if (paused.has(wt.branch)) {
           this.set(wt.branch, 'paused', 'Sync pausado para esta branch.');
           continue;

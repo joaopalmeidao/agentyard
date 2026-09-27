@@ -36,11 +36,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   const sync = new AutoSync(ctl);
   const tree = new WorktreeTreeProvider(ctl);
+  const treeView = vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true });
   ctx.subscriptions.push(sync);
   ctx.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph.autoSync') && sync.reschedule()),
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, new GitShowProvider()),
-    vscode.window.createTreeView('worktreeGraph.worktrees', { treeDataProvider: tree, showCollapseAll: true }),
+    treeView,
   );
 
   /** Ações vindas do webview: mesmos nomes dos comandos, argumentos simples. */
@@ -79,6 +80,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
         return ctl.refresh();
       case 'toggleAutoSync':
         return sync.toggle();
+      case 'chooseSyncWhere':
+        return sync.chooseWhere();
       case 'syncNow':
         return sync.tick(true);
       case 'generateCi':
@@ -117,11 +120,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('togglePauseSync', item => item?.branch && handler('togglePause', { branch: item.branch }));
   reg('toggleAutoSync', () => sync.toggle());
   reg('syncNow', () => sync.tick(true));
+  reg('chooseSyncWhere', () => sync.chooseWhere());
   reg('generateCiWorkflow', () => generateCiWorkflow(ctl));
   reg('showLog', () => out.show());
 
   // Usado pelos testes de integração (test/).
-  return { ctl, tree, agentTerms };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel };
 }
 
 export function deactivate() {}

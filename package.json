@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "Worktree Graph",
   "description": "Veja worktrees e branches num grafo, faça merge com um clique ou arrastando, e mantenha as branches sincronizadas com a base — pensado para desenvolvimento com agentes de IA.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "jp-08",
   "license": "MIT",
   "engines": {
@@ -153,6 +153,11 @@
         "command": "worktreeGraph.showLog",
         "title": "Mostrar log",
         "category": "Worktree Graph"
+      },
+      {
+        "command": "worktreeGraph.chooseSyncWhere",
+        "title": "Escolher onde o sync roda (local, GitHub Actions, dividido, ambos)",
+        "category": "Worktree Graph"
       }
     ],
     "menus": {
@@ -196,6 +201,11 @@
           "command": "worktreeGraph.showLog",
           "when": "view == worktreeGraph.worktrees",
           "group": "2_log"
+        },
+        {
+          "command": "worktreeGraph.chooseSyncWhere",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "1_sync"
         }
       ],
       "view/item/context": [
@@ -369,6 +379,23 @@
           "type": "boolean",
           "default": false,
           "description": "Se o sync automático começa ligado em repositórios novos. Depois disso, o botão de ligar/desligar vale por repositório."
+        },
+        "worktreeGraph.autoSync.where": {
+          "type": "string",
+          "enum": [
+            "local",
+            "github",
+            "split",
+            "both"
+          ],
+          "enumDescriptions": [
+            "Só a extensão sincroniza, nas worktrees desta máquina.",
+            "Só o GitHub Actions (workflow gerado em Gerar CI); a extensão só mostra o estado.",
+            "Local para branches não publicadas, GitHub Actions para as publicadas.",
+            "Os dois em todas as branches (pode gerar merges duplicados)."
+          ],
+          "default": "local",
+          "description": "Padrão de onde o sync da base roda. O botão 'onde' do painel escolhe por repositório."
         },
         "worktreeGraph.autoSync.mode": {
           "type": "string",

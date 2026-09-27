@@ -16,7 +16,7 @@ const { AutoSync } = require('../out/sync');
   const repo = await Repo.open(process.argv[2]);
   const conf = { 'autoSync.mode': 'merge', 'autoSync.branches': ['ai/**'], 'autoSync.testCommand': process.argv[3] || '' };
   const ctl = { repo, statuses: new Map(), syncOwner: false, out: { show(){} },
-    cfg: () => ({ get: (k, d) => (k in conf ? conf[k] : d) }), autoSyncEnabled: () => false, paused: () => [],
+    cfg: () => ({ get: (k, d) => (k in conf ? conf[k] : d) }), autoSyncEnabled: () => false, paused: () => [], syncWhere: () => process.env.WHERE || 'local',
     base: async () => ({ base: 'master', baseRef: 'master' }), log: m => console.log('  log:', m.split('\n')[0]), scheduleRefresh(){} };
   const s = new AutoSync(ctl);
   await s.tick(true);

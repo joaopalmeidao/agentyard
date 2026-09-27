@@ -154,6 +154,12 @@ export class WorktreeTreeProvider implements vscode.TreeDataProvider<Node> {
     return el;
   }
 
+  getParent(el: Node): Node | undefined {
+    const s = this.ctl.state;
+    if (s && el instanceof ChangesItem) return new WorktreeItem(el.wt, s.base, s.baseRef);
+    return undefined;
+  }
+
   async getChildren(el?: Node): Promise<Node[]> {
     const s = this.ctl.state;
     const repo = this.ctl.repo;

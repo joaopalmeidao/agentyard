@@ -5,6 +5,10 @@ Extensão do VS Code para quem trabalha com vários agentes de IA em paralelo, c
 (ou arrastando uma branch sobre outra) e mantém as branches em dia com a base — localmente, pela
 própria extensão, e no GitHub, por um workflow que ela gera.
 
+![Demonstração](docs/video/worktree-graph.gif)
+
+Vídeo em MP4: [docs/video/worktree-graph.mp4](docs/video/worktree-graph.mp4)
+
 ![VS Code com o Worktree Graph](docs/prints/00-vscode.png)
 
 ## O que tem
@@ -69,6 +73,20 @@ disputam um lock em `<.git>/worktree-graph-sync.lock`.
 
 ![Depois do sync](docs/prints/05-depois-do-sync.png)
 
+## Onde o sync roda
+
+O botão **onde** do painel (ou *Worktree Graph: Escolher onde o sync roda*) define, por repositório:
+
+| modo | o que acontece |
+|---|---|
+| **Só local** *(padrão)* | a extensão mescla a base nas worktrees desta máquina; o workflow do GitHub não é usado. |
+| **Só GitHub Actions** | a extensão não mexe nas worktrees, só mostra o estado; o workflow gerado em **Gerar CI** sincroniza as branches publicadas. |
+| **Dividido** | local para branches ainda não publicadas; GitHub Actions para as que têm upstream. Nenhuma branch é sincronizada pelos dois. |
+| **Ambos** | local e GitHub Actions em todas as branches (pode gerar dois merges diferentes da mesma base). |
+
+O padrão para repositórios novos vem de `worktreeGraph.autoSync.where`. Ao escolher um modo com
+GitHub sem ter o workflow, a extensão oferece gerá-lo.
+
 ## Sync no GitHub (CI)
 
 **Gerar CI** pergunta os padrões de branch e o comando de verificação e escreve o workflow. Ele:
@@ -99,6 +117,7 @@ compartilhadas — os padrões (`autoSync.branches`/`exclude`) ajudam a separar.
 | `worktreeGraph.graph.maxCommits` | `400` | |
 | `worktreeGraph.graph.showRemoteBranches` | `true` | |
 | `worktreeGraph.autoSync.enabledByDefault` | `false` | |
+| `worktreeGraph.autoSync.where` | `local` | `local`, `github`, `split` ou `both` |
 | `worktreeGraph.autoSync.mode` | `merge` | `merge` ou `notify` |
 | `worktreeGraph.autoSync.branches` | `["**"]` | `*` = um segmento, `**` = qualquer coisa |
 | `worktreeGraph.autoSync.exclude` | `[]` | |
@@ -120,3 +139,4 @@ node scripts/test-sync.js <repo> # sync contra um repositório, sem VS Code
 - `scripts/make-demo.sh` — cria um repositório de demonstração com worktrees "de agentes" (uma limpa, uma suja, uma que conflita).
 - `scripts/test-sync.js <repo> [teste] [status.json]` — roda o sync de verdade contra um repositório, sem VS Code.
 - `scripts/make-prints.sh` — regera `docs/prints/` renderizando o painel num Edge headless.
+- `scripts/make-video.sh` — grava o roteiro de `test/suite.js` num VS Code real e gera `docs/video/` (precisa de ffmpeg).

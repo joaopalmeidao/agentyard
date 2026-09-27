@@ -10,7 +10,11 @@ export type SyncKind =
   | 'testing'
   | 'test-failed'
   | 'paused'
+  | 'remote'
   | 'error';
+
+/** Onde o sync da base roda: só na extensão, só no GitHub Actions, dividido por branch publicada, ou ambos. */
+export type SyncWhere = 'local' | 'github' | 'split' | 'both';
 
 export interface SyncStatus {
   kind: SyncKind;
@@ -71,7 +75,7 @@ export interface GraphState {
   worktrees: WorktreeView[];
   branches: BranchView[];
   commits: GraphCommit[];
-  autoSync: { enabled: boolean; mode: string; testCommand: string; owner: boolean };
+  autoSync: { enabled: boolean; mode: string; testCommand: string; owner: boolean; where: SyncWhere };
   /** Agentes configurados, na ordem das configurações (o primeiro é o do botão). */
   agentNames: string[];
   error?: string;
