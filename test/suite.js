@@ -406,8 +406,11 @@ exports.run = async () => {
   await check('Claude: configuração lista skill, comando, settings e memória sintéticos; nova memória entra no índice', async () => {
     const svc = api.claudeConfig;
     await vscode.commands.executeCommand('worktreeGraph.claudeConfig.focus');
-    const scopes = svc.getChildren();
+    const root = svc.getChildren();
+    assert.strictEqual(root[0].kind, 'learn', 'nó "Aprender com o uso" no topo');
+    const scopes = root.slice(1);
     assert.deepStrictEqual(scopes.map(n => n.scope), ['user', 'project']);
+    assert.strictEqual(svc.pathOf(scopes[0]), svc.claudeDir());
     const userGroups = svc.getChildren(scopes[0]);
     const skills = svc.getChildren(userGroups.find(g => g.group === 'skills'));
     assert.ok(skills.some(n => n.entry && n.entry.name === 'revisar-pr'), 'skill sintética');
@@ -1256,7 +1259,7 @@ exports.run = async () => {
       const before = require('child_process').execSync('git rev-parse ai/refatorar-api', { cwd: ctl.repo.root, encoding: 'utf8' }).trim();
       await req('POST', '/api/msg', { c: client, msg: { type: 'action', action: 'mergeInto', args: { branch: 'ai/precos-promo' } } });
       const pick = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'pick'));
-      const i = pick.items.findIndex(x => x.label === 'ai/refatorar-api');
+      const i = pick.items.findIndex(x => x.label.replace(/^\$\([\w-]+\) /, '') === 'ai/refatorar-api');
       assert.ok(i >= 0, JSON.stringify(pick.items));
       await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: pick.id, value: i } });
       const confirm = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'message' && m.modal));
