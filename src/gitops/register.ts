@@ -82,7 +82,7 @@ export class GitOps implements vscode.Disposable {
   }
 
   private remoteName() {
-    return this.ctl.cfg().get<string>('remote', 'origin');
+    return this.ctl.remoteName();
   }
 
   private async worktreeOf(branch: string): Promise<Worktree | undefined> {

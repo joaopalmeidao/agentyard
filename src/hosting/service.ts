@@ -52,7 +52,7 @@ export class RequestService {
     this.remoteChecked = true;
     const repo = this.ctl.repo;
     if (!repo) return (this.remote = undefined);
-    const name = this.cfg().get<string>('remote', 'origin');
+    const name = this.ctl.remoteName();
     const r = await repo.run(['remote', 'get-url', name]);
     this.remote =
       r.code === 0
@@ -195,7 +195,7 @@ export class RequestService {
         t(
           'Saved {0}, but this repository\'s remote "{1}" does not point to {2}. PRs/MRs, issues and pipelines use the repository\'s remote.',
           base,
-          this.cfg().get<string>('remote', 'origin'),
+          this.ctl.remoteName(),
           host,
         ),
       );

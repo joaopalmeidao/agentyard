@@ -1,6 +1,10 @@
 # Changelog
 
 ## Não lançado
+- **Correção: push falhava com o acesso remoto configurado** (`fatal: ']' does not appear to be a git
+  repository`). As settings do acesso remoto (`worktreeGraph.remote.enabled`, `.host`, `.publicUrl`…)
+  colidiam com `worktreeGraph.remote`, o remote git, que passava a ser lido como objeto. Elas agora são
+  `worktreeGraph.remoteAccess.*`, e os valores antigos são movidos sozinhos na ativação.
 - **Modelos de tarefa: como se saem**: cada vez que um modelo vai para um agente, o AgentYard guarda
   quanto ele levou até ficar pronto, os turnos, as intervenções (permissões e bloqueios da guarda), os
   tokens e as rodadas da revisão automática. O relatório compara os modelos, para você reescrever os

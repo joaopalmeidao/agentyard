@@ -327,7 +327,7 @@ document.querySelectorAll('tr[data-branch]').forEach(tr => tr.onclick = () => vs
         send,
       );
       if (ok === send) {
-        const remote = this.ctl.cfg().get<string>('remote', 'origin');
+        const remote = this.ctl.remoteName();
         const r = await repo.run(['push', remote, s.base, tag], cwd, 300_000);
         if (r.code !== 0) vscode.window.showErrorMessage(t('Push failed: {0}', (r.stderr || r.stdout).trim()));
         else vscode.window.showInformationMessage(t('{0} and {1} pushed to {2}.', s.base, tag, remote));

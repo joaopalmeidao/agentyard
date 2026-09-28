@@ -145,7 +145,7 @@ export function registerStack(ctx: vscode.ExtensionContext, ctl: Controller, gua
   const forcePush = async (branches: string[]) => {
     const repo = ctl.repo;
     if (!repo) return;
-    const remote = ctl.cfg().get<string>('remote', 'origin');
+    const remote = ctl.remoteName();
     for (const b of branches) {
       const r = await repo.run(['push', '--force-with-lease', remote, `${b}:${b}`], repo.root, 300_000);
       if (r.code !== 0) vscode.window.showErrorMessage(t('Push of {0} refused: {1}', b, (r.stderr || r.stdout).trim()));

@@ -3,15 +3,15 @@ import { t } from '../i18n';
 import { ntfyRequest } from './core';
 
 /**
- * Notificação no celular pelo ntfy (`worktreeGraph.remote.ntfyTopic`), junto com a do sistema. O link
- * da notificação é o remote.publicUrl sem o token: o celular já guardou o token ao abrir o link uma vez.
+ * Notificação no celular pelo ntfy (`worktreeGraph.remoteAccess.ntfyTopic`), junto com a do sistema. O link
+ * da notificação é o remoteAccess.publicUrl sem o token: o celular já guardou o token ao abrir o link uma vez.
  */
 export function pushNotify(ctl: Controller, title: string, body: string) {
   const c = ctl.cfg();
-  const topic = c.get<string>('remote.ntfyTopic', '').trim();
+  const topic = c.get<string>('remoteAccess.ntfyTopic', '').trim();
   if (!topic) return;
-  const pub = c.get<string>('remote.publicUrl', '').trim();
-  const req = ntfyRequest(topic, title, body.slice(0, 500), c.get<boolean>('remote.enabled', false) && pub ? pub : undefined);
+  const pub = c.get<string>('remoteAccess.publicUrl', '').trim();
+  const req = ntfyRequest(topic, title, body.slice(0, 500), c.get<boolean>('remoteAccess.enabled', false) && pub ? pub : undefined);
   if (!req) {
     ctl.log(t('Remote access: invalid ntfy topic URL: {0}', topic));
     return;

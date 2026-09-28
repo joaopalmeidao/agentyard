@@ -18,10 +18,39 @@ function cfg() {
   return vscode.workspace.getConfiguration('worktreeGraph');
 }
 
-/** Endereço onde a página abre de fora (remote.publicUrl) ou, sem ele, nesta máquina. */
+const ACCESS_KEYS = ['enabled', 'port', 'host', 'actions', 'publicUrl', 'ntfyTopic'];
+
+/**
+ * As settings do acesso remoto eram worktreeGraph.remote.*, que colide com worktreeGraph.remote (o
+ * remote git): com elas definidas, a leitura do remote virava um objeto e o push falhava. Move os
+ * valores antigos (usuário e workspace) para remoteAccess.* e apaga os antigos.
+ */
+async function migrateOldSettings() {
+  const c = cfg();
+  const targets = [
+    [vscode.ConfigurationTarget.Global, 'globalValue'],
+    [vscode.ConfigurationTarget.Workspace, 'workspaceValue'],
+  ] as const;
+  for (const k of ACCESS_KEYS) {
+    const old = c.inspect(`remote.${k}`);
+    if (!old) continue;
+    for (const [target, field] of targets) {
+      if (old[field] === undefined) continue;
+      if (target === vscode.ConfigurationTarget.Workspace && !vscode.workspace.workspaceFolders?.length) continue;
+      try {
+        if (c.inspect(`remoteAccess.${k}`)?.[field] === undefined) await c.update(`remoteAccess.${k}`, old[field], target);
+        await c.update(`remote.${k}`, undefined, target);
+      } catch (e) {
+        console.warn(`AgentYard: migração de worktreeGraph.remote.${k} falhou`, e);
+      }
+    }
+  }
+}
+
+/** Endereço onde a página abre de fora (remoteAccess.publicUrl) ou, sem ele, nesta máquina. */
 function baseUrl(): string {
-  const pub = cfg().get<string>('remote.publicUrl', '').trim();
-  return pub || `http://localhost:${cfg().get<number>('remote.port', 7420)}`;
+  const pub = cfg().get<string>('remoteAccess.publicUrl', '').trim();
+  return pub || `http://localhost:${cfg().get<number>('remoteAccess.port', 7420)}`;
 }
 
 /** Arquivos do painel que o celular pode baixar (media/). */
@@ -97,8 +126,8 @@ class RemoteAccess implements vscode.Disposable {
         await this.hub.answer(client, String(msg.id), msg.value);
         return true;
       }
-      if (msg.type === 'action' && !cfg().get<boolean>('remote.actions', true)) {
-        this.hub.send(client, { type: 'toast', level: 'warning', message: t('Actions from the phone are turned off (worktreeGraph.remote.actions).') });
+      if (msg.type === 'action' && !cfg().get<boolean>('remoteAccess.actions', true)) {
+        this.hub.send(client, { type: 'toast', level: 'warning', message: t('Actions from the phone are turned off (worktreeGraph.remoteAccess.actions).') });
         return true;
       }
       // os diálogos que a ação abrir vão para esta aba
@@ -135,9 +164,9 @@ class RemoteAccess implements vscode.Disposable {
 
   /** Liga, desliga ou reinicia conforme a configuração. */
   apply() {
-    const on = cfg().get<boolean>('remote.enabled', false);
-    const host = cfg().get<string>('remote.host', '127.0.0.1').trim() || '127.0.0.1';
-    const port = cfg().get<number>('remote.port', 7420);
+    const on = cfg().get<boolean>('remoteAccess.enabled', false);
+    const host = cfg().get<string>('remoteAccess.host', '127.0.0.1').trim() || '127.0.0.1';
+    const port = cfg().get<number>('remoteAccess.port', 7420);
     const want = on ? `${host}:${port}` : '';
     if (want === this.serving && (this.server || this.retry)) return;
     this.stop();
@@ -190,32 +219,32 @@ export function registerRemoteAccess(ctx: vscode.ExtensionContext, ctl: Controll
     installRemoteDialogs(remote.hub),
     // o painel aberto no celular acompanha o estado como o do VS Code
     ctl.onDidChange(() => remote.hub.size && remote.hub.broadcast({ type: 'state', state: ctl.state ?? null })),
-    vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph.remote') && remote.apply()),
+    vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph.remoteAccess') && remote.apply()),
   );
-  remote.apply();
+  void migrateOldSettings().then(() => remote.apply());
 
   const reg = (id: string, fn: (...a: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
 
   reg('remote.copyLink', async () => {
-    if (!cfg().get<boolean>('remote.enabled', false)) {
+    if (!cfg().get<boolean>('remoteAccess.enabled', false)) {
       const enable = t('Turn on');
       const pick = await vscode.window.showInformationMessage(
         t('Turn on remote access?'),
-        { modal: true, detail: t('AgentYard serves on this machine (port {0}) a page with your agents and the main panel, where you can act as in VS Code. To open it on your phone, expose that port with a tunnel of your choice, such as Tailscale.',cfg().get<number>('remote.port', 7420)) },
+        { modal: true, detail: t('AgentYard serves on this machine (port {0}) a page with your agents and the main panel, where you can act as in VS Code. To open it on your phone, expose that port with a tunnel of your choice, such as Tailscale.',cfg().get<number>('remoteAccess.port', 7420)) },
         enable,
       );
       if (pick !== enable) return;
-      await cfg().update('remote.enabled', true, vscode.ConfigurationTarget.Global);
+      await cfg().update('remoteAccess.enabled', true, vscode.ConfigurationTarget.Global);
     }
     const link = core.remoteLink(baseUrl(), core.remoteToken());
     await vscode.env.clipboard.writeText(link);
     const open = t('Open');
     const settings = t('Settings');
-    const hasPublic = !!cfg().get<string>('remote.publicUrl', '').trim();
+    const hasPublic = !!cfg().get<string>('remoteAccess.publicUrl', '').trim();
     const pick = await vscode.window.showInformationMessage(
       hasPublic
         ? t('Remote access link copied. Open it on your phone once; it keeps the access.')
-        : t('Remote access link copied (this machine only). To open it on your phone, expose port {0} (e.g. "tailscale serve --bg {0}") and set worktreeGraph.remote.publicUrl.', cfg().get<number>('remote.port', 7420)),
+        : t('Remote access link copied (this machine only). To open it on your phone, expose port {0} (e.g. "tailscale serve --bg {0}") and set worktreeGraph.remoteAccess.publicUrl.', cfg().get<number>('remoteAccess.port', 7420)),
       open,
       settings,
     );

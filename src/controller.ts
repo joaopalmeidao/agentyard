@@ -56,6 +56,12 @@ export class Controller implements vscode.Disposable {
     return vscode.workspace.getConfiguration('worktreeGraph');
   }
 
+  /** Remote git (worktreeGraph.remote). Settings antigas remote.* do acesso remoto viram um objeto nessa chave: cai para origin. */
+  remoteName(): string {
+    const v = this.cfg().get<unknown>('remote');
+    return typeof v === 'string' && v.trim() ? v.trim() : 'origin';
+  }
+
   log(msg: string) {
     this.out.appendLine(`[${new Date().toLocaleTimeString()}] ${msg}`);
   }

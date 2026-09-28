@@ -40,7 +40,7 @@ export class PromotionService implements vscode.Disposable {
   }
 
   private remote() {
-    return this.ctl.cfg().get<string>('remote', 'origin');
+    return this.ctl.remoteName();
   }
 
   private mode(): 'local' | 'remote' {

@@ -1161,8 +1161,8 @@ exports.run = async () => {
     const http = require('http');
     const cfg = vscode.workspace.getConfiguration('worktreeGraph');
     const port = 7498;
-    await cfg.update('remote.port', port, vscode.ConfigurationTarget.Global);
-    await cfg.update('remote.enabled', true, vscode.ConfigurationTarget.Global);
+    await cfg.update('remoteAccess.port', port, vscode.ConfigurationTarget.Global);
+    await cfg.update('remoteAccess.enabled', true, vscode.ConfigurationTarget.Global);
     const token = require('../out/remote/core').remoteToken();
     const auth = { authorization: `Bearer ${token}` };
     const req = (method, url, body) =>
@@ -1229,8 +1229,8 @@ exports.run = async () => {
       assert.strictEqual(await new Promise(r => http.get({ host: '127.0.0.1', port, path: `/api/events?c=${client}` }, res => r(res.statusCode))), 401);
     } finally {
       stream.destroy();
-      await cfg.update('remote.enabled', undefined, vscode.ConfigurationTarget.Global);
-      await cfg.update('remote.port', undefined, vscode.ConfigurationTarget.Global);
+      await cfg.update('remoteAccess.enabled', undefined, vscode.ConfigurationTarget.Global);
+      await cfg.update('remoteAccess.port', undefined, vscode.ConfigurationTarget.Global);
     }
   });
 

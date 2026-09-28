@@ -2286,7 +2286,7 @@
   "Turn on remote access?": "Ligar o acesso remoto?",
   "AgentYard serves on this machine (port {0}) a page with your agents and the main panel, where you can act as in VS Code. To open it on your phone, expose that port with a tunnel of your choice, such as Tailscale.": "O AgentYard serve nesta máquina (porta {0}) uma página com seus agentes e o painel principal, onde você age como no VS Code. Para abrir no celular, exponha essa porta com um túnel de sua escolha, como o Tailscale.",
   "Remote access link copied. Open it on your phone once; it keeps the access.": "Link do acesso remoto copiado. Abra uma vez no celular; ele guarda o acesso.",
-  "Remote access link copied (this machine only). To open it on your phone, expose port {0} (e.g. \"tailscale serve --bg {0}\") and set worktreeGraph.remote.publicUrl.": "Link do acesso remoto copiado (só nesta máquina). Para abrir no celular, exponha a porta {0} (ex.: \"tailscale serve --bg {0}\") e preencha worktreeGraph.remote.publicUrl.",
+  "Remote access link copied (this machine only). To open it on your phone, expose port {0} (e.g. \"tailscale serve --bg {0}\") and set worktreeGraph.remoteAccess.publicUrl.": "Link do acesso remoto copiado (só nesta máquina). Para abrir no celular, exponha a porta {0} (ex.: \"tailscale serve --bg {0}\") e preencha worktreeGraph.remoteAccess.publicUrl.",
   "Generate new link": "Gerar novo link",
   "Generate a new remote access link?": "Gerar um novo link de acesso remoto?",
   "The current link stops working on every device.": "O link atual para de funcionar em todos os aparelhos.",
@@ -2402,7 +2402,7 @@
   "Filter": "Filtrar",
   "OK": "OK",
   "Cancel": "Cancelar",
-  "Actions from the phone are turned off (worktreeGraph.remote.actions).": "As ações pelo celular estão desligadas (worktreeGraph.remote.actions).",
+  "Actions from the phone are turned off (worktreeGraph.remoteAccess.actions).": "As ações pelo celular estão desligadas (worktreeGraph.remoteAccess.actions).",
   "Open link": "Abrir link",
   "This opens only in VS Code on the computer; it was opened there.": "Isto só abre no VS Code do computador; foi aberto lá.",
   "This link cannot be opened on the phone: {0}": "Este link não abre no celular: {0}"

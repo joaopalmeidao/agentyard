@@ -407,7 +407,7 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
       return existing.path;
     }
     const b = await svc.browser();
-    const remote = ctl.cfg().get<string>('remote', 'origin');
+    const remote = ctl.remoteName();
     const { refspec, localBranch } = fetchSpecFor(p, b?.kind ?? 'github');
     const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Fetching {0} ({1})…', p.ref, p.source) }, () =>
       repo.run(['fetch', remote, refspec], repo.root, 300_000),
@@ -505,7 +505,7 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     const p = svc.find(ref);
     const repo = ctl.repo;
     if (!p || !repo) return;
-    const remote = ctl.cfg().get<string>('remote', 'origin');
+    const remote = ctl.remoteName();
     const wt = svc.worktreeOf(p);
     const candidates = [wt?.branch, `${remote}/${p.source}`, `pr/${p.id}`, `mr/${p.id}`, p.headSha].filter(Boolean) as string[];
     let head: string | undefined;

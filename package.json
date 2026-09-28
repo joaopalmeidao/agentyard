@@ -3921,37 +3921,37 @@
           "default": true,
           "description": "%config.claude.osNotify.description%"
         },
-        "worktreeGraph.remote.enabled": {
+        "worktreeGraph.remoteAccess.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "%config.remote.enabled.markdownDescription%"
+          "markdownDescription": "%config.remoteAccess.enabled.markdownDescription%"
         },
-        "worktreeGraph.remote.port": {
+        "worktreeGraph.remoteAccess.port": {
           "type": "number",
           "default": 7420,
           "minimum": 1024,
           "maximum": 65535,
-          "description": "%config.remote.port.description%"
+          "description": "%config.remoteAccess.port.description%"
         },
-        "worktreeGraph.remote.host": {
+        "worktreeGraph.remoteAccess.host": {
           "type": "string",
           "default": "127.0.0.1",
-          "markdownDescription": "%config.remote.host.markdownDescription%"
+          "markdownDescription": "%config.remoteAccess.host.markdownDescription%"
         },
-        "worktreeGraph.remote.actions": {
+        "worktreeGraph.remoteAccess.actions": {
           "type": "boolean",
           "default": true,
-          "description": "%config.remote.actions.description%"
+          "description": "%config.remoteAccess.actions.description%"
         },
-        "worktreeGraph.remote.publicUrl": {
+        "worktreeGraph.remoteAccess.publicUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "%config.remote.publicUrl.markdownDescription%"
+          "markdownDescription": "%config.remoteAccess.publicUrl.markdownDescription%"
         },
-        "worktreeGraph.remote.ntfyTopic": {
+        "worktreeGraph.remoteAccess.ntfyTopic": {
           "type": "string",
           "default": "",
-          "markdownDescription": "%config.remote.ntfyTopic.markdownDescription%"
+          "markdownDescription": "%config.remoteAccess.ntfyTopic.markdownDescription%"
         },
         "worktreeGraph.claude.extraArgs": {
           "type": "string",

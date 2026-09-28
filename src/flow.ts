@@ -64,7 +64,7 @@ export async function configureFlow(ctl: Controller) {
   const repo = ctl.repo;
   if (!repo) return;
   // locais e as do remoto (qa/hml/prd muitas vezes só existem lá)
-  const names = await branchNames(repo, ctl.cfg().get<string>('remote', 'origin'));
+  const names = await branchNames(repo, ctl.remoteName());
   const current = flowStages(ctl);
   const guess = ['develop', 'dev', 'qa', 'homolog', 'hml', 'staging', 'prd', 'prod', 'production', 'main', 'master'].filter(n => names.includes(n));
   const chosen: FlowStage[] = [];

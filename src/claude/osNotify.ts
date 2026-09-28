@@ -28,7 +28,7 @@ export function osNotifyCommand(platform: NodeJS.Platform, title: string, body: 
 
 /**
  * Notificação do sistema operacional, para quando o VS Code está sem foco (a notificação do VS Code
- * só aparece dentro da janela). `worktreeGraph.claude.osNotify` desliga. Com `remote.ntfyTopic`, vai
+ * só aparece dentro da janela). `worktreeGraph.claude.osNotify` desliga. Com `remoteAccess.ntfyTopic`, vai
  * também para o celular.
  */
 export function osNotify(ctl: Controller, title: string, body: string) {

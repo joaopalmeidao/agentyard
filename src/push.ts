@@ -23,7 +23,7 @@ export async function pushBranch(ctl: Controller, branch: string, opts: { quiet?
   if (!repo) return false;
   // gatilho "push" do sync automático: traz a base para a branch antes de enviar (src/sync.ts)
   await ctl.beforePush?.(branch);
-  const remote = ctl.cfg().get<string>('remote', 'origin');
+  const remote = ctl.remoteName();
   const upstream = await repo.upstream(branch);
   if (upstream) {
     const [, ahead] = await repo.aheadBehind(upstream, branch);
