@@ -1493,8 +1493,8 @@
         "icon": "$(remote)"
       },
       {
-        "command": "worktreeGraph.remote.resetToken",
-        "title": "%command.remote.resetToken.title%",
+        "command": "worktreeGraph.remote.manage",
+        "title": "%command.remote.manage.title%",
         "category": "AgentYard"
       },
       {
@@ -4075,38 +4075,6 @@
           "default": true,
           "description": "%config.claude.osNotify.description%"
         },
-        "worktreeGraph.remoteAccess.enabled": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "%config.remoteAccess.enabled.markdownDescription%"
-        },
-        "worktreeGraph.remoteAccess.port": {
-          "type": "number",
-          "default": 7420,
-          "minimum": 1024,
-          "maximum": 65535,
-          "description": "%config.remoteAccess.port.description%"
-        },
-        "worktreeGraph.remoteAccess.phone": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "%config.remoteAccess.phone.markdownDescription%"
-        },
-        "worktreeGraph.remoteAccess.host": {
-          "type": "string",
-          "default": "127.0.0.1",
-          "markdownDescription": "%config.remoteAccess.host.markdownDescription%"
-        },
-        "worktreeGraph.remoteAccess.actions": {
-          "type": "boolean",
-          "default": true,
-          "description": "%config.remoteAccess.actions.description%"
-        },
-        "worktreeGraph.remoteAccess.publicUrl": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "%config.remoteAccess.publicUrl.markdownDescription%"
-        },
         "worktreeGraph.remoteAccess.ntfyTopic": {
           "type": "string",
           "default": "",
@@ -4713,7 +4681,7 @@
     "package": "tsc -p ./ && node scripts/package-dist.js",
     "dist": "node scripts/dist.js",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/longProject.test.js && node test/claudeGuard.test.js && node test/turns.test.js && node test/bridge.test.js && node test/autopilot.test.js && node test/remote.test.js && node test/remoteDialogs.test.js && node test/stack.test.js && node test/sparse.test.js && node test/headless.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/longProject.test.js && node test/claudeGuard.test.js && node test/turns.test.js && node test/bridge.test.js && node test/autopilot.test.js && node test/remote.test.js && node test/stack.test.js && node test/sparse.test.js && node test/headless.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

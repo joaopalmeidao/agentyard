@@ -2,19 +2,17 @@ import type { Controller } from '../controller';
 import { t } from '../i18n';
 import { ntfyRequest } from './core';
 
+/** Onde fica o último link do túnel copiado (destino ao tocar na notificação). */
+export const TUNNEL_LINK_KEY = 'remoteAccess.tunnelLink';
+
 /**
- * Notificação no celular pelo ntfy (`worktreeGraph.remoteAccess.ntfyTopic`), junto com a do sistema, quando
- * remoteAccess.phone está ligado. O link
- * da notificação é o remoteAccess.publicUrl sem o token: o celular já guardou o token ao abrir o link uma vez.
+ * Notificação no celular pelo ntfy (`worktreeGraph.remoteAccess.ntfyTopic`), junto com a do sistema.
+ * Tocar nela abre o VS Code pelo túnel (o último link copiado em Acesso remoto), quando há um.
  */
 export function pushNotify(ctl: Controller, title: string, body: string) {
-  const c = ctl.cfg();
-  // só com o acesso pelo celular ligado (remoteAccess.phone)
-  if (!c.get<boolean>('remoteAccess.phone', false)) return;
-  const topic = c.get<string>('remoteAccess.ntfyTopic', '').trim();
+  const topic = ctl.cfg().get<string>('remoteAccess.ntfyTopic', '').trim();
   if (!topic) return;
-  const pub = c.get<string>('remoteAccess.publicUrl', '').trim();
-  const req = ntfyRequest(topic, title, body.slice(0, 500), c.get<boolean>('remoteAccess.enabled', false) && pub ? pub : undefined);
+  const req = ntfyRequest(topic, title, body.slice(0, 500), ctl.ctx.globalState.get<string>(TUNNEL_LINK_KEY) || undefined);
   if (!req) {
     ctl.log(t('Remote access: invalid ntfy topic URL: {0}', topic));
     return;
