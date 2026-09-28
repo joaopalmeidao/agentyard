@@ -878,6 +878,24 @@ exports.run = async () => {
     }
   });
 
+  await check('histórico: "Mostrar só esta branch" deixa no grafo só os commits dela', async () => {
+    await ctl.ctx.workspaceState.update('graphFilter', 'unmerged');
+    try {
+      await api.panelAction('historyOfBranch', { branch: 'ai/login-oauth' });
+      assert.strictEqual(ctl.state.graphFilter, 'all');
+      assert.deepStrictEqual(ctl.state.graphBranches, ['ai/login-oauth']);
+      const head = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').head;
+      assert.ok(ctl.state.commits.some(c => c.sha === head), 'topo da branch aparece');
+      const own = new Set(require('child_process').execSync('git rev-list refs/heads/ai/login-oauth', { cwd: ctl.repo.root, encoding: 'utf8' }).split(/\r?\n/).filter(Boolean));
+      const other = ctl.state.commits.filter(c => !own.has(c.sha));
+      assert.deepStrictEqual(other.map(c => c.subject), [], 'commit de outra branch não aparece');
+    } finally {
+      await ctl.ctx.workspaceState.update('graphBranches', []);
+      await ctl.ctx.workspaceState.update('graphFilter', 'all');
+      await ctl.refresh();
+    }
+  });
+
   await check('agendamentos: o relógio dispara o agente, a fila recebe a tarefa e "só se limpa" pula a suja', async () => {
     const path = require('path');
     const fs = require('fs');

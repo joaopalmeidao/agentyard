@@ -1,5 +1,13 @@
 # Changelog
 
+## Não lançado
+- **Ver commits da branch…** (paleta, botão direito numa worktree ou branch na view Worktrees e menu da
+  branch no painel): escolha qualquer branch, local ou remota, e veja a lista de commits dela. Começa
+  só com o que a base não tem; um botão alterna para o histórico completo. Enter mostra os arquivos do
+  commit.
+- **Mostrar só esta branch no histórico** (menu da branch no painel): o grafo passa a mostrar só os
+  commits dela (volta pelo seletor **Branches:**).
+
 ## 0.16.0
 - **Tarefas por voz**: toda caixa que pede a tarefa do agente (nova worktree com tarefa, fila de tarefas,
   abrir o Claude/agente com tarefa, dividir entre agentes, várias abordagens, tarefa em lote) ganha um
