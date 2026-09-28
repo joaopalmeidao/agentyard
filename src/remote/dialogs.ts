@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import type { Hub } from './hub';
 
 /**
@@ -119,9 +120,95 @@ export function installRemoteDialogs(hub: Hub): vscode.Disposable {
     },
   );
 
+  // ---------- o que a ação abre: link da web abre na aba do celular; editor, diff, terminal e painéis
+  // só existem no VS Code do computador (abrem lá) e a aba recebe um aviso, uma vez por ação
+  const warned = new WeakSet<object>();
+  const desktopOnly = () => {
+    const store = origin.getStore();
+    const client = remoteClient();
+    if (!store || !client || warned.has(store)) return;
+    warned.add(store);
+    hub.send(client, { type: 'toast', level: 'warning', message: t('This opens only in VS Code on the computer; it was opened there.') });
+  };
+
+  const undoOpen = replaceApi('env', 'openExternal', origOpen => function (this: unknown, uri: vscode.Uri, ...rest: unknown[]) {
+    const client = remoteClient();
+    if (!client) return origOpen.call(this, uri, ...rest);
+    const url = uri.toString(true);
+    if (/^(https?|mailto):/i.test(url) && !isLocalUrl(url)) {
+      hub.send(client, { type: 'open', url });
+      return Promise.resolve(true);
+    }
+    hub.send(client, { type: 'toast', level: 'warning', message: t('This link cannot be opened on the phone: {0}', url) });
+    return Promise.resolve(false);
+  });
+
+  for (const name of ['showTextDocument', 'createTerminal', 'createWebviewPanel', 'showNotebookDocument']) {
+    patch(name, orig =>
+      function (this: unknown, ...a: unknown[]) {
+        desktopOnly();
+        return orig.apply(this, a);
+      },
+    );
+  }
+
+  const undoExec = replaceApi('commands', 'executeCommand', origExec => function (this: unknown, id: string, ...a: unknown[]) {
+    if (opensUi(id)) desktopOnly();
+    return origExec.call(this, id, ...a);
+  });
+
   return {
     dispose: () => {
       for (const [name, fn] of Object.entries(saved)) w[name] = fn;
+      undoOpen();
+      undoExec();
     },
   };
+}
+
+/**
+ * Troca uma função de vscode.env/vscode.commands. O VS Code congela vscode.env (Object.freeze):
+ * nesse caso o namespace inteiro vira uma cópia que herda o original e só muda essa função (quem
+ * chama vscode.env.x lê a propriedade na hora). Se nem isso der, fica como está: não impede a ativação.
+ */
+function replaceApi(ns: 'env' | 'commands', key: string, make: (orig: (...a: any[]) => any) => (...a: any[]) => any): () => void {
+  const api = vscode as unknown as Record<string, Record<string, (...a: any[]) => any>>;
+  const target = api[ns];
+  const orig = target[key];
+  const fn = make(orig);
+  try {
+    target[key] = fn;
+    if (target[key] === fn) return () => void (target[key] = orig);
+  } catch {}
+  try {
+    api[ns] = Object.create(target, { [key]: { value: fn, writable: true, configurable: true, enumerable: true } });
+    if (api[ns][key] === fn) return () => void (api[ns] = target);
+  } catch {}
+  return () => {};
+}
+
+/** Endereço desta máquina (localhost, 127.x): no celular não aponta para cá. */
+function isLocalUrl(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.replace(/^\[|\]$/g, '');
+    return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127\./.test(h) || h === '0.0.0.0';
+  } catch {
+    return false;
+  }
+}
+
+/** Comandos que abrem editor, diff, view ou painel no VS Code (não existem no celular). */
+const UI_COMMANDS = new Set([
+  'vscode.open',
+  'vscode.diff',
+  'vscode.changes',
+  'vscode.openWith',
+  'vscode.openFolder',
+  'revealInExplorer',
+  'revealFileInOS',
+  'markdown.showPreview',
+  'markdown.showPreviewToSide',
+]);
+function opensUi(id: string): boolean {
+  return UI_COMMANDS.has(id) || /^workbench\.(view|action\.(open|show|terminal|chat|focus|quickOpen))/.test(id) || /\.(focus|reveal|show)$/.test(id);
 }

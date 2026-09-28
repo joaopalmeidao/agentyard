@@ -14,6 +14,7 @@ export interface PanelTexts {
   cancel: string;
   ok: string;
   filter: string;
+  openLink: string;
 }
 
 const DARK = `--vscode-editor-background:#1f1f1f;--vscode-foreground:#cccccc;--vscode-descriptionForeground:#9d9d9d;--vscode-widget-border:#313131;
@@ -136,6 +137,24 @@ html,body{background:var(--vscode-editor-background);color:var(--vscode-foregrou
     toasts.appendChild(el);
     setTimeout(() => el.remove(), t.level === 'error' ? 12000 : 6000);
   }
+  // link pedido por uma ação: abre numa aba nova; se o navegador barrar (não veio de um toque),
+  // vira um aviso com o link para tocar
+  function openLink(url) {
+    if (!/^(https?|mailto):/i.test(url)) return;
+    const w = window.open(url, '_blank');
+    if (w) { try { w.opener = null; } catch {} return; }
+    const el = document.createElement('div');
+    el.className = 'ay-toast';
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = T.openLink + ': ' + url;
+    a.onclick = () => el.remove();
+    el.appendChild(a);
+    toasts.appendChild(el);
+    setTimeout(() => el.remove(), 20000);
+  }
   const dlg = document.getElementById('ay-dlg');
   let open = null;
   const answer = (id, value) => send({ type: 'answer', id, value });
@@ -227,6 +246,7 @@ html,body{background:var(--vscode-editor-background);color:var(--vscode-foregrou
           else if (msg.type === 'dialogClose') close(msg.id);
           else if (msg.type === 'dialogError') { const e = dlg.querySelector('.ay-err'); if (e && open && open.id === msg.id) e.textContent = msg.message; }
           else if (msg.type === 'toast') toast(msg);
+          else if (msg.type === 'open') openLink(msg.url);
           else deliver(msg);
         }
       }
