@@ -1,6 +1,13 @@
 # Changelog
 
-## Não lançado
+## 0.17.0
+- **Destino na fila de merge**: ao pôr uma worktree na fila (menu da worktree, grafo, aviso de agente
+  pronto e view da fila) você escolhe para onde ela vai. Com um fluxo de estágios configurado, a
+  sugestão segue o fluxo: o 1º estágio (dev) para uma feature ou o estágio seguinte para um estágio,
+  depois os outros estágios, a base e as demais branches locais. **Mesclar em…** usa a mesma ordem.
+- **Ponte do Claude em todos os projetos**: `status`, `mark_ready` e `notify` funcionam numa worktree
+  de qualquer projeto da lista, não só do ativo (lidos direto do git). A janela com o projeto ativo
+  tem prioridade, e o aviso de pronto troca para o projeto antes das ações.
 - **Ver commits da branch…** (paleta, botão direito numa worktree ou branch na view Worktrees e menu da
   branch no painel): escolha qualquer branch, local ou remota, e veja a lista de commits dela. Começa
   só com o que a base não tem; um botão alterna para o histórico completo. Enter mostra os arquivos do
