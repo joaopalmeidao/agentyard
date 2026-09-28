@@ -1247,6 +1247,28 @@
         "category": "AgentYard"
       }
     ],
+    "submenus": [
+      {
+        "id": "worktreeGraph.wt.agent",
+        "label": "%submenu.wt.agent%"
+      },
+      {
+        "id": "worktreeGraph.wt.open",
+        "label": "%submenu.wt.open%"
+      },
+      {
+        "id": "worktreeGraph.wt.merge",
+        "label": "%submenu.wt.merge%"
+      },
+      {
+        "id": "worktreeGraph.wt.changes",
+        "label": "%submenu.wt.changes%"
+      },
+      {
+        "id": "worktreeGraph.wt.env",
+        "label": "%submenu.wt.env%"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -1578,7 +1600,7 @@
       "view/item/context": [
         {
           "command": "worktreeGraph.newWorktreeWithTaskFrom",
-          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch)",
+          "when": "view == worktreeGraph.worktrees && viewItem == branch",
           "group": "1_open@0c"
         },
         {
@@ -1593,17 +1615,17 @@
         },
         {
           "command": "worktreeGraph.branchSummary",
-          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "when": "view == worktreeGraph.worktrees && (viewItem == branch || viewItem == commits)",
           "group": "0_summary@1"
         },
         {
           "command": "worktreeGraph.askAgentAboutBranch",
-          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "when": "view == worktreeGraph.worktrees && (viewItem == branch || viewItem == commits)",
           "group": "0_summary@2"
         },
         {
           "command": "worktreeGraph.copyBranchContext",
-          "when": "view == worktreeGraph.worktrees && (viewItem =~ /^worktree/ || viewItem == branch || viewItem == commits)",
+          "when": "view == worktreeGraph.worktrees && (viewItem == branch || viewItem == commits)",
           "group": "0_summary@3"
         },
         {
@@ -1687,94 +1709,9 @@
           "group": "inline@3"
         },
         {
-          "command": "worktreeGraph.openWorktree",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@1"
-        },
-        {
-          "command": "worktreeGraph.openTerminal",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@2"
-        },
-        {
-          "command": "worktreeGraph.diffWithBase",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "1_open@3"
-        },
-        {
-          "command": "worktreeGraph.mergeBaseInto",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@1"
-        },
-        {
-          "command": "worktreeGraph.mergeIntoBase",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@2"
-        },
-        {
-          "command": "worktreeGraph.rechainMigrations",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@9"
-        },
-        {
-          "command": "worktreeGraph.mergeInto",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "2_merge@3"
-        },
-        {
-          "command": "worktreeGraph.togglePauseSync",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "3_sync"
-        },
-        {
-          "command": "worktreeGraph.removeWorktree",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "9_danger"
-        },
-        {
-          "command": "worktreeGraph.launchAgent",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@0"
-        },
-        {
-          "command": "worktreeGraph.agents.pick",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@0b"
-        },
-        {
-          "command": "worktreeGraph.launchAgentNew",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@0a"
-        },
-        {
-          "command": "worktreeGraph.openFileInWorktree",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@4"
-        },
-        {
           "command": "worktreeGraph.toggleFavorite",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "inline@9"
-        },
-        {
-          "command": "worktreeGraph.toggleFavorite",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "0_fav"
-        },
-        {
-          "command": "worktreeGraph.analyzeMerge",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@0"
-        },
-        {
-          "command": "worktreeGraph.publishRequest",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@4"
-        },
-        {
-          "command": "worktreeGraph.addToExplorer",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@5"
         },
         {
           "command": "worktreeGraph.openToSide",
@@ -1795,11 +1732,6 @@
           "command": "worktreeGraph.copyPath",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^wt(File|Folder)$/",
           "group": "2_path@2"
-        },
-        {
-          "command": "worktreeGraph.resolveConflict",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@5"
         },
         {
           "command": "worktreeGraph.openProjectGraph",
@@ -1897,11 +1829,6 @@
           "group": "inline@2"
         },
         {
-          "command": "worktreeGraph.claude.commands",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@6"
-        },
-        {
           "command": "worktreeGraph.claudeConfig.newSkill",
           "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeGroup-skills|claudeScope-user|claudeScope-project)$/",
           "group": "inline"
@@ -1977,11 +1904,6 @@
           "group": "inline@4"
         },
         {
-          "command": "worktreeGraph.pushBranch",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "2_merge@6"
-        },
-        {
           "command": "worktreeGraph.pipelines.fix",
           "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
           "group": "inline@1"
@@ -2037,16 +1959,6 @@
           "group": "3_fix@1"
         },
         {
-          "command": "worktreeGraph.reviewWithAgent",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@7"
-        },
-        {
-          "command": "worktreeGraph.openReview",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@8"
-        },
-        {
           "command": "worktreeGraph.tasks.runNow",
           "when": "view == worktreeGraph.tasks && viewItem == task-waiting",
           "group": "inline@1"
@@ -2092,59 +2004,9 @@
           "group": "inline@1"
         },
         {
-          "command": "worktreeGraph.tasks.add",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@6"
-        },
-        {
-          "command": "worktreeGraph.agents.checkReady",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@7"
-        },
-        {
           "command": "worktreeGraph.attempts.fromIssue",
           "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
           "group": "1_work@3"
-        },
-        {
-          "command": "worktreeGraph.pullBranch",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "2_merge@7"
-        },
-        {
-          "command": "worktreeGraph.compareWith",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@6"
-        },
-        {
-          "command": "worktreeGraph.stashCreate",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "4_changes@1"
-        },
-        {
-          "command": "worktreeGraph.moveChanges",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "4_changes@2"
-        },
-        {
-          "command": "worktreeGraph.showUncommitted",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "4_changes@0"
-        },
-        {
-          "command": "worktreeGraph.discardChanges",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "4_changes@9"
-        },
-        {
-          "command": "worktreeGraph.reorganizeCommits",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "4_changes@3"
-        },
-        {
-          "command": "worktreeGraph.undoReorganize",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "4_changes@4"
         },
         {
           "command": "worktreeGraph.showUncommitted",
@@ -2282,31 +2144,6 @@
           "group": "inline@3"
         },
         {
-          "command": "worktreeGraph.mergeQueue.add",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
-          "group": "2_merge@7"
-        },
-        {
-          "command": "worktreeGraph.coord.showOverlaps",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "2_merge@8"
-        },
-        {
-          "command": "worktreeGraph.templates.use",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@6"
-        },
-        {
-          "command": "worktreeGraph.env.configure",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@7"
-        },
-        {
-          "command": "worktreeGraph.env.runDev",
-          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
-          "group": "1_open@8"
-        },
-        {
           "command": "worktreeGraph.pullRequests.openBrowser",
           "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
           "group": "inline@1"
@@ -2370,6 +2207,96 @@
           "command": "worktreeGraph.pullRequests.copyLink",
           "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
           "group": "4_copy@1"
+        },
+        {
+          "command": "worktreeGraph.launchAgent",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_agent@0"
+        },
+        {
+          "command": "worktreeGraph.launchAgentNew",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_agent@1"
+        },
+        {
+          "command": "worktreeGraph.agents.pick",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_agent@2"
+        },
+        {
+          "submenu": "worktreeGraph.wt.agent",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_agent@9"
+        },
+        {
+          "command": "worktreeGraph.openWorktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_open@0"
+        },
+        {
+          "command": "worktreeGraph.openTerminal",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_open@1"
+        },
+        {
+          "command": "worktreeGraph.diffWithBase",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_open@2"
+        },
+        {
+          "submenu": "worktreeGraph.wt.open",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_open@9"
+        },
+        {
+          "command": "worktreeGraph.mergeBaseInto",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "3_git@0"
+        },
+        {
+          "command": "worktreeGraph.mergeIntoBase",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "3_git@1"
+        },
+        {
+          "command": "worktreeGraph.publishRequest",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "3_git@2"
+        },
+        {
+          "command": "worktreeGraph.pushBranch",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_git@3"
+        },
+        {
+          "command": "worktreeGraph.pullBranch",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_git@4"
+        },
+        {
+          "submenu": "worktreeGraph.wt.merge",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_git@9"
+        },
+        {
+          "submenu": "worktreeGraph.wt.changes",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_more@0"
+        },
+        {
+          "submenu": "worktreeGraph.wt.env",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_more@1"
+        },
+        {
+          "command": "worktreeGraph.toggleFavorite",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "8_fav"
+        },
+        {
+          "command": "worktreeGraph.removeWorktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "9_danger"
         }
       ],
       "commandPalette": [
@@ -2639,6 +2566,156 @@
           "command": "worktreeGraph.claude.sendTerminalSelection",
           "when": "terminalTextSelected",
           "group": "9_worktreeGraph@0"
+        }
+      ],
+      "worktreeGraph.wt.agent": [
+        {
+          "command": "worktreeGraph.askAgentAboutBranch",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_ask@0"
+        },
+        {
+          "command": "worktreeGraph.tasks.add",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_ask@1"
+        },
+        {
+          "command": "worktreeGraph.templates.use",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_ask@2"
+        },
+        {
+          "command": "worktreeGraph.newWorktreeWithTaskFrom",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_ask@3"
+        },
+        {
+          "command": "worktreeGraph.agents.checkReady",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_status@0"
+        },
+        {
+          "command": "worktreeGraph.reviewWithAgent",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "3_review@0"
+        },
+        {
+          "command": "worktreeGraph.openReview",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "3_review@1"
+        },
+        {
+          "command": "worktreeGraph.resolveConflict",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "3_review@2"
+        },
+        {
+          "command": "worktreeGraph.claude.commands",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_claude@0"
+        }
+      ],
+      "worktreeGraph.wt.open": [
+        {
+          "command": "worktreeGraph.branchSummary",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_summary@0"
+        },
+        {
+          "command": "worktreeGraph.copyBranchContext",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_summary@1"
+        },
+        {
+          "command": "worktreeGraph.compareWith",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_compare@0"
+        },
+        {
+          "command": "worktreeGraph.coord.showOverlaps",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_compare@1"
+        },
+        {
+          "command": "worktreeGraph.openFileInWorktree",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_open@0"
+        },
+        {
+          "command": "worktreeGraph.addToExplorer",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_open@1"
+        }
+      ],
+      "worktreeGraph.wt.merge": [
+        {
+          "command": "worktreeGraph.analyzeMerge",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "1_merge@0"
+        },
+        {
+          "command": "worktreeGraph.mergeInto",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_merge@1"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.add",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "1_merge@2"
+        },
+        {
+          "command": "worktreeGraph.rechainMigrations",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_fix@0"
+        },
+        {
+          "command": "worktreeGraph.togglePauseSync",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "3_sync@0"
+        }
+      ],
+      "worktreeGraph.wt.changes": [
+        {
+          "command": "worktreeGraph.showUncommitted",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_changes@0"
+        },
+        {
+          "command": "worktreeGraph.stashCreate",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_changes@1"
+        },
+        {
+          "command": "worktreeGraph.moveChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_changes@2"
+        },
+        {
+          "command": "worktreeGraph.reorganizeCommits",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_commits@0"
+        },
+        {
+          "command": "worktreeGraph.undoReorganize",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_commits@1"
+        },
+        {
+          "command": "worktreeGraph.discardChanges",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "9_danger@0"
+        }
+      ],
+      "worktreeGraph.wt.env": [
+        {
+          "command": "worktreeGraph.env.runDev",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_env@0"
+        },
+        {
+          "command": "worktreeGraph.env.configure",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_env@1"
         }
       ]
     },

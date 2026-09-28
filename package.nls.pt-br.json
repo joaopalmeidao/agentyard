@@ -351,5 +351,10 @@
   "config.claude.connectIde.markdownDescription": "Abre o Claude Code com `--ide`, conectando-o ao VS Code ao abrir (diffs no editor, seleção e problemas compartilhados). Precisa da extensão do Claude Code e da worktree dentro do workspace.",
   "config.claude.ideWorkspace.markdownDescription": "O Claude só se conecta ao VS Code (`/ide`) quando a pasta dele está dentro do workspace. Quando um Claude abre numa worktree fora dele (e a extensão do Claude Code está instalada), oferecer adicionar a worktree como pasta do workspace.",
   "config.claude.ideWorkspace.enumDescriptions.0": "Perguntar uma vez por worktree.",
-  "config.claude.ideWorkspace.enumDescriptions.1": "Nunca perguntar."
+  "config.claude.ideWorkspace.enumDescriptions.1": "Nunca perguntar.",
+  "submenu.wt.agent": "Agente",
+  "submenu.wt.open": "Resumo e comparação",
+  "submenu.wt.merge": "Mais opções de merge",
+  "submenu.wt.changes": "Alterações e commits",
+  "submenu.wt.env": "Ambiente"
 }
