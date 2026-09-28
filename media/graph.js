@@ -406,6 +406,19 @@
 
   const arrows = (behind, ahead) => [behind ? `↓${behind}` : '', ahead ? `↑${ahead}` : ''].filter(Boolean).join(' ');
 
+  /** Branch empilhada: o pai; ↻ quando precisa de restack (clique faz o restack, ou mostra a pilha). */
+  function stackChip(w) {
+    const st = w.stack;
+    const tips = {
+      ok: t('Stacked on {0}: its PR targets {0}. Click to see the stack.', esc(st.parent)),
+      behind: t('{0} got new commits: click to restack onto it.', esc(st.parent)),
+      'parent-merged': t('{0} is already in the base: click to move this branch onto the base.', esc(st.parent)),
+      'parent-gone': t('{0} was deleted: click to move this branch onto the base.', esc(st.parent)),
+    };
+    const ok = st.state === 'ok';
+    return `<span class="chip ${ok ? 'muted' : 'warn'} link" data-action="${ok ? 'stack.show' : 'stack.restack'}" data-branch="${esc(w.branch || '')}" title="${tips[st.state] || ''}">↳ ${esc(st.parent)}${ok ? '' : ' ↻'}</span>`;
+  }
+
   function chip(text, cls = '', title = '') {
     return `<span class="chip ${cls}" ${title ? `title="${esc(title)}"` : ''}>${text}</span>`;
   }
@@ -553,6 +566,7 @@
         if (w.review) chips.push(reviewChip(w));
         if (w.tasks) chips.push(tasksChip(w));
         if (w.request) chips.push(requestChip(w.request));
+        if (w.stack) chips.push(stackChip(w));
         if (w.overlap) chips.push(overlapChip(w));
         if (w.budget) chips.push(budgetChip(w));
         if (w.branch && pipelineFor(w.branch)) chips.push(pipelineChip(pipelineFor(w.branch)));
@@ -1170,8 +1184,11 @@
         }
         if (wt.agents && wt.agents.length) agent.push(item('agents.pick', t('Agents open here ({0})…', wt.agents.length), { path: wt.path }, 'agent'));
         if (agent.length) agent.push('<hr>');
+        agent.push(item('claude.launchWithOptions', `✦ ${t('Claude Code with options (model, permission mode)…')}`, { path: wt.path, branch: b }, 'agent'));
         agent.push(item('addTask', `☰ ${t('Add task for the agent…')}`, { path: wt.path, branch: b }));
         agent.push(item('templates.use', `✦ ${t('Use task template…')}`, { path: wt.path, branch: b }, 'agent'));
+        if (req) agent.push(item('sendPrFeedback', `✦ ${t('Send the {0} review feedback to the agent', esc(req.ref))}`, { path: wt.path, branch: b }, 'agent'));
+        agent.push(item('turns.pick', t('Agent turns (checkpoints)…'), { path: wt.path, branch: b }));
       }
       agent.push(item('newWorktreeWithTask', `✦ ${t('New worktree from here, with task…')}`, { startPoint: b }, 'agent'));
       if (!isBase) agent.push(item('reviewWithAgent', `✦ ${t('Review PR/MR with the agent')}`, { branch: b }, 'agent'));
@@ -1188,6 +1205,10 @@
         git.push(item('stashCreate', t('Stash changes…'), { path: wt.path }));
         git.push(item('moveChanges', t('Move changes to another worktree…'), { path: wt.path }));
         if (!isBase) git.push(item('reorganizeCommits', t('Reorganize commits (squash, reorder, drop)…'), { path: wt.path }));
+        git.push(item('claude.commitMessage', `✦ ${t('Commit with a message written by Claude…')}`, { path: wt.path, branch: b }, 'agent'));
+        git.push('<hr>');
+        git.push(item('bisect', t('Find the commit that broke it (bisect)…'), { path: wt.path, branch: b }));
+        git.push(item('sparseCheckout', t('Partial checkout (sparse)…'), { path: wt.path, branch: b }));
       }
       items.push(sub('Git', git));
 
@@ -1204,6 +1225,8 @@
         tree.push(item('createWorktree', t('Create worktree for this branch'), { existing: b }));
       }
       tree.push(item('createWorktree', t('New branch + worktree from here'), { startPoint: b }));
+      tree.push(item('stack.newChild', `↳ ${t('New worktree stacked on this branch…')}`, { branch: b }));
+      if (wt && wt.stack) tree.push(item('stack.restack', `↻ ${t('Restack onto {0}', esc(wt.stack.parent))}`, { branch: b }));
       items.push(sub(t('Worktree'), tree));
 
       items.push('<hr>');

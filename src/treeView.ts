@@ -57,6 +57,7 @@ export class WorktreeItem extends vscode.TreeItem {
       const p = pipelineOf(wt.branch)!;
       parts.push(`${{ success: '✓', failed: '✗', running: '⟳', queued: '…', canceled: '⊘', skipped: '↷', manual: '▶' }[p.status] ?? '?'} CI`);
     }
+    if (wt.stack) parts.push(`↳ ${wt.stack.parent}${wt.stack.state === 'ok' ? '' : ' ↻'}`);
     if (wt.paused) parts.push('‖');
     this.description = parts.join('  ');
 

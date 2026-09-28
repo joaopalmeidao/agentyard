@@ -1287,6 +1287,159 @@
         "category": "AgentYard"
       },
       {
+        "command": "worktreeGraph.claudeIntegration.setup",
+        "title": "%command.claudeIntegration.setup.title%",
+        "category": "AgentYard",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "worktreeGraph.claudeIntegration.remove",
+        "title": "%command.claudeIntegration.remove.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.claudeIntegration.status",
+        "title": "%command.claudeIntegration.status.title%",
+        "category": "AgentYard",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "worktreeGraph.turns.show",
+        "title": "%command.turns.show.title%",
+        "category": "AgentYard",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreeGraph.turns.restore",
+        "title": "%command.turns.restore.title%",
+        "category": "AgentYard",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "worktreeGraph.turns.restoreAfter",
+        "title": "%command.turns.restoreAfter.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.turns.pick",
+        "title": "%command.turns.pick.title%",
+        "category": "AgentYard",
+        "icon": "$(history)"
+      },
+      {
+        "command": "worktreeGraph.claude.whoWrote",
+        "title": "%command.claude.whoWrote.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.claude.launchWithOptions",
+        "title": "%command.claude.launchWithOptions.title%",
+        "category": "AgentYard",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "worktreeGraph.claude.taskMetrics",
+        "title": "%command.claude.taskMetrics.title%",
+        "category": "AgentYard",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "worktreeGraph.pullRequests.sendFeedback",
+        "title": "%command.pullRequests.sendFeedback.title%",
+        "category": "AgentYard",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "worktreeGraph.sendPrFeedback",
+        "title": "%command.sendPrFeedback.title%",
+        "category": "AgentYard",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "worktreeGraph.resolveSentFeedback",
+        "title": "%command.resolveSentFeedback.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.stack.newChild",
+        "title": "%command.stack.newChild.title%",
+        "category": "AgentYard",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "worktreeGraph.stack.setParent",
+        "title": "%command.stack.setParent.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.stack.restack",
+        "title": "%command.stack.restack.title%",
+        "category": "AgentYard",
+        "icon": "$(layers-active)"
+      },
+      {
+        "command": "worktreeGraph.stack.show",
+        "title": "%command.stack.show.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.newSparseWorktree",
+        "title": "%command.newSparseWorktree.title%",
+        "category": "AgentYard",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "worktreeGraph.sparseCheckout",
+        "title": "%command.sparseCheckout.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.bisect",
+        "title": "%command.bisect.title%",
+        "category": "AgentYard",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "worktreeGraph.claude.commitMessage",
+        "title": "%command.claude.commitMessage.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.missionControl",
+        "title": "%command.missionControl.title%",
+        "category": "AgentYard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "worktreeGraph.agentReview.add",
+        "title": "%command.agentReview.add.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.agentReview.send",
+        "title": "%command.agentReview.send.title%",
+        "category": "AgentYard",
+        "icon": "$(send)"
+      },
+      {
+        "command": "worktreeGraph.agentReview.deleteThread",
+        "title": "%command.agentReview.deleteThread.title%",
+        "category": "AgentYard",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreeGraph.agentReview.deleteComment",
+        "title": "%command.agentReview.deleteComment.title%",
+        "category": "AgentYard",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreeGraph.agentReview.clear",
+        "title": "%command.agentReview.clear.title%",
+        "category": "AgentYard"
+      },
+      {
         "command": "worktreeGraph.longProjects.new",
         "title": "%command.longProjects.new.title%",
         "category": "AgentYard",
@@ -1676,9 +1829,44 @@
           "group": "navigation@2"
         },
         {
-          "command": "worktreeGraph.agents.grid",
+          "command": "worktreeGraph.claude.taskMetrics",
           "when": "view == worktreeGraph.agents",
           "group": "navigation@5"
+        },
+        {
+          "command": "worktreeGraph.agents.grid",
+          "when": "view == worktreeGraph.agents",
+          "group": "navigation@6"
+        },
+        {
+          "command": "worktreeGraph.claudeIntegration.status",
+          "when": "view == worktreeGraph.agents",
+          "group": "9_more@0"
+        },
+        {
+          "command": "worktreeGraph.claudeIntegration.setup",
+          "when": "view == worktreeGraph.agents",
+          "group": "9_more@1"
+        },
+        {
+          "command": "newSparseWorktree",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "0_create@1"
+        },
+        {
+          "command": "worktreeGraph.claude.taskMetrics",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "5_claude"
+        },
+        {
+          "command": "missionControl",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "5_claude"
+        },
+        {
+          "command": "missionControl",
+          "when": "view == worktreeGraph.agents",
+          "group": "navigation@4"
         },
         {
           "command": "worktreeGraph.longProjects.new",
@@ -2493,6 +2681,96 @@
           "group": "4_copy@1"
         },
         {
+          "command": "worktreeGraph.turns.show",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTurn/",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.turns.restore",
+          "when": "view == worktreeGraph.agents && viewItem == agentTurn",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.turns.show",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTurn/",
+          "group": "1_turn@0"
+        },
+        {
+          "command": "worktreeGraph.turns.restore",
+          "when": "view == worktreeGraph.agents && viewItem == agentTurn",
+          "group": "1_turn@1"
+        },
+        {
+          "command": "worktreeGraph.turns.restoreAfter",
+          "when": "view == worktreeGraph.agents && viewItem == agentTurn",
+          "group": "1_turn@2"
+        },
+        {
+          "command": "worktreeGraph.turns.pick",
+          "when": "view == worktreeGraph.agents && viewItem == agentGroup",
+          "group": "1_open@2"
+        },
+        {
+          "command": "worktreeGraph.claude.launchWithOptions",
+          "when": "view == worktreeGraph.agents && viewItem == agentGroup",
+          "group": "1_open@1"
+        },
+        {
+          "command": "worktreeGraph.claude.launchWithOptions",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@0d"
+        },
+        {
+          "command": "worktreeGraph.turns.pick",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@7b"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.sendFeedback",
+          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)/",
+          "group": "2_review@0"
+        },
+        {
+          "command": "sendPrFeedback",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_merge@9"
+        },
+        {
+          "command": "worktreeGraph.claude.commitMessage",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@0b"
+        },
+        {
+          "command": "sparseCheckout",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@5"
+        },
+        {
+          "command": "worktreeGraph.stack.newChild",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "5_stack@0"
+        },
+        {
+          "command": "worktreeGraph.stack.restack",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "5_stack@1"
+        },
+        {
+          "command": "worktreeGraph.stack.setParent",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "5_stack@2"
+        },
+        {
+          "command": "worktreeGraph.stack.show",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "5_stack@3"
+        },
+        {
+          "command": "bisect",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "6_debug@0"
+        },
+        {
           "command": "worktreeGraph.longProjects.start",
           "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-(planned|review|paused|blocked)$/",
           "group": "inline@1"
@@ -2807,6 +3085,30 @@
           "when": "false"
         },
         {
+          "command": "worktreeGraph.turns.show",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.turns.restore",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.turns.restoreAfter",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.agentReview.add",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.agentReview.deleteThread",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.agentReview.deleteComment",
+          "when": "false"
+        },
+        {
           "command": "worktreeGraph.claude.sendTerminalSelection",
           "when": "terminalFocus && terminalTextSelected"
         },
@@ -2835,6 +3137,16 @@
           "group": "9_worktreeGraph@2"
         },
         {
+          "command": "worktreeGraph.claude.whoWrote",
+          "when": "resourceScheme == file",
+          "group": "9_worktreeGraph@3"
+        },
+        {
+          "command": "worktreeGraph.agentReview.send",
+          "when": "worktreeGraph.agentReviewPending",
+          "group": "9_worktreeGraph@4"
+        },
+        {
           "command": "worktreeGraph.claude.sendDiagnostics",
           "when": "resourceScheme == file",
           "group": "9_worktreeGraph@3"
@@ -2845,6 +3157,32 @@
           "command": "worktreeGraph.claude.sendSelection",
           "when": "!explorerResourceIsFolder",
           "group": "9_worktreeGraph@0"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "worktreeGraph.agentReview.add",
+          "group": "inline",
+          "when": "commentController == agentyard.agentReview"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "worktreeGraph.agentReview.send",
+          "group": "navigation@1",
+          "when": "commentController == agentyard.agentReview && !commentThreadIsEmpty"
+        },
+        {
+          "command": "worktreeGraph.agentReview.deleteThread",
+          "group": "navigation@2",
+          "when": "commentController == agentyard.agentReview && !commentThreadIsEmpty"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "worktreeGraph.agentReview.deleteComment",
+          "group": "inline",
+          "when": "commentController == agentyard.agentReview && comment == agentReviewNote"
         }
       ],
       "terminal/context": [
@@ -2872,6 +3210,33 @@
           "type": "string",
           "default": "",
           "description": "%config.postCreateCommand.description%"
+        },
+        "worktreeGraph.worktree.submodules": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.worktree.submodules.description%"
+        },
+        "worktreeGraph.worktree.sparseDepth": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 5,
+          "description": "%config.worktree.sparseDepth.description%"
+        },
+        "worktreeGraph.stack.autoRestack": {
+          "type": "string",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "auto",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.stack.autoRestack.enumDescriptions.0%",
+            "%config.stack.autoRestack.enumDescriptions.1%",
+            "%config.stack.autoRestack.enumDescriptions.2%"
+          ],
+          "description": "%config.stack.autoRestack.description%"
         },
         "worktreeGraph.agents": {
           "type": "array",
@@ -3231,6 +3596,89 @@
           "default": "waiting",
           "description": "%config.claude.notify.description%"
         },
+        "worktreeGraph.claude.bridge": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.claude.bridge.markdownDescription%"
+        },
+        "worktreeGraph.claude.mcp": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.claude.mcp.markdownDescription%"
+        },
+        "worktreeGraph.claude.guard": {
+          "type": "string",
+          "default": "on",
+          "enum": [
+            "on",
+            "strict",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.claude.guard.enumDescriptions.0%",
+            "%config.claude.guard.enumDescriptions.1%",
+            "%config.claude.guard.enumDescriptions.2%"
+          ],
+          "description": "%config.claude.guard.description%"
+        },
+        "worktreeGraph.claude.approveInVsCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.claude.approveInVsCode.description%"
+        },
+        "worktreeGraph.claude.sessionContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.claude.sessionContext.description%"
+        },
+        "worktreeGraph.claude.extraContext": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "description": "%config.claude.extraContext.description%"
+        },
+        "worktreeGraph.claude.checkpoints": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.claude.checkpoints.markdownDescription%"
+        },
+        "worktreeGraph.claude.checkpointDays": {
+          "type": "number",
+          "default": 7,
+          "minimum": 0,
+          "description": "%config.claude.checkpointDays.description%"
+        },
+        "worktreeGraph.claude.commitNotes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.claude.commitNotes.markdownDescription%"
+        },
+        "worktreeGraph.claude.osNotify": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.claude.osNotify.description%"
+        },
+        "worktreeGraph.claude.extraArgs": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.claude.extraArgs.markdownDescription%"
+        },
+        "worktreeGraph.claude.appendSystemPrompt": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "%config.claude.appendSystemPrompt.markdownDescription%"
+        },
+        "worktreeGraph.claude.headlessModel": {
+          "type": "string",
+          "default": "haiku",
+          "markdownDescription": "%config.claude.headlessModel.markdownDescription%"
+        },
+        "worktreeGraph.claude.headlessCommand": {
+          "type": "string",
+          "default": "claude",
+          "markdownDescription": "%config.claude.headlessCommand.markdownDescription%"
+        },
         "worktreeGraph.claude.answerFromNotification": {
           "type": "boolean",
           "default": false,
@@ -3307,6 +3755,25 @@
           "editPresentation": "multilineText",
           "default": "",
           "markdownDescription": "%config.prompts.fixPipeline.markdownDescription%"
+        },
+        "worktreeGraph.prompts.prFeedback": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "",
+          "markdownDescription": "%config.prompts.prFeedback.markdownDescription%"
+        },
+        "worktreeGraph.pipelines.onFailure": {
+          "type": "string",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "agent"
+          ],
+          "enumDescriptions": [
+            "%config.pipelines.onFailure.enumDescriptions.0%",
+            "%config.pipelines.onFailure.enumDescriptions.1%"
+          ],
+          "description": "%config.pipelines.onFailure.description%"
         },
         "worktreeGraph.checks.mode": {
           "type": "string",
@@ -3526,11 +3993,13 @@
           "type": "string",
           "enum": [
             "warn",
-            "pause-queue"
+            "pause-queue",
+            "block-prompts"
           ],
           "enumDescriptions": [
             "%config.budget.action.enumDescriptions.0%",
-            "%config.budget.action.enumDescriptions.1%"
+            "%config.budget.action.enumDescriptions.1%",
+            "%config.budget.action.enumDescriptions.2%"
           ],
           "default": "warn",
           "description": "%config.budget.action.description%"
@@ -3635,6 +4104,11 @@
           "default": "merge",
           "description": "%config.pullRequests.mergeMethod.description%"
         },
+        "worktreeGraph.pullRequests.describeWithClaude": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.pullRequests.describeWithClaude.markdownDescription%"
+        },
         "worktreeGraph.longProjects.gateRetries": {
           "type": "number",
           "default": 3,
@@ -3681,7 +4155,7 @@
     "package": "tsc -p ./ && node scripts/package-dist.js",
     "dist": "node scripts/dist.js",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/longProject.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/longProject.test.js && node test/claudeGuard.test.js && node test/turns.test.js && node test/bridge.test.js && node test/stack.test.js && node test/sparse.test.js && node test/headless.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

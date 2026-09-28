@@ -479,7 +479,7 @@ export class Coord implements vscode.Disposable {
   /** Worktrees que não recebem mais tarefas automáticas (budget.action = pause-queue e limite estourado). */
   budgetBlocked(): Set<string> {
     const out = new Set<string>();
-    if (this.ctl.cfg().get<string>('budget.action', 'warn') !== 'pause-queue') return out;
+    if (!['pause-queue', 'block-prompts'].includes(this.ctl.cfg().get<string>('budget.action', 'warn'))) return out;
     for (const w of this.ctl.state?.worktrees ?? []) if (budgetLevel(w.claude, this.limits()).level === 'over') out.add(key(w.path));
     return out;
   }
@@ -501,7 +501,7 @@ export class Coord implements vscode.Disposable {
       void vscode.window.showWarningMessage(
         b.level === 'over'
           ? t('AgentYard: {0} went over budget ({1}% in {2}).', w.name, pct, b.by === 'usd' ? 'US$' : 'tokens') +
-              (this.ctl.cfg().get('budget.action') === 'pause-queue' ? ` ${t('New automatic tasks for it are on hold.')}` : '')
+              (['pause-queue', 'block-prompts'].includes(this.ctl.cfg().get<string>('budget.action', 'warn')) ? ` ${t('New automatic tasks for it are on hold.')}` : '')
           : t('AgentYard: {0} used {1}% of the budget.', w.name, pct),
       );
     }

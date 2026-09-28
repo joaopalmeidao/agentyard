@@ -69,6 +69,8 @@ export interface WorktreeView extends Worktree {
   port?: number;
   /** PR/MR aberto desta branch. */
   request?: ChangeRequest;
+  /** Branch empilhada sobre outra (src/stack): o pai e se precisa de restack. */
+  stack?: { parent: string; state: 'ok' | 'behind' | 'parent-merged' | 'parent-gone' };
 }
 
 export interface BranchView {

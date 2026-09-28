@@ -56,11 +56,28 @@ export interface PrCheck {
 
 export type MergeMethod = 'merge' | 'squash' | 'rebase';
 
+/** Conversa de revisão numa linha do código (thread do GitHub, discussão do GitLab). */
+export interface ReviewThread {
+  id: string;
+  path?: string;
+  line?: number;
+  resolved: boolean;
+  /** O código em volta mudou depois do comentário. */
+  outdated?: boolean;
+  comments: { author: string; body: string; at: number; url?: string }[];
+}
+
+/** O que a revisão pediu: conversas nas linhas e revisões com texto geral. */
+export interface PrFeedback {
+  threads: ReviewThread[];
+  reviews: { author: string; state: string; body: string; at: number }[];
+}
+
 export interface PrBrowser {
   readonly kind: HostKind;
   readonly label: 'PR' | 'MR';
   /** O que dá para fazer além de listar. */
-  readonly can: { files: boolean; comments: boolean; checks: boolean; merge: boolean; draft: boolean; reviewRequested: boolean };
+  readonly can: { files: boolean; comments: boolean; checks: boolean; merge: boolean; draft: boolean; reviewRequested: boolean; threads: boolean };
   whoami(): Promise<string>;
   groups(me: string, recentDays?: number): Promise<PrGroups>;
   files(pr: PullRequestInfo): Promise<PrFile[]>;
@@ -68,6 +85,12 @@ export interface PrBrowser {
   checks(pr: PullRequestInfo): Promise<PrCheck[]>;
   merge(pr: PullRequestInfo, method: MergeMethod): Promise<void>;
   setDraft(pr: PullRequestInfo, draft: boolean): Promise<void>;
+  /** Conversas e revisões (para mandar ao agente). */
+  feedback(pr: PullRequestInfo): Promise<PrFeedback>;
+  /** Responde (se `reply`) e marca a conversa como resolvida. */
+  resolveThread(pr: PullRequestInfo, id: string, reply?: string): Promise<void>;
+  /** Troca a branch de destino (PR empilhado cujo pai já entrou na base). */
+  retarget(pr: PullRequestInfo, target: string): Promise<void>;
 }
 
 const ts = (s?: string | null) => (s ? Math.floor(new Date(s).getTime() / 1000) : 0);
@@ -134,7 +157,7 @@ async function limited<T, R>(items: T[], n: number, fn: (item: T) => Promise<R>)
 export class GitHubPrBrowser implements PrBrowser {
   readonly kind = 'github';
   readonly label = 'PR';
-  readonly can = { files: true, comments: true, checks: true, merge: true, draft: true, reviewRequested: true };
+  readonly can = { files: true, comments: true, checks: true, merge: true, draft: true, reviewRequested: true, threads: true };
   private readonly api: string;
   private readonly graphql: string;
 
@@ -249,8 +272,46 @@ export class GitHubPrBrowser implements PrBrowser {
     const mutation = draft
       ? 'mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{isDraft}}}'
       : 'mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}';
-    const r = await request(this.f, this.graphql, { method: 'POST', headers: this.headers(true), body: JSON.stringify({ query: mutation, variables: { id: pr.nodeId } }) });
+    await this.gql(mutation, { id: pr.nodeId });
+  }
+
+  private async gql(query: string, variables: Record<string, unknown>): Promise<any> {
+    const r = await request(this.f, this.graphql, { method: 'POST', headers: this.headers(true), body: JSON.stringify({ query, variables }) });
     if (r?.errors?.length) throw new HostError(0, r.errors.map((e: any) => e.message).join('; '));
+    return r?.data;
+  }
+
+  async feedback(pr: PullRequestInfo): Promise<PrFeedback> {
+    const [owner, ...rest] = this.remote.projectPath.split('/');
+    const query =
+      'query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){pullRequest(number:$n){reviewThreads(first:100){nodes{id isResolved isOutdated path line originalLine comments(first:30){nodes{author{login} body url createdAt}}}}}}}';
+    const [data, reviews] = await Promise.all([
+      this.gql(query, { owner, name: rest.join('/'), n: pr.id }),
+      this.req('GET', `/pulls/${pr.id}/reviews?per_page=100`) as Promise<any[]>,
+    ]);
+    const nodes: any[] = data?.repository?.pullRequest?.reviewThreads?.nodes ?? [];
+    return {
+      threads: nodes.map(n => ({
+        id: n.id,
+        path: n.path ?? undefined,
+        line: n.line ?? n.originalLine ?? undefined,
+        resolved: !!n.isResolved,
+        outdated: !!n.isOutdated,
+        comments: (n.comments?.nodes ?? []).map((c: any) => ({ author: c.author?.login ?? '?', body: c.body ?? '', at: ts(c.createdAt), url: c.url })),
+      })),
+      reviews: (reviews ?? [])
+        .filter(r => (r.body ?? '').trim() && r.state !== 'PENDING')
+        .map(r => ({ author: r.user?.login ?? '?', state: String(r.state ?? '').toLowerCase(), body: r.body, at: ts(r.submitted_at) })),
+    };
+  }
+
+  async retarget(pr: PullRequestInfo, target: string) {
+    await this.req('PATCH', `/pulls/${pr.id}`, { base: target });
+  }
+
+  async resolveThread(_pr: PullRequestInfo, id: string, reply?: string) {
+    if (reply) await this.gql('mutation($id:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id,body:$body}){comment{id}}}', { id, body: reply });
+    await this.gql('mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}', { id });
   }
 }
 
@@ -259,7 +320,7 @@ export class GitHubPrBrowser implements PrBrowser {
 export class GitLabPrBrowser implements PrBrowser {
   readonly kind = 'gitlab';
   readonly label = 'MR';
-  readonly can = { files: true, comments: true, checks: true, merge: true, draft: true, reviewRequested: true };
+  readonly can = { files: true, comments: true, checks: true, merge: true, draft: true, reviewRequested: true, threads: true };
   private readonly api: string;
   private readonly project: string;
 
@@ -374,13 +435,47 @@ export class GitLabPrBrowser implements PrBrowser {
     const clean = pr.title.replace(/^\s*(draft:|\[draft\]|\(draft\)|wip:)\s*/i, '');
     await this.req('PUT', `/projects/${this.project}/merge_requests/${pr.id}`, { title: draft ? `Draft: ${clean}` : clean });
   }
+
+  async feedback(pr: PullRequestInfo): Promise<PrFeedback> {
+    const list: any[] = await this.req('GET', `/projects/${this.project}/merge_requests/${pr.id}/discussions?per_page=100`);
+    const threads: ReviewThread[] = [];
+    const reviews: PrFeedback['reviews'] = [];
+    for (const d of list) {
+      const notes = (d.notes ?? []).filter((n: any) => !n.system);
+      if (!notes.length) continue;
+      const first = notes[0];
+      if (!first.resolvable) {
+        // comentário geral no MR (sem linha)
+        reviews.push({ author: first.author?.username ?? '?', state: 'commented', body: first.body ?? '', at: ts(first.created_at) });
+        continue;
+      }
+      threads.push({
+        id: String(d.id),
+        path: first.position?.new_path ?? first.position?.old_path,
+        line: first.position?.new_line ?? first.position?.old_line ?? undefined,
+        resolved: notes.every((n: any) => !n.resolvable || n.resolved),
+        comments: notes.map((n: any) => ({ author: n.author?.username ?? '?', body: n.body ?? '', at: ts(n.created_at), url: `${pr.url}#note_${n.id}` })),
+      });
+    }
+    return { threads, reviews };
+  }
+
+  async retarget(pr: PullRequestInfo, target: string) {
+    await this.req('PUT', `/projects/${this.project}/merge_requests/${pr.id}`, { target_branch: target });
+  }
+
+  async resolveThread(pr: PullRequestInfo, id: string, reply?: string) {
+    const base = `/projects/${this.project}/merge_requests/${pr.id}/discussions/${id}`;
+    if (reply) await this.req('POST', `${base}/notes`, { body: reply });
+    await this.req('PUT', `${base}?resolved=true`);
+  }
 }
 
 // ---------------------------------------------------------------- Bitbucket / Azure: só listagem
 
 /** Para plataformas sem suporte completo: lista os abertos pelo cliente que já existe. */
 export class ListOnlyPrBrowser implements PrBrowser {
-  readonly can = { files: false, comments: false, checks: false, merge: false, draft: false, reviewRequested: false };
+  readonly can = { files: false, comments: false, checks: false, merge: false, draft: false, reviewRequested: false, threads: false };
   constructor(private readonly client: HostClient) {}
 
   get kind() {
@@ -421,6 +516,15 @@ export class ListOnlyPrBrowser implements PrBrowser {
   async setDraft(): Promise<void> {
     return this.unsupported();
   }
+  async feedback(): Promise<PrFeedback> {
+    return this.unsupported();
+  }
+  async resolveThread(): Promise<void> {
+    return this.unsupported();
+  }
+  async retarget(): Promise<void> {
+    return this.unsupported();
+  }
 }
 
 /** Ref local para trazer o PR: a própria branch, ou refs/pull/N/head → pr/N quando vem de fork (GitHub). */
@@ -428,4 +532,31 @@ export function fetchSpecFor(pr: PullRequestInfo, kind: HostKind): { refspec: st
   if (pr.fork && kind === 'github') return { refspec: `refs/pull/${pr.id}/head:refs/heads/pr/${pr.id}`, localBranch: `pr/${pr.id}` };
   if (pr.fork && kind === 'gitlab') return { refspec: `refs/merge-requests/${pr.id}/head:refs/heads/mr/${pr.id}`, localBranch: `mr/${pr.id}` };
   return { refspec: `refs/heads/${pr.source}:refs/remotes/origin/${pr.source}`, localBranch: pr.source };
+}
+
+/** Conversas que ainda pedem algo: não resolvidas (as desatualizadas também, o agente confere). */
+export function openThreads(fb: PrFeedback): ReviewThread[] {
+  return fb.threads.filter(x => !x.resolved);
+}
+
+/** O que a revisão pediu, em Markdown, para o agente (e para a ferramenta MCP pr_feedback). */
+export function feedbackText(pr: Pick<PullRequestInfo, 'ref' | 'title' | 'url'>, fb: PrFeedback, me?: string): string {
+  const open = openThreads(fb);
+  const lines = [`${pr.ref} "${pr.title}" — ${pr.url}`, ''];
+  const reviews = fb.reviews.filter(r => !me || r.author.toLowerCase() !== me.toLowerCase());
+  if (reviews.length) {
+    lines.push('## Reviews', '');
+    for (const r of reviews) lines.push(`- ${r.author} (${r.state}): ${r.body.trim().replace(/\n+/g, ' ')}`);
+    lines.push('');
+  }
+  if (open.length) {
+    lines.push('## Unresolved review threads', '');
+    for (const th of open) {
+      lines.push(`### ${th.path ?? '(general)'}${th.line ? `:${th.line}` : ''}${th.outdated ? ' (outdated: the code changed since)' : ''} [thread ${th.id}]`);
+      for (const c of th.comments) lines.push(`- ${c.author}: ${c.body.trim()}`);
+      lines.push('');
+    }
+  }
+  if (!reviews.length && !open.length) lines.push('No unresolved review threads.');
+  return lines.join('\n');
 }
