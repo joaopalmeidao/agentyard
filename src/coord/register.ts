@@ -228,21 +228,36 @@ export class Coord implements vscode.Disposable {
     void this.runQueue();
   }
 
-  /** Branches locais que ainda não estão na fila (para escolher várias de uma vez). */
-  async pickForQueue(authorized = false): Promise<string[]> {
+  /** Branches locais que ainda não estão na fila (para escolher várias de uma vez), rumo a `target` (padrão: a base). */
+  async pickForQueue(authorized = false, target?: string): Promise<string[]> {
     const repo = this.ctl.repo;
     if (!repo) return [];
-    const { base } = await this.ctl.base();
+    const tgt = target ?? (await this.ctl.base()).base;
     const queued = new Set(this.queue().filter(i => QUEUED.includes(i.status)).map(i => i.branch));
     const items = (await repo.refs())
-      .filter(r => r.kind === 'head' && r.name !== base && !queued.has(r.name))
+      .filter(r => r.kind === 'head' && r.name !== tgt && !queued.has(r.name))
       .map(r => ({ label: r.name, description: r.subject }));
     const picks = await vscode.window.showQuickPick(items, {
       canPickMany: true,
-      title: authorized ? t('Add to merge queue → {0} (Claude authorized to resolve conflicts)', base) : t('Add to merge queue → {0}', base),
-      placeHolder: t('Pick the branches; they go into {0} one at a time, in this order', base),
+      title: authorized ? t('Add to merge queue → {0} (Claude authorized to resolve conflicts)', tgt) : t('Add to merge queue → {0}', tgt),
+      placeHolder: t('Pick the branches; they go into {0} one at a time, in this order', tgt),
     });
     return picks?.map(p => p.label) ?? [];
+  }
+
+  /** Para qual branch a fila leva `sources`: a base vem primeiro, depois as outras branches locais. */
+  async pickTarget(sources: string[]): Promise<string | undefined> {
+    const repo = this.ctl.repo;
+    const { base } = await this.ctl.base();
+    if (!repo) return base;
+    const others = (await repo.refs())
+      .filter(r => r.kind === 'head' && r.name !== base && !sources.includes(r.name))
+      .map(r => ({ label: r.name, description: r.subject }));
+    const pick = await vscode.window.showQuickPick([{ label: base, description: t('base') }, ...others], {
+      title: t('Merge queue: destination'),
+      placeHolder: sources.length ? t('Which branch should {0} go into?', sources.join(', ')) : t('Which branch should the queue merge into?'),
+    });
+    return pick?.label;
   }
 
   /** O agente que cuidava de um item terminou: volta para a fila (ou sai) e a fila segue. */
@@ -588,25 +603,27 @@ export function registerCoord(ctx: vscode.ExtensionContext, ctl: Controller, age
   const branchOf = async (arg: any) => (typeof arg === 'string' ? arg : arg?.branch ?? (await actions.pickBranch(ctl, undefined, t('Which branch?'))));
   reg('coord.showOverlaps', (arg?: unknown) => coord.showOverlap(arg));
   reg('showOverlaps', (a?: { path?: string }) => coord.showOverlap(a?.path ? { path: a.path } : undefined));
-  reg('mergeQueueAdd', (a?: { branch?: string }) => a?.branch && coord.enqueue(a.branch));
   // Árvore com várias selecionadas: (clicada, selecionadas[]); sem argumento: escolhe várias.
+  // Destino: o que veio no argumento (painel de merge) ou pergunta, com a base em primeiro.
   const add = (authorized: boolean) => async (arg?: any, second?: any) => {
-    if (Array.isArray(second) && second.length) {
-      const bs = second.map(x => (typeof x === 'string' ? x : x?.branch)).filter((b): b is string => !!b);
-      if (bs.length) return coord.enqueue(bs, undefined, { authorized });
+    let target = typeof second === 'string' ? second : undefined;
+    let bs: string[] = [];
+    if (Array.isArray(second) && second.length) bs = second.map(x => (typeof x === 'string' ? x : x?.branch)).filter((b): b is string => !!b);
+    else if (arg !== undefined) {
+      const b = await branchOf(arg);
+      if (!b) return;
+      bs = [b];
     }
-    const target = typeof second === 'string' ? second : undefined;
-    if (arg === undefined) {
-      const bs = await coord.pickForQueue(authorized);
-      return bs.length ? coord.enqueue(bs, target, { authorized }) : undefined;
-    }
-    const b = await branchOf(arg);
-    if (b) await coord.enqueue(b, target, { authorized });
+    if (!target) target = await coord.pickTarget(bs);
+    if (!target) return;
+    if (!bs.length) bs = await coord.pickForQueue(authorized, target);
+    if (bs.length) await coord.enqueue(bs, target, { authorized });
   };
   reg('mergeQueue.add', add(false));
   // Mesma coisa, mas o Claude que resolver os conflitos já abre autorizado e a fila segue sozinha.
   reg('mergeQueue.addAuthorized', add(true));
-  reg('mergeQueueAddAuthorized', (a?: { branch?: string }) => a?.branch && coord.enqueue(a.branch, undefined, { authorized: true }));
+  reg('mergeQueueAdd', (a?: { branch?: string }) => a?.branch && add(false)(a.branch));
+  reg('mergeQueueAddAuthorized', (a?: { branch?: string }) => a?.branch && add(true)(a.branch));
   reg('mergeQueue.toggleAuthorized', (it?: MergeQueueItem) => it && coord.toggleAuthorized(it.item.branch));
   reg('mergeQueue.remove', (it?: MergeQueueItem) => it && coord.remove(it.item.branch));
   reg('mergeQueue.moveUp', (it?: MergeQueueItem) => it && coord.move(it.item.branch, -1));

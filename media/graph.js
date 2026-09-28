@@ -1171,8 +1171,8 @@
         items.push(item('mergeIntoBase', `↑ ${t('Merge into {0}', state.base)}`, { branch: b }));
       }
       items.push(item('mergeInto', t('Merge into…'), { branch: b }));
-      if (!isBase) items.push(item('mergeQueueAdd', t('Add to merge queue → {0}', state.base), { branch: b }));
-      if (!isBase) items.push(item('mergeQueueAddAuthorized', `✦ ${t('Add to merge queue → {0} (Claude resolves conflicts)', state.base)}`, { branch: b }));
+      if (!isBase) items.push(item('mergeQueueAdd', t('Add to merge queue…'), { branch: b }));
+      if (!isBase) items.push(item('mergeQueueAddAuthorized', `✦ ${t('Add to merge queue… (Claude resolves conflicts)')}`, { branch: b }));
       if (wt && wt.overlap) items.push(item('showOverlaps', `⚠ ${t('View overlap ({0} file(s))', wt.overlap.files)}`, { path: wt.path }));
       if (wt && wt.changes) items.push(item('showUncommitted', `● ${t('View uncommitted changes ({0})', wt.changes)}`, { path: wt.path }));
       items.push(item('branchCommits', t('View commits…'), { branch: b }));
