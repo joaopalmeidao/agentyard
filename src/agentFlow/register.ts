@@ -47,7 +47,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     const review = t('Review');
     const analyze = t('Analyze merge');
     // Mesma fila de merge da view (destino: a base); o merge sai quando chegar a vez dela.
-    const queue = t('Add to merge queue → {0}', (await ctl.base()).base);
+    const queue = t('Add to merge queue…');
     // Na fila com o Claude já autorizado: se der conflito, ele resolve sozinho e a fila segue.
     const queueAuthorized = t('✦ Queue (Claude resolves conflicts)');
     const publish = t('Publish {0}', L);
