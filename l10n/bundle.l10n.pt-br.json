@@ -2336,5 +2336,11 @@
   "until {0}": "até {0}",
   "Notes": "Notas",
   "{0} file reservation(s) released.": "{0} reserva(s) de arquivos solta(s).",
-  "Release the file reservations of which worktree?": "Soltar as reservas de arquivos de qual worktree?"
+  "Release the file reservations of which worktree?": "Soltar as reservas de arquivos de qual worktree?",
+  "the week": "a semana",
+  "the 5 h window": "a janela de 5 h",
+  "Task queue paused: {0} is at {1}% of the budget; resumes at {2}.": "Fila de tarefas pausada: {0} está em {1}% do orçamento; volta às {2}.",
+  "Run anyway": "Rodar mesmo assim",
+  "Task queue paused: {0} is at {1}% of the Claude budget. The queued tasks start at {2}.": "Fila de tarefas pausada: {0} está em {1}% do orçamento do Claude. As tarefas da fila começam às {2}.",
+  "paused until {0} (Claude usage)": "pausada até {0} (uso do Claude)"
 }

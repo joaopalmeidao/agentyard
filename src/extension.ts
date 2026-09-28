@@ -87,6 +87,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(projects, vscode.window.createTreeView('worktreeGraph.projects', { treeDataProvider: new ProjectsTreeProvider(projects) }));
   const decorations = new WorktreeDecorations(ctl);
   const claude = new ClaudeService(ctl, agentTerms);
+  ctl.taskDeferred = () => claude.usagePause();
   const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
   registerAgentAttention(ctx, ctl, agentTerms);

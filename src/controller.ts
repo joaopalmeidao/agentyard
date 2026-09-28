@@ -34,6 +34,8 @@ export class Controller implements vscode.Disposable {
   readonly stateHooks: ((s: GraphState) => void)[] = [];
   /** Preenchido por src/coord: worktree que não deve receber tarefas automáticas (orçamento estourado). */
   taskBlocked?: (worktreePath: string) => boolean;
+  /** Preenchido na ativação: a fila de tarefas deve esperar (uso do Claude perto do orçamento). */
+  taskDeferred?: () => import('./autopilot/core').UsagePause | undefined;
   private readonly cacheChanged = new vscode.EventEmitter<void>();
   /** Disparado quando chegam status novos (as cores da árvore de arquivos dependem disso). */
   readonly onDidChangeCache = this.cacheChanged.event;

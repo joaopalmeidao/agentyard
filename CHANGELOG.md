@@ -1,6 +1,11 @@
 # Changelog
 
 ## Não lançado
+- **Fila que respeita o limite de uso**: quando o uso estimado do Claude na janela de 5 h ou na semana
+  chega a `tasks.pauseAtUsage` (90%) do orçamento (`claude.sessionBudgetTokens`,
+  `claude.weeklyBudgetTokens`), a fila de tarefas e os agendamentos esperam a janela virar e saem
+  sozinhos depois; a fila mostra "pausada até…" e o aviso tem **Rodar mesmo assim**. Sem orçamento
+  configurado, nada muda.
 - **Mural dos agentes**: um agente avisa os outros de uma mudança que os afeta com a ferramenta MCP
   `post_note` (`read_notes` lê), e você fala com todos de uma vez por **Nota para todos os agentes…**
   (📣 na view Agentes abertos). As notas novas entram no contexto do próximo prompt de cada Claude do

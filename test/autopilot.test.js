@@ -101,6 +101,16 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.strictEqual(A.usageBlocks(undefined, 90), false);
   });
 
+  await check('usagePause: semana antes da janela de 5 h, sem orçamento não pausa', () => {
+    const base = { limitPct: 90, sessionBudget: 1000, weekBudget: 10000, weekRolling: false, now: 100, block: { tokens: 950, end: 5000 }, week: { tokens: 100, end: 90000 } };
+    assert.deepStrictEqual(A.usagePause(base), { window: '5h', pct: 95, until: 5000 });
+    assert.deepStrictEqual(A.usagePause({ ...base, week: { tokens: 9500, end: 90000 } }), { window: 'week', pct: 95, until: 90000 });
+    assert.strictEqual(A.usagePause({ ...base, week: { tokens: 9500, end: 90000 }, weekRolling: true }).until, 100 + 3600_000);
+    assert.strictEqual(A.usagePause({ ...base, sessionBudget: 0 }), undefined);
+    assert.strictEqual(A.usagePause({ ...base, limitPct: 0 }), undefined);
+    assert.strictEqual(A.usagePause({ ...base, block: undefined }), undefined);
+  });
+
   await check('glob das reservas: pasta, *, ** e ?', () => {
     assert.ok(B.matches('src/auth', 'src/auth/login.ts'));
     assert.ok(B.matches('src/auth/**', 'src/auth/a/b.ts'));

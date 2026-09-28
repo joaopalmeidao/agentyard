@@ -4476,6 +4476,12 @@
           "minimum": 0.25,
           "maximum": 24,
           "description": "%config.claude.claims.hours.description%"
+        },
+        "worktreeGraph.tasks.pauseAtUsage": {
+          "type": "number",
+          "default": 90,
+          "minimum": 0,
+          "description": "%config.tasks.pauseAtUsage.description%"
         }
       }
     }

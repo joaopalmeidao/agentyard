@@ -474,5 +474,6 @@
   "config.claude.claims.hours.description": "How long a file reservation lasts when the agent does not say.",
   "command.board.show.title": "Agent board (notes and reserved files)",
   "command.board.post.title": "Note to all agents…",
-  "command.board.release.title": "Release file reservations"
+  "command.board.release.title": "Release file reservations",
+  "config.tasks.pauseAtUsage.description": "Task queue and schedules wait when the estimated Claude usage of the 5 h window or of the week reaches this percentage of the budget (claude.sessionBudgetTokens, claude.weeklyBudgetTokens), and start on their own when the window resets. 0 turns it off; without a budget, it never pauses."
 }

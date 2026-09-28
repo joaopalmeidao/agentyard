@@ -182,3 +182,33 @@ export function stuckNudge(sig: string, repeats: number): string {
 export function usageBlocks(pct: number | undefined, limit: number): boolean {
   return limit > 0 && typeof pct === 'number' && pct >= limit;
 }
+
+export interface UsagePause {
+  /** Quando tentar de novo. */
+  until: number;
+  window: '5h' | 'week';
+  pct: number;
+}
+
+/**
+ * A fila deve esperar? Compara o uso estimado da janela de 5 h e da semana com os orçamentos
+ * (`claude.sessionBudgetTokens`, `weeklyBudgetTokens`); sem orçamento, nunca pausa. Na semana
+ * corrida não há hora de virada: tenta de novo em 1 h.
+ */
+export function usagePause(o: {
+  limitPct: number;
+  block?: { tokens: number; end: number };
+  sessionBudget: number;
+  week: { tokens: number; end: number };
+  weekBudget: number;
+  weekRolling: boolean;
+  now: number;
+}): UsagePause | undefined {
+  if (o.limitPct <= 0) return undefined;
+  const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : undefined);
+  const w = pct(o.week.tokens, o.weekBudget);
+  if (usageBlocks(w, o.limitPct)) return { window: 'week', pct: w!, until: o.weekRolling ? o.now + 3600_000 : o.week.end };
+  const b = o.block ? pct(o.block.tokens, o.sessionBudget) : undefined;
+  if (o.block && usageBlocks(b, o.limitPct)) return { window: '5h', pct: b!, until: o.block.end };
+  return undefined;
+}

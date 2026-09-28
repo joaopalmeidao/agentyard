@@ -474,5 +474,6 @@
   "config.claude.claims.hours.description": "Quanto dura uma reserva de arquivos quando o agente não diz.",
   "command.board.show.title": "Mural dos agentes (notas e arquivos reservados)",
   "command.board.post.title": "Nota para todos os agentes…",
-  "command.board.release.title": "Soltar as reservas de arquivos"
+  "command.board.release.title": "Soltar as reservas de arquivos",
+  "config.tasks.pauseAtUsage.description": "A fila de tarefas e os agendamentos esperam quando o uso estimado do Claude na janela de 5 h ou na semana chega a esta porcentagem do orçamento (claude.sessionBudgetTokens, claude.weeklyBudgetTokens), e saem sozinhos quando a janela vira. 0 desliga; sem orçamento, nunca pausa."
 }

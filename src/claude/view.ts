@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AgentTerminals, claudeAgentName, OpenAgent, promptArgument, stateText } from '../agents';
+import { usagePause, UsagePause } from '../autopilot/core';
 import type { Controller } from '../controller';
 import type { GraphState } from '../model';
 import { locale, t } from '../i18n';
@@ -168,6 +169,22 @@ export class ClaudeService implements vscode.Disposable {
 
   private budgets() {
     return { session: this.cfg().get<number>('sessionBudgetTokens', 0), week: this.cfg().get<number>('weeklyBudgetTokens', 0) };
+  }
+
+  /** A fila de tarefas deve esperar? (uso estimado perto do orçamento, `tasks.pauseAtUsage`) */
+  usagePause(now = Date.now()): UsagePause | undefined {
+    if (!this.loaded) return undefined;
+    const b = this.budgets();
+    const block = currentBlock(this.sessions, now, this.cfg().get<number>('blockHours', 5));
+    return usagePause({
+      limitPct: this.ctl.cfg().get<number>('tasks.pauseAtUsage', 90),
+      block,
+      sessionBudget: b.session,
+      week: weekWindow(this.sessions, this.weekMode(), now),
+      weekBudget: b.week,
+      weekRolling: this.weekMode() === 'rolling',
+      now,
+    });
   }
 
   private weekMode(): 'rolling' | 'monday' {
