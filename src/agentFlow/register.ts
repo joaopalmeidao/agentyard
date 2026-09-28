@@ -46,6 +46,8 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     const L = ctl.requests.label;
     const review = t('Review');
     const analyze = t('Analyze merge');
+    // Mesma fila de merge da view (destino: a base); o merge sai quando chegar a vez dela.
+    const queue = t('Add to merge queue → {0}', (await ctl.base()).base);
     const publish = t('Publish {0}', L);
     const openTerminal = t('Open terminal');
     const pick = await vscode.window.showInformationMessage(
@@ -54,6 +56,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
           ? t('{0}: the agent finished ({1} new commit(s)). Ready for review.', name, r.commits)
           : t('{0}: the agent finished. Ready for review.', name)),
       review,
+      queue,
       analyze,
       publish,
       openTerminal,
@@ -61,6 +64,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     if (!pick) return;
     if (pick !== openTerminal) await watch.clearReady(r.path);
     if (pick === review && r.branch) await actions.diffWithBase(ctl, r.branch);
+    if (pick === queue && r.branch) await vscode.commands.executeCommand('worktreeGraph.mergeQueue.add', r.branch);
     if (pick === analyze && r.branch) await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', r.branch);
     if (pick === publish && r.branch) await ctl.requests.publish(r.branch);
     if (pick === openTerminal) await actions.openTerminal(ctl, { path: r.path });

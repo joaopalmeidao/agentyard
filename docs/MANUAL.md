@@ -389,7 +389,8 @@ Para várias branches prontas ao mesmo tempo: **Pôr na fila de merge**. A fila 
 trazendo a base antes e rodando as checagens. Dá para pôr várias de uma vez: selecione as
 worktrees na árvore (Ctrl/Shift+clique) e use **Pôr na fila de merge**, ou clique no **+** da view
 e marque as branches na lista (entram na ordem em que aparecem). O painel **Analisar merge** também
-tem **Pôr na fila de merge**.
+tem **Pôr na fila de merge**, e o aviso "✓ Pronto para revisar" de um agente tem **Pôr na fila de
+merge → base**.
 
 Se uma branch conflitar com a base ou falhar nas checagens, a fila abre o Claude Code (o primeiro
 agente configurado) na worktree dela com a tarefa de trazer a base, resolver e commitar; o item
