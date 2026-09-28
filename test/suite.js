@@ -179,8 +179,11 @@ exports.run = async () => {
     assert.ok(o.claude);
     assert.strictEqual(o.state, 'starting');
     assert.strictEqual(o.terminal.creationOptions.env.WTGRAPH_AGENT_ID, o.id);
-    const settings = JSON.parse(fs.readFileSync(path.join(agentTerms.eventsDir(), 'hooks.settings.json'), 'utf8'));
+    const settings = JSON.parse(fs.readFileSync(path.join(agentTerms.eventsDir(), 'hooks.bridge.settings.json'), 'utf8'));
     assert.ok(settings.hooks.Stop && settings.hooks.Notification, 'settings com os hooks');
+    assert.ok(settings.hooks.PreToolUse.some(g => g.hooks[0].command.includes('--launched')), 'hooks da ponte');
+    assert.strictEqual(o.terminal.creationOptions.env.WTGRAPH_BRIDGE, '1');
+    assert.ok(o.bridged);
     const file = path.join(agentTerms.eventsDir(), `${o.id}.jsonl`);
     const emit = e => fs.appendFileSync(file, JSON.stringify({ session_id: 'sessao-teste', ...e }) + '\n');
     emit({ hook_event_name: 'SessionStart' });
@@ -954,6 +957,43 @@ exports.run = async () => {
     await api.templates.send({ path: wt2.path, branch: wt2.branch }, all.find(x => x.id === 'fix-tests'), 'queue');
     const q = api.agentFlow.tasks.queue(wt2.path);
     assert.ok(q && q.tasks.some(x => x.text.includes('ai/precos-promo')), 'tarefa na fila');
+  });
+
+  await check('integração Claude: MCP e hooks falam com a janela pela ponte local', async () => {
+    const core = require('../out/bridge/core');
+    const path = require('path');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const other = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    await until(() => api.bridge.running() && core.findBridge(wt.path));
+    const info = core.findBridge(path.join(wt.path, 'src'));
+    assert.strictEqual(info.port, api.bridge.port());
+    const st = await core.callBridge(info, 'tool', { name: 'status', args: {}, cwd: wt.path });
+    assert.ok(!st.isError && st.text.includes('ai/login-oauth') && st.text.includes('base'), st.text);
+    const all = await core.callBridge(info, 'tool', { name: 'list_worktrees', args: {}, cwd: wt.path });
+    assert.ok(all.text.includes('ai/precos-promo'), all.text);
+    assert.ok((await core.callBridge(info, 'tool', { name: 'status', args: { worktree: 'nao/existe' }, cwd: wt.path })).isError);
+    await core.callBridge(info, 'tool', { name: 'queue_task', args: { text: 'tarefa via MCP', worktree: 'ai/refatorar-api' }, cwd: wt.path });
+    const wt3 = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
+    assert.ok(api.agentFlow.tasks.queue(wt3.path).tasks.some(x => x.text === 'tarefa via MCP'));
+    // guarda: editar arquivo de outra worktree é negado; na própria, passa
+    const deny = await core.callBridge(info, 'hook', { hook_event_name: 'PreToolUse', cwd: wt.path, tool_name: 'Edit', tool_input: { file_path: path.join(other.path, 'x.ts') } });
+    assert.strictEqual(JSON.parse(deny.stdout).hookSpecificOutput.permissionDecision, 'deny');
+    const pass = await core.callBridge(info, 'hook', { hook_event_name: 'PreToolUse', cwd: wt.path, tool_name: 'Edit', tool_input: { file_path: path.join(wt.path, 'x.ts') } });
+    assert.ok(!pass.stdout);
+    // contexto da sessão
+    const ctxOut = await core.callBridge(info, 'hook', { hook_event_name: 'SessionStart', cwd: wt.path, source: 'startup' });
+    const add = JSON.parse(ctxOut.stdout).hookSpecificOutput.additionalContext;
+    assert.ok(add.includes('ai/login-oauth') && add.includes('master'), add);
+    // turno: checkpoint no começo e no fim, com o que mudou
+    await core.callBridge(info, 'hook', { hook_event_name: 'UserPromptSubmit', cwd: wt.path, session_id: 'sessao-ponte', prompt: 'crie turno.txt' });
+    require('fs').writeFileSync(path.join(wt.path, 'turno.txt'), 'oi\n');
+    await core.callBridge(info, 'hook', { hook_event_name: 'Stop', cwd: wt.path, session_id: 'sessao-ponte' });
+    const log = await until(() => api.claudeIntegration.logsFor(wt.path).find(l => l.session === 'sessao-ponte' && l.turns[0]?.end));
+    assert.strictEqual(log.turns[0].files, 1);
+    const diff = await core.callBridge(info, 'tool', { name: 'turn_diff', args: {}, cwd: wt.path });
+    assert.ok(diff.text.includes('turno.txt') && diff.text.includes('+oi'), diff.text);
+    require('fs').rmSync(path.join(wt.path, 'turno.txt'));
+    await assert.rejects(core.callBridge({ ...info, token: 'errado' }, 'ping', {}), /denied/);
   });
 
   await check('espaço em disco: calculado em segundo plano e no estado', async () => {

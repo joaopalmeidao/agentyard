@@ -1,6 +1,48 @@
 # Changelog
 
 ## Não lançado
+- **Ponte com o Claude Code**: todo Claude aberto pelo AgentYard ganha hooks e o servidor MCP
+  `agentyard` pela linha de comando (`--settings` e `--mcp-config`), rodando no próprio executável do
+  VS Code — sem Node.js e sem mexer no seu `settings.json`. Ferramentas: `status`, `list_worktrees`,
+  `overlaps`, `pr_feedback`, `ci_status`, `review_comments`, `turn_diff`, `list_tasks`, `queue_task`,
+  `create_worktree`, `mark_ready` e `notify`. Para o Claude aberto fora da extensão, **Integrar o Claude
+  Code com o AgentYard no projeto…**; **Integração com o Claude Code: diagnóstico** mostra o que está
+  ligado (`worktreeGraph.claude.bridge`, `claude.mcp`).
+- **Guarda da worktree**: antes de rodar, o Claude é impedido de editar ou rodar comandos em outras
+  worktrees, dar push forçado ou direto numa branch protegida, trocar a worktree para a base e remover
+  worktrees; ele recebe o motivo (`worktreeGraph.claude.guard`: `on`, `strict`, `off`).
+- **Permissão respondida no VS Code**: o pedido do Claude vira notificação com Permitir, Permitir nesta
+  sessão, Negar e Responder no terminal (`worktreeGraph.claude.approveInVsCode`). Com o VS Code sem
+  foco, os avisos também saem como notificação do sistema (`claude.osNotify`).
+- **Contexto no início da sessão**: worktree, branch, base, à frente/atrás, conflito previsto, arquivos
+  que outras worktrees estão mexendo, PR/MR e último CI (`claude.sessionContext`, `claude.extraContext`).
+  No modo plan, **Ver plano** quando o Claude propõe um. `budget.action: block-prompts` bloqueia novos
+  turnos de uma worktree que estourou o orçamento.
+- **Turnos do agente (checkpoints)**: o estado da worktree no começo e no fim de cada turno, sem mexer
+  em índice, stash ou branch. Na view Agentes abertos, cada terminal lista os turnos: ver o que mudou em
+  cada um ou restaurar os arquivos para antes/depois, com desfazer (`claude.checkpoints`).
+- **Quem escreveu esta linha**: commits feitos num turno ganham uma nota git local com a sessão; no
+  editor, **Qual sessão de agente escreveu esta linha?** abre a transcrição (`claude.commitNotes`).
+- **Revisão → agente**: **Mandar os comentários da revisão ao agente** (PR/MR, worktree ou painel)
+  manda as conversas não resolvidas para o Claude da worktree; quando ele termina, **Enviar e
+  resolver** faz o push, responde e resolve as conversas (GitHub e GitLab, `prompts.prFeedback`).
+  Revisão local: comente linhas dos arquivos da worktree pelo **+** do editor e mande tudo de uma vez.
+- **CI → agente**: com `pipelines.onFailure: agent`, a falha vai direto para o Claude parado na
+  worktree, que lê o log pela ferramenta `ci_status`.
+- **Claude com opções**: modelo, modo de permissão (`plan`, `acceptEdits`, `auto`) e tarefa ao abrir
+  (`claude.extraArgs`, `claude.appendSystemPrompt`). **Commitar com mensagem escrita pelo Claude** e,
+  com `pullRequests.describeWithClaude`, título e descrição do PR/MR pelo Claude sem terminal
+  (`claude.headlessModel`).
+- **Branches empilhadas**: **Nova worktree empilhada sobre esta branch**, PR apontando para o pai,
+  `↳ pai` no card e **Restack** quando o pai anda; quando o pai entra na base, a branch passa para cima
+  da base e o destino do PR/MR muda sozinho (`stack.autoRestack`).
+- **Checkout parcial (sparse)** para monorepos, na criação ou depois, e submódulos inicializados na
+  worktree nova (`worktree.submodules`).
+- **Achar o commit que quebrou (bisect)**: `git bisect run` numa worktree temporária com o seu comando
+  de teste, ou conduzido pelo agente; no fim, **Explicar com o agente**.
+- **Mission control**: os agentes de todas as janelas do VS Code numa tela, com estado, tempo, custo e
+  próximo passo. **Métricas das tarefas dos agentes**: tokens, US$, turnos, linhas, commits e
+  intervenções por worktree.
 - Estado real de cada Claude Code aberto pela extensão, pelos hooks do próprio Claude (passados com
   `--settings`, sem mexer no seu `settings.json`): **trabalhando**, **esperando você** (pedido de
   permissão) ou **sua vez**. Aparece no chip do card, na árvore, na view de agentes abertos e na

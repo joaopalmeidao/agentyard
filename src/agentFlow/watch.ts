@@ -181,6 +181,16 @@ export class AgentWatch implements vscode.Disposable {
     }
   }
 
+  /** O próprio agente disse que terminou (ferramenta MCP mark_ready): marca pronto já. */
+  async markReady(p: string, branch: string | undefined, commits: number) {
+    const s = this.sessions.get(keyOf(p));
+    this.sessions.delete(keyOf(p));
+    const info: ReadyInfo = { path: s?.path ?? p, branch: branch ?? s?.branch, at: Date.now(), commits };
+    await this.setReady(info);
+    this.finished.fire({ path: info.path, branch: info.branch, ready: true });
+    this.onReady(info);
+  }
+
   /** Força a checagem de uma worktree (ou de todas as acompanhadas). */
   async checkNow(p?: string): Promise<boolean> {
     const keys = p ? [keyOf(p)] : [...this.sessions.keys()];

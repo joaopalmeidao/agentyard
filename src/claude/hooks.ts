@@ -18,10 +18,15 @@ export interface HookEvent {
   cwd?: string;
   message?: string;
   notification_type?: string;
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
 }
 
-/** Eventos que mudam o estado. PostToolUse marca a volta ao trabalho depois de uma permissão. */
-export const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Notification', 'Stop', 'SessionEnd'] as const;
+/**
+ * Eventos que mudam o estado. PostToolUse marca a volta ao trabalho depois de uma permissão;
+ * PermissionRequest chega na hora do pedido (a Notification só depois de uns segundos).
+ */
+export const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PermissionRequest', 'Notification', 'Stop', 'SessionEnd'] as const;
 const TOOL_EVENTS = new Set(['PostToolUse']);
 
 /** Comando de cada hook: roda no shell do Claude (bash; no Windows, o Git Bash que ele exige). */
@@ -30,18 +35,20 @@ export function hookCommand(eventsDir: string): string {
   return `{ cat; echo; } >> "${dir}/\${WTGRAPH_AGENT_ID:-unknown}.jsonl"`;
 }
 
-export function hookSettings(eventsDir: string) {
+/** Hooks de estado; `extra` acrescenta grupos por evento (os da ponte com o AgentYard, src/bridge). */
+export function hookSettings(eventsDir: string, extra: Record<string, unknown[]> = {}) {
   const hook = { type: 'command', command: hookCommand(eventsDir), timeout: 5 };
   const hooks: Record<string, unknown[]> = {};
   for (const e of HOOK_EVENTS) hooks[e] = [TOOL_EVENTS.has(e) ? { matcher: '*', hooks: [hook] } : { hooks: [hook] }];
+  for (const [e, groups] of Object.entries(extra)) hooks[e] = [...(hooks[e] ?? []), ...groups];
   return { hooks };
 }
 
 /** Grava (só se mudou) o arquivo passado com --settings e devolve o caminho. */
-export function writeHookSettings(eventsDir: string): string {
+export function writeHookSettings(eventsDir: string, extra: Record<string, unknown[]> = {}, name = 'hooks.settings.json'): string {
   fs.mkdirSync(eventsDir, { recursive: true });
-  const file = path.join(eventsDir, 'hooks.settings.json');
-  const json = JSON.stringify(hookSettings(eventsDir), null, 2);
+  const file = path.join(eventsDir, name);
+  const json = JSON.stringify(hookSettings(eventsDir, extra), null, 2);
   let old = '';
   try {
     old = fs.readFileSync(file, 'utf8');
@@ -58,11 +65,36 @@ export function isClaudeCommand(cmd: string): boolean {
   return /^claude(\.exe|\.cmd)?$/i.test(path.basename(first.replace(/^["']|["']$/g, '')));
 }
 
-/** Põe `--settings "<arquivo>"` logo depois do `claude`; outros comandos ficam como estão. */
-export function instrumentCommand(cmd: string, settingsFile: string): string {
-  if (!isClaudeCommand(cmd) || /(^|\s)--settings(\s|=|$)/.test(cmd)) return cmd;
+/**
+ * Põe `--settings "<arquivo>"` (e `--mcp-config "<arquivo>"`, se houver) logo depois do `claude`;
+ * outros comandos ficam como estão.
+ */
+export function instrumentCommand(cmd: string, settingsFile: string, mcpConfig?: string): string {
+  if (!isClaudeCommand(cmd)) return cmd;
+  const flags: string[] = [];
+  if (!/(^|\s)--settings(\s|=|$)/.test(cmd)) flags.push(`--settings "${settingsFile}"`);
+  if (mcpConfig && !/(^|\s)--mcp-config(\s|=|$)/.test(cmd)) flags.push(`--mcp-config "${mcpConfig}"`);
+  if (!flags.length) return cmd;
   const m = cmd.match(/^(\s*\S+)([\s\S]*)$/);
-  return m ? `${m[1]} --settings "${settingsFile}"${m[2]}` : cmd;
+  return m ? `${m[1]} ${flags.join(' ')}${m[2]}` : cmd;
+}
+
+/** Põe `args` logo depois do binário do `claude` (ex.: `--model opus`); outros comandos ficam como estão. */
+export function insertArgs(cmd: string, args: string): string {
+  if (!args.trim() || !isClaudeCommand(cmd)) return cmd;
+  const m = cmd.match(/^(\s*\S+)([\s\S]*)$/);
+  return m ? `${m[1]} ${args.trim()}${m[2]}` : cmd;
+}
+
+/** Argumentos do Claude escolhidos em "Abrir Claude com opções…". */
+export function claudeArgs(o: { model?: string; permissionMode?: string; systemPrompt?: string }, quote: (s: string) => string): string {
+  return [
+    o.model ? `--model ${o.model}` : '',
+    o.permissionMode && o.permissionMode !== 'default' ? `--permission-mode ${o.permissionMode}` : '',
+    o.systemPrompt?.trim() ? `--append-system-prompt ${quote(o.systemPrompt.trim())}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 /**
@@ -99,6 +131,8 @@ export function nextState(cur: AgentState, e: HookEvent): AgentState {
     case 'UserPromptSubmit':
     case 'PostToolUse':
       return 'working';
+    case 'PermissionRequest':
+      return 'waiting';
     case 'Notification':
       // "esperando sua mensagem" depois de um tempo parado não é pedido de permissão
       return e.notification_type === 'idle_prompt' || /waiting for your input/i.test(e.message ?? '') ? cur : 'waiting';

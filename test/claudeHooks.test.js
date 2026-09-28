@@ -10,7 +10,7 @@ Module._resolveFilename = function (r, ...a) {
   return r === 'vscode' ? 'vscode' : orig.call(this, r, ...a);
 };
 require.cache.vscode = { id: 'vscode', filename: 'vscode', loaded: true, exports: {} };
-const { hookCommand, hookSettings, writeHookSettings, isClaudeCommand, instrumentCommand, parseEvents, nextState, EventTail, pruneEvents } = require('../out/claude/hooks');
+const { hookCommand, hookSettings, writeHookSettings, isClaudeCommand, instrumentCommand, insertArgs, claudeArgs, parseEvents, nextState, EventTail, pruneEvents } = require('../out/claude/hooks');
 const { mentionOf, selectionLines } = require('../out/claude/sendContext');
 
 let failures = 0;
@@ -37,11 +37,31 @@ check('instrumentCommand põe --settings logo depois do claude', () => {
   assert.strictEqual(instrumentCommand('claude (Get-Content -Raw x)', 'C:\\a b\\s.json'), 'claude --settings "C:\\a b\\s.json" (Get-Content -Raw x)');
   assert.strictEqual(instrumentCommand('codex', '/s.json'), 'codex');
   assert.strictEqual(instrumentCommand('claude --settings mine.json', '/s.json'), 'claude --settings mine.json');
+  assert.strictEqual(instrumentCommand('claude -c', '/s.json', '/m.json'), 'claude --settings "/s.json" --mcp-config "/m.json" -c');
+  assert.strictEqual(instrumentCommand('claude --mcp-config x.json', '/s.json', '/m.json'), 'claude --settings "/s.json" --mcp-config x.json');
+  assert.strictEqual(instrumentCommand('codex', '/s.json', '/m.json'), 'codex');
+});
+
+check('hooks extras da ponte entram junto dos de estado', () => {
+  const s = hookSettings(dir, { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'x' }] }], Stop: [{ hooks: [{ type: 'command', command: 'y' }] }] });
+  assert.strictEqual(s.hooks.PreToolUse.length, 1);
+  assert.strictEqual(s.hooks.Stop.length, 2);
+  const f = writeHookSettings(dir, { Stop: [] }, 'outro.settings.json');
+  assert.ok(f.endsWith('outro.settings.json'));
+});
+
+check('insertArgs e claudeArgs', () => {
+  assert.strictEqual(insertArgs('claude "tarefa"', '--model opus'), 'claude --model opus "tarefa"');
+  assert.strictEqual(insertArgs('codex', '--model opus'), 'codex');
+  assert.strictEqual(insertArgs('claude', '  '), 'claude');
+  const q = s => `'${s}'`;
+  assert.strictEqual(claudeArgs({ model: 'sonnet', permissionMode: 'plan', systemPrompt: ' seja breve ' }, q), "--model sonnet --permission-mode plan --append-system-prompt 'seja breve'");
+  assert.strictEqual(claudeArgs({ permissionMode: 'default' }, q), '');
 });
 
 check('hookSettings: um hook por evento, matcher só nos de ferramenta', () => {
   const s = hookSettings(dir);
-  assert.deepStrictEqual(Object.keys(s.hooks).sort(), ['Notification', 'PostToolUse', 'SessionEnd', 'SessionStart', 'Stop', 'UserPromptSubmit']);
+  assert.deepStrictEqual(Object.keys(s.hooks).sort(), ['Notification', 'PermissionRequest', 'PostToolUse', 'SessionEnd', 'SessionStart', 'Stop', 'UserPromptSubmit']);
   assert.strictEqual(s.hooks.PostToolUse[0].matcher, '*');
   assert.strictEqual(s.hooks.Stop[0].matcher, undefined);
   assert.ok(!hookCommand('C:\\x\\y').includes('\\'), 'caminho com barras normais para o bash');
@@ -77,6 +97,7 @@ check('nextState', () => {
   assert.strictEqual(nextState('idle', ev('Notification', { message: 'Claude is waiting for your input' })), 'idle');
   assert.strictEqual(nextState('idle', ev('SessionEnd')), 'ended');
   assert.strictEqual(nextState('working', ev('PreCompact')), 'working');
+  assert.strictEqual(nextState('working', ev('PermissionRequest', { tool_name: 'Bash' })), 'waiting');
 });
 
 check('EventTail lê só o que é novo', () => {

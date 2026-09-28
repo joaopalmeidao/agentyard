@@ -46,6 +46,8 @@ export class PipelineService implements vscode.Disposable {
   private disposed = false;
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
+  /** Preenchido na ativação: trata um pipeline que falhou (ex.: manda ao agente aberto); true = já tratou. */
+  onFailure?: (p: Pipeline) => Promise<boolean>;
 
   constructor(private readonly ctl: Controller) {
     this.scope = ctl.ctx.workspaceState.get<Scope>('pipelines.scope', 'worktrees');
@@ -163,17 +165,19 @@ export class PipelineService implements vscode.Disposable {
       if (p.status === 'running' || p.status === 'queued') continue;
       this.notified.add(p.id);
       if (p.status !== 'failed' || !withWorktree.has(p.branch)) continue;
-      const agent = this.agentName();
-      const viewLog = t('View log');
-      const rerun = t('Re-run');
-      vscode.window
-        .showWarningMessage(t('Pipeline "{0}" failed on {1}.', p.name, p.branch), viewLog, rerun, t('✦ Ask {0} to fix it', agent))
-        .then(pick => {
-          if (pick === viewLog) return this.showLog(p);
-          if (pick === rerun) return this.retry(p, true);
-          if (pick) return this.fixWithAgent(p);
-        });
+      void this.announceFailure(p);
     }
+  }
+
+  private async announceFailure(p: Pipeline) {
+    if (this.onFailure && (await this.onFailure(p).catch(() => false))) return;
+    const agent = this.agentName();
+    const viewLog = t('View log');
+    const rerun = t('Re-run');
+    const pick = await vscode.window.showWarningMessage(t('Pipeline "{0}" failed on {1}.', p.name, p.branch), viewLog, rerun, t('✦ Ask {0} to fix it', agent));
+    if (pick === viewLog) return this.showLog(p);
+    if (pick === rerun) return this.retry(p, true);
+    if (pick) return this.fixWithAgent(p);
   }
 
   private agentName(): string {
@@ -273,27 +277,39 @@ export class PipelineService implements vscode.Disposable {
     await vscode.window.showTextDocument(doc, { preview: true });
   }
 
-  /** Abre o agente na worktree da branch com o log da falha (cria a worktree se preciso). */
-  async fixWithAgent(p: Pipeline) {
+  /** Jobs que falharam e o fim do log do primeiro (para o agente e a ferramenta MCP ci_status). */
+  async failure(p: Pipeline, interactive = true): Promise<{ failed: PipelineJob[]; log: string } | undefined> {
     const jobs = await this.jobs(p).catch(() => [] as PipelineJob[]);
     const failed = jobs.filter(j => j.status === 'failed');
-    let log = '';
-    const client = await this.client(true);
-    if (!client) return;
-    if (failed[0]) log = tailLog(String(await client.log(failed[0]).catch(e => t('(could not download the log: {0})', (e as Error).message))), 150);
+    const client = await this.client(interactive);
+    if (!client) return undefined;
+    const log = failed[0] ? tailLog(String(await client.log(failed[0]).catch(e => t('(could not download the log: {0})', (e as Error).message))), 150) : '';
+    return { failed, log };
+  }
+
+  /** Prompt de correção do pipeline (worktreeGraph.prompts.fixPipeline). */
+  async fixPrompt(p: Pipeline): Promise<string | undefined> {
+    const f = await this.failure(p);
+    if (!f) return undefined;
+    const template = this.ctl.cfg().get<string>('prompts.fixPipeline', '') || defaultFixPrompt();
+    return fillTemplate(template, {
+      branch: p.branch,
+      pipeline: p.name,
+      url: p.url,
+      jobs: f.failed.map(j => j.name).join(', ') || t('(not identified)'),
+      log: f.log || t('(no log)'),
+    });
+  }
+
+  /** Abre o agente na worktree da branch com o log da falha (cria a worktree se preciso). */
+  async fixWithAgent(p: Pipeline) {
+    const prompt = await this.fixPrompt(p);
+    if (!prompt) return;
     const wts = (await this.ctl.repo?.worktreesFast()) ?? [];
     if (!wts.some(w => w.branch === p.branch)) {
       const dir = await createWorktree(this.ctl, { existing: p.branch, quiet: true });
       if (!dir) return;
     }
-    const template = this.ctl.cfg().get<string>('prompts.fixPipeline', '') || defaultFixPrompt();
-    const prompt = fillTemplate(template, {
-      branch: p.branch,
-      pipeline: p.name,
-      url: p.url,
-      jobs: failed.map(j => j.name).join(', ') || t('(not identified)'),
-      log: log || t('(no log)'),
-    });
     await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { branch: p.branch, prompt });
   }
 

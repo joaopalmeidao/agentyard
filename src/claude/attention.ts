@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { AgentTerminals, OpenAgent } from '../agents';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
+import { osNotify } from './osNotify';
 
 const keyOf = (p: string) => path.normalize(p).toLowerCase();
 
@@ -54,11 +55,17 @@ export function registerAgentAttention(ctx: vscode.ExtensionContext, ctl: Contro
     const show = t('Show terminal');
     let pick: string | undefined;
     if (o.state === 'waiting') {
+      // o pedido de permissão chega também pela ponte, que pergunta com Permitir/Negar: espera um
+      // instante para não avisar duas vezes
+      await new Promise(r => setTimeout(r, 1500));
+      if (o.asking || o.state !== 'waiting') return;
+      if (!vscode.window.state.focused) osNotify(ctl, t('{0} in {1} needs you', o.agent, where(o)), o.message ?? t('waiting for your answer'));
       pick = await vscode.window.showWarningMessage(
         t('{0} in {1} needs you: {2}', o.agent, where(o), o.message ?? t('waiting for your answer')),
         show,
       );
     } else if (mode === 'all' && o.state === 'idle' && previous === 'working') {
+      if (!vscode.window.state.focused) osNotify(ctl, 'AgentYard', t('{0} in {1} finished and is waiting for your next message.', o.agent, where(o)));
       pick = await vscode.window.showInformationMessage(t('{0} in {1} finished and is waiting for your next message.', o.agent, where(o)), show);
     }
     if (pick === show) o.terminal.show();

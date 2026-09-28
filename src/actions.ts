@@ -12,6 +12,7 @@ import { guardMerge } from './guards';
 import { migrationGate } from './migrations/register';
 import { Repo, Worktree } from './git';
 import { t } from './i18n';
+import { applySparse, hasSubmodules, initSubmodules } from './sparse';
 
 type BranchArg = string | { branch?: string } | undefined;
 
@@ -234,7 +235,7 @@ export const worktreeCreatedHooks: ((dir: string, branch: string, quiet: boolean
 
 export async function createWorktree(
   ctl: Controller,
-  opts: { startPoint?: string; existing?: string; branch?: string; quiet?: boolean } = {},
+  opts: { startPoint?: string; existing?: string; branch?: string; quiet?: boolean; sparse?: string[] } = {},
 ): Promise<string | undefined> {
   const repo = repoOf(ctl);
   const { base } = await ctl.base();
@@ -264,8 +265,20 @@ export async function createWorktree(
   let dir = path.join(root, branch.replace(/[\/\\]/g, '-'));
   for (let i = 2; fs.existsSync(dir); i++) dir = path.join(root, `${branch.replace(/[\/\\]/g, '-')}-${i}`);
 
-  const args = opts.existing ? ['worktree', 'add', dir, branch] : ['worktree', 'add', '-b', branch, dir, startPoint ?? base];
-  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating worktree {0}…', branch) }, () => repo.exec(args, repo.root, 300_000));
+  const sparse = opts.sparse?.length ? opts.sparse : undefined;
+  const noCheckout = sparse ? ['--no-checkout'] : [];
+  const args = opts.existing ? ['worktree', 'add', ...noCheckout, dir, branch] : ['worktree', 'add', ...noCheckout, '-b', branch, dir, startPoint ?? base];
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating worktree {0}…', branch) }, async () => {
+    await repo.exec(args, repo.root, 300_000);
+    if (sparse) await applySparse(dir, sparse);
+  });
+  if (hasSubmodules(dir) && ctl.cfg().get<boolean>('worktree.submodules', true)) {
+    try {
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Initializing the submodules of {0}…', branch) }, () => initSubmodules(dir));
+    } catch (e) {
+      vscode.window.showWarningMessage(t('The submodules of {0} were not initialized: {1}', branch, (e as Error).message));
+    }
+  }
   ctl.log(t('Worktree created: {0} ({1})', dir, branch));
   ctl.scheduleRefresh(100);
 

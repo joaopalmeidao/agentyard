@@ -143,6 +143,30 @@ Onde as pastas nascem: `worktreeGraph.worktreeRoot` (padrão `<repo>.worktrees` 
 
 Também dá para criar worktree a partir de um commit do histórico, de uma issue ou de um PR/MR.
 
+### Checkout parcial e submódulos
+
+Em monorepo, a worktree de um agente só precisa das pastas da tarefa. **Nova worktree com checkout
+parcial (monorepo)…** (menu ⋯ da view Worktrees) pergunta as pastas antes de criar; **Checkout
+parcial (sparse): escolher pastas…** muda uma worktree que já existe (nenhuma pasta = volta ao
+checkout completo). Os arquivos da raiz sempre vêm. `worktreeGraph.worktree.sparseDepth` define
+quantos níveis de pasta aparecem na lista.
+
+Se o repositório tem submódulos, a worktree nova já sai com `git submodule update --init
+--recursive` (`worktreeGraph.worktree.submodules`).
+
+### Branches empilhadas
+
+Para dividir uma tarefa grande em PRs menores, um em cima do outro: **Nova worktree empilhada sobre
+esta branch…** (menu da worktree, ou Worktree → ↳ no painel). O card mostra `↳ pai`, e o PR da
+branch já sugere o pai como destino.
+
+Quando o pai recebe commits, aparece `↻` e o AgentYard oferece o **Restack**: leva só os commits da
+branch (e das que estão em cima dela) para cima do pai, com `git rebase --onto`. Quando o pai entra
+na base, a branch passa a sair da base e o destino do PR/MR muda sozinho. Conflito desfaz o rebase
+e oferece resolver com o agente; branches já enviadas pedem **Enviar (force-with-lease)**.
+`worktreeGraph.stack.autoRestack`: `ask` (padrão), `auto` ou `off`. **Empilhar sobre outra
+branch…** liga uma branch que já existe a um pai; **Ver a pilha** mostra a sequência.
+
 ### Abrir e navegar
 
 - **Abrir em nova janela**: outra janela do VS Code na worktree.
@@ -175,6 +199,14 @@ apagar. **Mover alterações para outra worktree…** leva o trabalho não commi
 
 Um terminal por worktree e agente: clicar de novo só traz o terminal para frente.
 `worktreeGraph.agentTerminalLocation` escolhe entre o painel de terminais e uma aba do editor.
+
+### Abrir com opções
+
+**Abrir Claude Code com opções (modelo, modo de permissão)…** pergunta o modelo (`opus`, `sonnet`,
+`haiku` ou outro), o modo de permissão (`plan` para ele só planejar antes, `acceptEdits`, `auto`) e a
+tarefa, e lembra a última escolha. `worktreeGraph.claude.extraArgs` acrescenta argumentos a todo
+Claude aberto pela extensão; `worktreeGraph.claude.appendSystemPrompt` vai como
+`--append-system-prompt` nesse comando.
 
 ### Configurar a lista
 
@@ -286,6 +318,33 @@ duplicar, pausar/retomar, executar agora, histórico e excluir.
   você escolhe o que postar no GitHub/GitLab. **Abrir a última revisão do agente** reabre o painel.
 - Commits do histórico: **✦ Explicar com o agente** (ver seção 11).
 
+### Turnos do agente (checkpoints)
+
+No começo e no fim de cada turno do Claude (do prompt até a resposta terminar), o AgentYard guarda o
+estado da worktree num commit solto em `refs/agentyard/turns` — sem mexer no índice, no stash nem na
+branch. Na view **Agentes abertos**, cada terminal expande nos turnos, com arquivos e `+/−`:
+
+- clicar abre **o que mudou naquele turno** (todos os arquivos numa aba só);
+- **Restaurar os arquivos para antes deste turno** (ou depois) volta só os arquivos, com **Desfazer**.
+
+**Turnos do agente (checkpoints)…** no menu da worktree lista os turnos de todas as sessões dali.
+Os checkpoints ficam 7 dias (`worktreeGraph.claude.checkpointDays`); desligue com
+`worktreeGraph.claude.checkpoints`.
+
+### Quem escreveu esta linha
+
+Os commits feitos durante um turno ganham uma nota git local (`refs/notes/agentyard`) com a sessão,
+o turno e o prompt. No editor, botão direito → **Qual sessão de agente escreveu esta linha?** mostra
+o commit e abre a transcrição da sessão (`worktreeGraph.claude.commitNotes`).
+
+### Revisão local para o agente
+
+Como num PR, mas antes de publicar: nos arquivos de uma worktree, clique no **+** da margem do
+editor para comentar uma linha (ou um trecho). Os comentários se acumulam (a barra de status mostra
+quantos); **✦ Mandar os comentários da revisão ao agente** manda tudo numa tarefa só para o Claude
+daquela worktree — se ele já está aberto e parado, recebe uma linha e lê os comentários pela
+ferramenta MCP `review_comments`.
+
 ## 8. Merge
 
 ### Formas de mesclar
@@ -321,6 +380,20 @@ Para várias branches prontas ao mesmo tempo: **Pôr na fila de merge**. A fila 
 trazendo a base antes e rodando as checagens. Na view **Fila de merge**: subir/descer, tirar,
 pausar/retomar, processar agora e limpar. `worktreeGraph.mergeQueue.pushBase` faz push da base
 depois de cada merge.
+
+### Achar o commit que quebrou (bisect)
+
+**Achar o commit que quebrou (bisect)…** (menu da worktree, ou Git no painel) pergunta o commit
+quebrado (padrão `HEAD`), o último que funcionava (onde a branch saiu da base, tags ou commits
+recentes) e um comando de teste (saída 0 = funciona). O `git bisect run` roda numa worktree
+temporária, sem mexer nas suas nem nas dos agentes, e no fim oferece **✦ Explicar com o agente**.
+Sem comando, o agente conduz o bisect numa worktree temporária própria.
+
+### Commit com mensagem do Claude
+
+**✦ Commitar com mensagem escrita pelo Claude…** manda o diff (o que está no stage, ou tudo) e as
+últimas mensagens do repositório para o Claude sem terminal (`claude -p`), que escreve no mesmo
+estilo; você revisa antes do commit. Modelo em `worktreeGraph.claude.headlessModel` (padrão `haiku`).
 
 ### Cherry-pick e reorganizar commits
 
@@ -367,6 +440,17 @@ No painel, clicar no chip do PR abre o PR nesta view; **Ctrl/Alt+clique** abre n
 
 GitHub e GitLab têm todas as ações; Bitbucket e Azure DevOps, a listagem.
 
+### Comentários da revisão → agente
+
+No PR/MR (view Pull requests), na worktree ou no painel (Agente → **Mandar os comentários da revisão
+ao agente**): as conversas não resolvidas e as revisões com texto vão como tarefa para o Claude da
+worktree — que traz a branch, se preciso. Quando o agente termina, o AgentYard oferece **Enviar e
+resolver**: faz o push, responde "resolvido em <commit>" em cada conversa e marca como resolvida.
+GitHub e GitLab. Texto da tarefa em `worktreeGraph.prompts.prFeedback`.
+
+Com `worktreeGraph.pullRequests.describeWithClaude`, **Publicar PR/MR** pede ao Claude título e
+descrição a partir dos commits e do diff.
+
 ### Pipelines
 
 View **Pipelines**: execuções por branch (só com worktree ou todas), jobs, log, re-executar
@@ -375,6 +459,10 @@ View **Pipelines**: execuções por branch (só com worktree ou todas), jobs, lo
 O último pipeline de cada branch aparece no card. Quando um pipeline falha,
 **✦ Corrigir com o agente** abre o agente na worktree com o final do log
 (`worktreeGraph.prompts.fixPipeline`).
+
+Com `worktreeGraph.pipelines.onFailure` = `agent`, um pipeline que falha numa worktree com um Claude
+aberto e parado vai direto para ele (que lê o log pela ferramenta `ci_status`); sem Claude parado,
+aparece a notificação de sempre.
 
 ## 10. Issues
 
@@ -525,6 +613,44 @@ View **Claude: configuração**, com escopo do usuário e do projeto ativo:
 
 A pasta de dados é `CLAUDE_CONFIG_DIR` ou `~/.claude`; troque em `worktreeGraph.claude.configDir`.
 
+### Integração com o AgentYard (hooks e MCP)
+
+Todo Claude Code aberto pelo AgentYard sai com hooks (`--settings`) e com o servidor MCP
+`agentyard` (`--mcp-config`), sem mexer no seu `settings.json`. Os scripts rodam com o próprio
+executável do VS Code como node: não precisa de Node.js. Cada janela abre um servidor local em
+`127.0.0.1` com token e se anuncia em `~/.agentyard/bridges`.
+
+- **Guarda da worktree** (`worktreeGraph.claude.guard`): antes de rodar, bloqueia edições e comandos
+  em outras worktrees, push forçado, push direto em branch protegida, trocar a worktree para a base e
+  remover worktrees. `strict` também impede criar/trocar de branch dentro da worktree. O Claude recebe
+  o motivo e segue por outro caminho.
+- **Permissão pelo VS Code** (`worktreeGraph.claude.approveInVsCode`): o pedido de permissão vira uma
+  notificação com **Permitir**, **Permitir nesta sessão**, **Negar** e **Responder no terminal**. Ir
+  ao terminal mostra o pedido lá, como sempre.
+- **Contexto da sessão** (`worktreeGraph.claude.sessionContext`): no início, o Claude fica sabendo a
+  worktree, a branch, a base, à frente/atrás, conflito previsto, arquivos que outras worktrees estão
+  mexendo, PR/MR e o último CI. Instruções a mais em `worktreeGraph.claude.extraContext`.
+- **Plano**: no modo `plan`, quando o Claude propõe o plano, a notificação oferece **Ver plano**.
+- **Orçamento**: com `worktreeGraph.budget.action` = `block-prompts`, uma worktree que estourou o
+  orçamento não começa outro turno.
+- **Ferramentas MCP**: `status`, `list_worktrees`, `overlaps`, `pr_feedback`, `ci_status`,
+  `review_comments`, `turn_diff`, `list_tasks`, `queue_task`, `create_worktree`, `mark_ready` (o
+  agente avisa que terminou) e `notify`.
+
+Para o Claude aberto fora do AgentYard, **Integrar o Claude Code com o AgentYard no projeto…** grava
+o servidor MCP em `.mcp.json` e os hooks em `.claude/settings.json` (esses precisam de `node` no
+PATH). **Integração com o Claude Code: diagnóstico** mostra o servidor, os terminais e os últimos
+eventos. Desligue tudo com `worktreeGraph.claude.bridge`.
+
+Quando o VS Code está sem foco, os avisos também saem como notificação do sistema
+(`worktreeGraph.claude.osNotify`).
+
+### Mission control
+
+**Mission control: todos os agentes** (view Agentes abertos): os agentes de todas as janelas do VS
+Code numa tela, com estado, há quanto tempo, custo e o próximo passo (responder, revisar, sua vez).
+**Ir** traz o terminal (ou a janela) para frente.
+
 ## 16. Ambiente por worktree (portas, .env, dependências)
 
 Vários agentes rodando o app ao mesmo tempo precisam de portas diferentes:
@@ -574,6 +700,10 @@ desfeitos antes da remoção: o conteúdo do destino não é apagado.
   Com `worktreeGraph.report.agentSummary`, oferece **✦ Redigir resumo com o agente**.
 - **Preparar versão…**: changelog por seções desde a última tag, próxima versão por semver, commit
   e tag locais (o push fica com você).
+
+**Métricas das tarefas dos agentes** (view Agentes abertos): por worktree, tokens e US$, turnos,
+tokens por turno, linhas e commits, intervenções (pedidos de permissão, bloqueios da guarda e do
+orçamento) e planos.
 
 ## 19. Vários projetos
 
@@ -627,6 +757,15 @@ Todas começam com `worktreeGraph.`. As mais usadas:
 | `cleanup.remindThreshold`, `cleanup.staleDays` | `20`, `7` | lembrete de limpeza |
 | `pullRequests.mergeMethod` | `merge` | método ao mesclar pela view |
 | `prompts.*` | | textos enviados ao agente (conflito, issue, pipeline, checagens, revisão) |
+| `claude.bridge`, `claude.mcp` | `true` | hooks e MCP do AgentYard no Claude aberto pela extensão |
+| `claude.guard` | `on` | guarda da worktree (`on`, `strict`, `off`) |
+| `claude.approveInVsCode` | `true` | responder pedidos de permissão na notificação |
+| `claude.checkpoints`, `claude.checkpointDays` | `true`, `7` | checkpoints por turno |
+| `claude.extraArgs` | | argumentos em todo Claude aberto (ex.: `--model opus`) |
+| `claude.headlessModel` | `haiku` | modelo da mensagem de commit e da descrição de PR |
+| `pipelines.onFailure` | `ask` | `agent` manda a falha do CI para o Claude parado |
+| `stack.autoRestack` | `ask` | restack das branches empilhadas |
+| `worktree.submodules` | `true` | inicializar submódulos na worktree nova |
 
 A lista completa, com descrições, está em **Configurações → Extensões → AgentYard**.
 
@@ -650,6 +789,10 @@ com `autoSync.branches`/`exclude`, ou foi pausada.
 
 **Muitas janelas no mesmo repositório.** Só uma roda o sync e os agendamentos (lock em
 `<.git>/worktree-graph-sync.lock`); as outras só mostram.
+
+**"Os hooks do Claude Code não responderam".** No Windows, o Claude roda os hooks no Git Bash:
+instale o Git for Windows. Em WSL/SSH, a extensão precisa estar instalada no lado remoto. Veja
+**Integração com o Claude Code: diagnóstico**.
 
 **Log da extensão.** **AgentYard: Mostrar log** abre o canal de saída com os comandos git
 executados e erros.

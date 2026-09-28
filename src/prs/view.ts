@@ -587,5 +587,5 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
     }
   });
 
-  return { svc, tree, view };
+  return { svc, tree, view, prOf, bring };
 }

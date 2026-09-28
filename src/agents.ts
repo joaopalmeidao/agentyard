@@ -3,7 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
-import { AgentState, EventTail, instrumentCommand, isClaudeCommand, nextState, pruneEvents, writeHookSettings } from './claude/hooks';
+import { AgentState, EventTail, insertArgs, instrumentCommand, isClaudeCommand, nextState, pruneEvents, writeHookSettings } from './claude/hooks';
+import { describeToolRequest } from './claude/guard';
 import { t } from './i18n';
 
 export interface AgentConfig {
@@ -81,6 +82,10 @@ export interface OpenAgent {
   message?: string;
   /** Sessão do Claude Code deste terminal (vem do hook SessionStart). */
   sessionId?: string;
+  /** Aberto com os hooks e o MCP da ponte (src/bridge). */
+  bridged?: boolean;
+  /** O pedido de permissão está sendo perguntado no VS Code (src/claude/integration.ts). */
+  asking?: boolean;
 }
 
 export interface AgentStateChange {
@@ -92,6 +97,14 @@ export interface StartOptions {
   task?: boolean;
   prompt?: string;
   name?: string;
+  /** Não acrescenta `claude.extraArgs` (o comando já traz os argumentos escolhidos). */
+  noExtraArgs?: boolean;
+}
+
+/** O que a ponte com o AgentYard (src/bridge) acrescenta ao Claude aberto: hooks e servidor MCP. */
+export interface LaunchExtras {
+  hooks: Record<string, unknown[]>;
+  mcpConfig?: string;
 }
 
 /** Nomes repetidos viram "Claude Code ×2". */
@@ -169,6 +182,8 @@ export class AgentTerminals implements vscode.Disposable {
   private poll?: NodeJS.Timeout;
   /** Arquivo do último prompt enviado (usado pelos testes). */
   lastPromptFile?: string;
+  /** Preenchido pela ponte (src/bridge): hooks e MCP a mais para cada Claude aberto. */
+  launchExtras?: () => LaunchExtras | undefined;
 
   constructor(private readonly ctl: Controller) {
     this.disposables.push(
@@ -207,6 +222,7 @@ export class AgentTerminals implements vscode.Disposable {
       id,
       task: env.WTGRAPH_TASK === '1',
       claude: env.WTGRAPH_CLAUDE === '1',
+      bridged: env.WTGRAPH_BRIDGE === '1',
     };
     this.open.push(o);
     if (env.WTGRAPH_HOOKS === '1') {
@@ -228,6 +244,11 @@ export class AgentTerminals implements vscode.Disposable {
     return this.list(worktreePath)
       .filter(o => o.claude)
       .reverse();
+  }
+
+  /** Avisa que algo de um terminal mudou por fora (ex.: pedido de permissão aberto no VS Code). */
+  refresh() {
+    this.changed.fire();
   }
 
   byTerminal(term: vscode.Terminal): OpenAgent | undefined {
@@ -289,6 +310,7 @@ export class AgentTerminals implements vscode.Disposable {
       o.state = nextState(o.state ?? 'starting', e);
       if (e.session_id) o.sessionId = e.session_id;
       if (e.hook_event_name === 'Notification' && o.state === 'waiting') o.message = e.message;
+      if (e.hook_event_name === 'PermissionRequest') o.message = t('Permission: {0}', describeToolRequest(e.tool_name, e.tool_input));
     }
     if (o.state !== 'waiting') o.message = undefined;
     if (o.state === previous) {
@@ -407,10 +429,16 @@ export class AgentTerminals implements vscode.Disposable {
   async start(worktreePath: string, branch: string | undefined, agent: string, command: string, opts: StartOptions = {}): Promise<OpenAgent> {
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const claude = isClaudeCommand(command);
+    if (claude && !opts.noExtraArgs) command = insertArgs(command, this.ctl.cfg().get<string>('claude.extraArgs', ''));
     let hooks = false;
+    let bridged = false;
     if (claude && this.ctl.cfg().get<boolean>('claude.trackState', true)) {
       try {
-        command = instrumentCommand(command, writeHookSettings(this.eventsDir()));
+        const extras = this.launchExtras?.();
+        bridged = !!extras && Object.keys(extras.hooks).length > 0;
+        // arquivos diferentes com e sem a ponte: um terminal restaurado não herda hooks que não pediu
+        const settings = writeHookSettings(this.eventsDir(), extras?.hooks, bridged ? 'hooks.bridge.settings.json' : 'hooks.settings.json');
+        command = instrumentCommand(command, settings, extras?.mcpConfig);
         hooks = true;
       } catch (e) {
         this.ctl.log(t('Could not prepare the Claude Code hooks: {0}', (e as Error).message));
@@ -422,8 +450,9 @@ export class AgentTerminals implements vscode.Disposable {
       WTGRAPH_TASK: opts.task ? '1' : '',
       WTGRAPH_CLAUDE: claude ? '1' : '',
       WTGRAPH_HOOKS: hooks ? '1' : '',
+      WTGRAPH_BRIDGE: bridged ? '1' : '',
     });
-    const o: OpenAgent = { terminal, path: worktreePath, branch, agent, started: Date.now(), id, task: opts.task, claude, state: hooks ? 'starting' : undefined };
+    const o: OpenAgent = { terminal, path: worktreePath, branch, agent, started: Date.now(), id, task: opts.task, claude, bridged, state: hooks ? 'starting' : undefined };
     this.open.push(o);
     if (hooks) this.watchEvents(o);
     this.changed.fire();
