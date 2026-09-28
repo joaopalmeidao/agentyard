@@ -18,6 +18,7 @@ import { ReadySummaryService } from './env/readySummary';
 import { registerEnv } from './env/register';
 import { registerMigrations } from './migrations/register';
 import { registerTemplates } from './templates/register';
+import { registerLongProjects } from './longProject/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
@@ -33,6 +34,7 @@ import { Projects, ProjectsTreeProvider } from './projects';
 import { AutoSync } from './sync';
 import { registerClaudeConfig } from './claude/configView';
 import { registerAgentAttention } from './claude/attention';
+import { registerClaudeVoice } from './claude/voice';
 import { registerSendToClaude, worktreeOfFile } from './claude/sendContext';
 import { pickRelevant, registerTerminalUx } from './claude/terminalUx';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
@@ -82,7 +84,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
   registerAgentAttention(ctx, ctl, agentTerms);
+  registerLongProjects(ctx, ctl, agentTerms, claude);
   registerSendToClaude(ctx, ctl, agentTerms);
+  registerClaudeVoice(ctx, ctl, agentTerms);
   registerTerminalUx(ctx, ctl, agentTerms);
   /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */
   const claudeTarget = async (arg?: { path?: string; wtPath?: string; branch?: string }): Promise<{ cwd: string; label: string } | undefined> => {

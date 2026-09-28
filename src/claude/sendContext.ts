@@ -65,33 +65,42 @@ function contextFile(name: string, text: string): string {
 }
 
 /**
+ * Claude que recebe o texto: o único aberto na worktree; senão pergunta entre os dessa worktree,
+ * os das outras, ou abrir um novo nela.
+ */
+export async function pickClaude(
+  ctl: Controller,
+  agentTerms: AgentTerminals,
+  wt: { path: string; branch?: string; name: string } | undefined,
+  placeHolder = t('Send to which Claude?'),
+): Promise<OpenAgent | undefined> {
+  const here = wt ? agentTerms.claudeIn(wt.path) : [];
+  if (here.length === 1) return here[0];
+  const others = agentTerms.claudeIn().filter(o => !here.includes(o));
+  type Item = vscode.QuickPickItem & { o?: OpenAgent; open?: boolean };
+  const items: Item[] = [
+    ...here.map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: agentTerms.describe(o), o })),
+    ...(wt && !here.length ? [{ label: `$(add) ${t('Open a Claude in {0}', wt.name)}`, open: true }] : []),
+    ...(others.length ? [{ label: t('Other worktrees'), kind: vscode.QuickPickItemKind.Separator } as Item] : []),
+    ...others.map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: agentTerms.describe(o), o })),
+  ];
+  if (!items.length) {
+    vscode.window.showInformationMessage(t('No Claude Code open by AgentYard. Open one from the panel or the status bar.'));
+    return undefined;
+  }
+  if (items.length === 1 && items[0].open && wt) return agentTerms.start(wt.path, wt.branch, claudeAgentName(ctl), 'claude');
+  const pick = await vscode.window.showQuickPick(items, { placeHolder });
+  if (pick?.open && wt) return agentTerms.start(wt.path, wt.branch, claudeAgentName(ctl), 'claude');
+  return pick?.o;
+}
+
+/**
  * "Enviar ao Claude": digita a menção do arquivo (e das linhas selecionadas) no Claude aberto na
  * worktree do arquivo, sem apertar Enter, para você completar a mensagem. Sem Claude ali, oferece
  * os de outras worktrees ou abrir um novo. O mesmo caminho manda os problemas do arquivo, o diff da
  * worktree e a seleção de um terminal.
  */
 export function registerSendToClaude(ctx: vscode.ExtensionContext, ctl: Controller, agentTerms: AgentTerminals) {
-  const pickTarget = async (wt: { path: string; branch?: string; name: string } | undefined): Promise<OpenAgent | undefined> => {
-    const here = wt ? agentTerms.claudeIn(wt.path) : [];
-    if (here.length === 1) return here[0];
-    const others = agentTerms.claudeIn().filter(o => !here.includes(o));
-    type Item = vscode.QuickPickItem & { o?: OpenAgent; open?: boolean };
-    const items: Item[] = [
-      ...here.map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: agentTerms.describe(o), o })),
-      ...(wt && !here.length ? [{ label: `$(add) ${t('Open a Claude in {0}', wt.name)}`, open: true }] : []),
-      ...(others.length ? [{ label: t('Other worktrees'), kind: vscode.QuickPickItemKind.Separator } as Item] : []),
-      ...others.map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: agentTerms.describe(o), o })),
-    ];
-    if (!items.length) {
-      vscode.window.showInformationMessage(t('No Claude Code open by AgentYard. Open one from the panel or the status bar.'));
-      return undefined;
-    }
-    if (items.length === 1 && items[0].open && wt) return agentTerms.start(wt.path, wt.branch, claudeAgentName(ctl), 'claude');
-    const pick = await vscode.window.showQuickPick(items, { placeHolder: t('Send to which Claude?') });
-    if (pick?.open && wt) return agentTerms.start(wt.path, wt.branch, claudeAgentName(ctl), 'claude');
-    return pick?.o;
-  };
-
   /** Worktree do editor ativo, do terminal ativo ou da janela, nessa ordem. */
   const currentWorktree = () => {
     const file = vscode.window.activeTextEditor?.document.uri;
@@ -123,7 +132,7 @@ export function registerSendToClaude(ctx: vscode.ExtensionContext, ctl: Controll
       // pelo editor: as linhas selecionadas; pelo Explorer: o arquivo inteiro
       const inEditor = !fromExplorer && files.length === 1 && editor?.document.uri.fsPath === files[0];
       const lines = inEditor ? selectionLines(editor!.selection) : undefined;
-      const target = await pickTarget(worktreeOfFile(ctl, files[0]));
+      const target = await pickClaude(ctl, agentTerms, worktreeOfFile(ctl, files[0]));
       if (!target) return;
       const text = files.map(f => mentionOf(f, target.path, lines)).join(' ') + ' ';
       await agentTerms.type(target, text, false);
@@ -143,7 +152,7 @@ export function registerSendToClaude(ctx: vscode.ExtensionContext, ctl: Controll
         vscode.window.showInformationMessage(t('No problems in {0}.', path.basename(doc.fsPath)));
         return;
       }
-      const target = await pickTarget(worktreeOfFile(ctl, doc.fsPath));
+      const target = await pickClaude(ctl, agentTerms, worktreeOfFile(ctl, doc.fsPath));
       if (!target) return;
       const text = diagnosticsText(
         doc.fsPath,
@@ -167,7 +176,7 @@ export function registerSendToClaude(ctx: vscode.ExtensionContext, ctl: Controll
         vscode.window.showInformationMessage(t('{0} has no changes compared to {1}.', wt.branch ?? wt.name, base || 'HEAD'));
         return;
       }
-      const target = await pickTarget(wt);
+      const target = await pickClaude(ctl, agentTerms, wt);
       if (!target) return;
       const file = contextFile(`${(wt.branch ?? wt.name).replace(/[^\w.-]+/g, '-')}.diff`, diff.stdout);
       await agentTerms.type(target, `${t('Changes in {0} compared to {1}:', wt.branch ?? wt.name, base || 'HEAD')} ${mentionOf(file, target.path)} `, false);
@@ -186,7 +195,7 @@ export function registerSendToClaude(ctx: vscode.ExtensionContext, ctl: Controll
         vscode.window.showInformationMessage(t('Select some text in the terminal to send it to Claude.'));
         return;
       }
-      const target = await pickTarget(currentWorktree());
+      const target = await pickClaude(ctl, agentTerms, currentWorktree());
       if (!target) return;
       const file = contextFile('terminal.txt', text);
       await agentTerms.type(target, `${t('Output from the terminal {0}:', term.name)} ${mentionOf(file, target.path)} `, false);
