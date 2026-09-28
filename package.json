@@ -76,6 +76,10 @@
           "name": "%view.pipelines.name%"
         },
         {
+          "id": "worktreeGraph.longProjects",
+          "name": "%view.longProjects.name%"
+        },
+        {
           "id": "worktreeGraph.tasks",
           "name": "%view.tasks.name%"
         },
@@ -123,6 +127,10 @@
       {
         "view": "worktreeGraph.mergeQueue",
         "contents": "%welcome.mergeQueue.1%"
+      },
+      {
+        "view": "worktreeGraph.longProjects",
+        "contents": "%welcome.longProjects.1%"
       }
     ],
     "commands": [
@@ -1203,6 +1211,72 @@
         "command": "worktreeGraph.pullRequests.openFileDiff",
         "title": "%command.pullRequests.openFileDiff.title%",
         "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.longProjects.new",
+        "title": "%command.longProjects.new.title%",
+        "category": "AgentYard",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.start",
+        "title": "%command.longProjects.start.title%",
+        "category": "AgentYard",
+        "icon": "$(play)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.pause",
+        "title": "%command.longProjects.pause.title%",
+        "category": "AgentYard",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.replan",
+        "title": "%command.longProjects.replan.title%",
+        "category": "AgentYard",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.openPlan",
+        "title": "%command.longProjects.openPlan.title%",
+        "category": "AgentYard",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.openProgress",
+        "title": "%command.longProjects.openProgress.title%",
+        "category": "AgentYard",
+        "icon": "$(book)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.showTerminal",
+        "title": "%command.longProjects.showTerminal.title%",
+        "category": "AgentYard",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.verify",
+        "title": "%command.longProjects.verify.title%",
+        "category": "AgentYard",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.retryMilestone",
+        "title": "%command.longProjects.retryMilestone.title%",
+        "category": "AgentYard",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.markDone",
+        "title": "%command.longProjects.markDone.title%",
+        "category": "AgentYard",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "worktreeGraph.longProjects.forget",
+        "title": "%command.longProjects.forget.title%",
+        "category": "AgentYard",
+        "icon": "$(discard)"
       }
     ],
     "menus": {
@@ -1526,6 +1600,11 @@
           "command": "worktreeGraph.pullRequests.refresh",
           "when": "view == worktreeGraph.pullRequests",
           "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.longProjects.new",
+          "when": "view == worktreeGraph.longProjects",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
@@ -2293,6 +2372,86 @@
           "command": "worktreeGraph.pullRequests.copyLink",
           "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
           "group": "4_copy@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.start",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-(planned|review|paused|blocked)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.pause",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-(running)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.showTerminal",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-(planning|running|blocked)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.longProjects.openPlan",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-/",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.longProjects.start",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-(planned|review|paused|blocked)$/",
+          "group": "1_run@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.pause",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-(running)$/",
+          "group": "1_run@2"
+        },
+        {
+          "command": "worktreeGraph.longProjects.showTerminal",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-/",
+          "group": "1_run@3"
+        },
+        {
+          "command": "worktreeGraph.longProjects.verify",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-/",
+          "group": "1_run@4"
+        },
+        {
+          "command": "worktreeGraph.longProjects.openPlan",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-/",
+          "group": "2_files@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.openProgress",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-/",
+          "group": "2_files@2"
+        },
+        {
+          "command": "worktreeGraph.longProjects.replan",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-/",
+          "group": "3_plan@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.forget",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lproject-/",
+          "group": "9_reset@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.retryMilestone",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lmilestone-(active|done|blocked|stuck|pending)$/",
+          "group": "1_run@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.markDone",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lmilestone-(active|blocked|stuck|pending)$/",
+          "group": "1_run@2"
+        },
+        {
+          "command": "worktreeGraph.longProjects.openPlan",
+          "when": "view == worktreeGraph.longProjects && viewItem =~ /^lmilestone-/",
+          "group": "2_files@1"
+        },
+        {
+          "command": "worktreeGraph.longProjects.new",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_open@7"
         }
       ],
       "commandPalette": [
@@ -2522,6 +2681,14 @@
         },
         {
           "command": "worktreeGraph.pullRequests.openFileDiff",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.longProjects.retryMilestone",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.longProjects.markDone",
           "when": "false"
         }
       ],
@@ -3254,6 +3421,24 @@
           ],
           "default": "merge",
           "description": "%config.pullRequests.mergeMethod.description%"
+        },
+        "worktreeGraph.longProjects.gateRetries": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "description": "%config.longProjects.gateRetries.description%"
+        },
+        "worktreeGraph.longProjects.milestoneMinutes": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "description": "%config.longProjects.milestoneMinutes.description%"
+        },
+        "worktreeGraph.longProjects.maxSessionsPerMilestone": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "description": "%config.longProjects.maxSessionsPerMilestone.description%"
         }
       }
     }
@@ -3264,7 +3449,7 @@
     "package": "tsc -p ./ && node scripts/package-dist.js",
     "dist": "node scripts/dist.js",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/longProject.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

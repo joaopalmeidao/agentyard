@@ -41,9 +41,15 @@ check('instrumentCommand põe --settings logo depois do claude', () => {
 
 check('hookSettings: um hook por evento, matcher só nos de ferramenta', () => {
   const s = hookSettings(dir);
-  assert.deepStrictEqual(Object.keys(s.hooks).sort(), ['Notification', 'PostToolUse', 'SessionEnd', 'SessionStart', 'Stop', 'UserPromptSubmit']);
+  assert.deepStrictEqual(Object.keys(s.hooks).sort(), ['Notification', 'PostToolUse', 'PreCompact', 'SessionEnd', 'SessionStart', 'Stop', 'UserPromptSubmit']);
   assert.strictEqual(s.hooks.PostToolUse[0].matcher, '*');
   assert.strictEqual(s.hooks.Stop[0].matcher, undefined);
+  // projetos longos: segundo hook só em SessionStart, UserPromptSubmit e Stop (este com timeout longo)
+  assert.strictEqual(s.hooks.Stop[0].hooks.length, 2);
+  assert.ok(s.hooks.Stop[0].hooks[1].timeout >= 600);
+  assert.ok(s.hooks.Stop[0].hooks[1].command.includes('.project'));
+  assert.strictEqual(s.hooks.PostToolUse[0].hooks.length, 1);
+  assert.strictEqual(s.hooks.SessionStart[0].hooks.length, 2);
   assert.ok(!hookCommand('C:\\x\\y').includes('\\'), 'caminho com barras normais para o bash');
 });
 
@@ -54,6 +60,7 @@ check('writeHookSettings só regrava quando muda', () => {
   writeHookSettings(dir);
   assert.strictEqual(fs.statSync(f).mtimeMs, 0);
   assert.ok(m > 0 && JSON.parse(fs.readFileSync(f, 'utf8')).hooks.Stop);
+  assert.ok(fs.readFileSync(path.join(dir, 'project-hook.sh'), 'utf8').includes('MAX_RETRIES'));
 });
 
 check('parseEvents: linhas inteiras, sobra incompleta volta', () => {

@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
-import { AgentState, EventTail, instrumentCommand, isClaudeCommand, nextState, pruneEvents, writeHookSettings } from './claude/hooks';
+import { AGENT_FILE_SUFFIXES, AgentState, EventTail, HookEvent, instrumentCommand, isClaudeCommand, nextState, pruneEvents, writeHookSettings } from './claude/hooks';
 import { t } from './i18n';
 
 export interface AgentConfig {
@@ -59,6 +59,8 @@ export interface AgentLaunch {
   terminal: vscode.Terminal;
   agent: string;
   prompt?: string;
+  /** Aberto por um projeto longo (chave do projeto): o projeto cuida do "terminou". */
+  project?: string;
 }
 
 /** Um terminal de agente aberto pela extensão. */
@@ -81,6 +83,13 @@ export interface OpenAgent {
   message?: string;
   /** Sessão do Claude Code deste terminal (vem do hook SessionStart). */
   sessionId?: string;
+  /** Projeto longo que abriu este terminal (chave do projeto). */
+  project?: string;
+}
+
+export interface AgentHookEvent {
+  open: OpenAgent;
+  event: HookEvent;
 }
 
 export interface AgentStateChange {
@@ -92,6 +101,10 @@ export interface StartOptions {
   task?: boolean;
   prompt?: string;
   name?: string;
+  /** Id do terminal (nome dos arquivos dos hooks), quando quem abre precisa gravar algo antes. */
+  id?: string;
+  /** Projeto longo que abre o terminal. */
+  project?: string;
 }
 
 /** Nomes repetidos viram "Claude Code ×2". */
@@ -162,7 +175,10 @@ export class AgentTerminals implements vscode.Disposable {
   private readonly stateChanged = new vscode.EventEmitter<AgentStateChange>();
   /** Um Claude mudou de estado. */
   readonly onDidChangeState = this.stateChanged.event;
-  private readonly disposables: vscode.Disposable[] = [this.launched, this.changed, this.stateChanged];
+  private readonly hookEvent = new vscode.EventEmitter<AgentHookEvent>();
+  /** Cada evento dos hooks de um Claude, na ordem em que chegou. */
+  readonly onDidHookEvent = this.hookEvent.event;
+  private readonly disposables: vscode.Disposable[] = [this.launched, this.changed, this.stateChanged, this.hookEvent];
   private readonly tails = new Map<string, EventTail>();
   private readonly pending = new Map<string, { text: string; submit: boolean }>();
   private watcher?: fs.FSWatcher;
@@ -207,6 +223,7 @@ export class AgentTerminals implements vscode.Disposable {
       id,
       task: env.WTGRAPH_TASK === '1',
       claude: env.WTGRAPH_CLAUDE === '1',
+      project: env.WTGRAPH_PROJECT || undefined,
     };
     this.open.push(o);
     if (env.WTGRAPH_HOOKS === '1') {
@@ -289,6 +306,7 @@ export class AgentTerminals implements vscode.Disposable {
       o.state = nextState(o.state ?? 'starting', e);
       if (e.session_id) o.sessionId = e.session_id;
       if (e.hook_event_name === 'Notification' && o.state === 'waiting') o.message = e.message;
+      this.hookEvent.fire({ open: o, event: e });
     }
     if (o.state !== 'waiting') o.message = undefined;
     if (o.state === previous) {
@@ -304,10 +322,12 @@ export class AgentTerminals implements vscode.Disposable {
   private forget(o: OpenAgent) {
     this.pending.delete(o.id);
     if (this.tails.delete(o.id)) {
-      try {
-        fs.unlinkSync(path.join(this.eventsDir(), `${o.id}.jsonl`));
-      } catch {
-        // o hook nunca escreveu, ou já foi apagado
+      for (const suffix of AGENT_FILE_SUFFIXES) {
+        try {
+          fs.unlinkSync(path.join(this.eventsDir(), `${o.id}${suffix}`));
+        } catch {
+          // o hook nunca escreveu, ou já foi apagado
+        }
       }
     }
     if (!this.tails.size) this.stopWatcher();
@@ -405,7 +425,7 @@ export class AgentTerminals implements vscode.Disposable {
    * Code ganham os hooks de estado (`claude.trackState`).
    */
   async start(worktreePath: string, branch: string | undefined, agent: string, command: string, opts: StartOptions = {}): Promise<OpenAgent> {
-    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = opts.id ?? newAgentId();
     const claude = isClaudeCommand(command);
     let hooks = false;
     if (claude && this.ctl.cfg().get<boolean>('claude.trackState', true)) {
@@ -422,14 +442,15 @@ export class AgentTerminals implements vscode.Disposable {
       WTGRAPH_TASK: opts.task ? '1' : '',
       WTGRAPH_CLAUDE: claude ? '1' : '',
       WTGRAPH_HOOKS: hooks ? '1' : '',
+      WTGRAPH_PROJECT: opts.project ?? '',
     });
-    const o: OpenAgent = { terminal, path: worktreePath, branch, agent, started: Date.now(), id, task: opts.task, claude, state: hooks ? 'starting' : undefined };
+    const o: OpenAgent = { terminal, path: worktreePath, branch, agent, started: Date.now(), id, task: opts.task, claude, state: hooks ? 'starting' : undefined, project: opts.project };
     this.open.push(o);
     if (hooks) this.watchEvents(o);
     this.changed.fire();
     terminal.show();
     terminal.sendText(command);
-    this.launched.fire({ path: worktreePath, branch, terminal, agent, prompt: opts.prompt });
+    this.launched.fire({ path: worktreePath, branch, terminal, agent, prompt: opts.prompt, project: opts.project });
     this.ctl.scheduleRefresh(50);
     return o;
   }
@@ -522,6 +543,11 @@ export class AgentTerminals implements vscode.Disposable {
     this.stopWatcher();
     this.disposables.forEach(d => d.dispose());
   }
+}
+
+/** Id novo de terminal de agente (nome dos arquivos dos hooks). */
+export function newAgentId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /** Terminais agrupados por worktree, na ordem em que cada worktree apareceu. */
