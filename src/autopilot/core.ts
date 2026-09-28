@@ -193,6 +193,74 @@ export function parseJudge(text: string, letters: string[]): JudgeResult | undef
   return { ranking, reasons, recommendation };
 }
 
+// ---------------------------------------------------------------- lições
+
+/** Mensagens que a pessoa digitou numa transcrição do Claude Code (JSONL), sem resultados de ferramenta. */
+export function userMessages(jsonl: string, max = 40): string[] {
+  const out: string[] = [];
+  for (const line of jsonl.split(/\r?\n/)) {
+    if (!line.includes('"user"')) continue;
+    let e: any;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (e?.type !== 'user' || e.isMeta || e.isSidechain) continue;
+    const c = e.message?.content;
+    const text = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((p: any) => p?.type === 'text').map((p: any) => String(p.text ?? '')).join('\n') : '';
+    const clean = text.trim();
+    // comandos internos e avisos do próprio Claude Code não são o que a pessoa pediu
+    if (!clean || /^<(command-|local-command|system-reminder|user-memory)/.test(clean) || clean.startsWith('Caveat:')) continue;
+    out.push(clean.length > 1500 ? `${clean.slice(0, 1500)}…` : clean);
+  }
+  return out.slice(-max);
+}
+
+export interface LessonsInput {
+  branch: string;
+  /** Mensagens da pessoa, por sessão (a primeira costuma ser a tarefa; as outras, correções). */
+  sessions: string[][];
+  interventions: string[];
+  review?: string[];
+  claudeMd: string;
+  diffStat: string;
+}
+
+export function lessonsPrompt(o: LessonsInput): string {
+  return [
+    `A coding agent worked on branch ${o.branch}. Find what should be written down for the next agents working on this repository, so the same corrections are not needed again.`,
+    'Look at what the person had to tell the agent after the initial task (corrections, rules, preferences, things the agent got wrong), the interventions and the review findings.',
+    'Only keep lessons that are durable and general for this repository (conventions, commands, architecture rules, pitfalls). Skip one-off details of this task and anything already in CLAUDE.md.',
+    ...o.sessions.map((msgs, i) => `=== Session ${i + 1}: messages from the person\n${msgs.map((m, j) => `[${j + 1}] ${m}`).join('\n')}`),
+    o.interventions.length ? `=== Interventions\n${o.interventions.map(x => `- ${x}`).join('\n')}` : '',
+    o.review?.length ? `=== Automatic review findings\n${o.review.map(x => `- ${x}`).join('\n')}` : '',
+    `=== Files changed\n${o.diffStat || '(none)'}`,
+    `=== Current CLAUDE.md\n${o.claudeMd.trim() || '(does not exist)'}`,
+    'Answer in this exact format and nothing else:',
+    'LESSONS:',
+    '- <lesson, one line each; "(none)" if there is nothing worth keeping>',
+    'CLAUDE_MD:',
+    '<the markdown to APPEND to CLAUDE.md, short and imperative, matching its style and language; empty if nothing>',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function parseLessons(text: string): { lessons: string[]; append: string } {
+  const [head, tailPart = ''] = text.split(/^CLAUDE_MD:\s*$/m);
+  const lessons = (head.split(/LESSONS:\s*/i)[1] ?? '')
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => /^[-*]\s+\S/.test(l))
+    .map(l => l.replace(/^[-*]\s+/, ''))
+    .filter(l => !/^\(?none\)?\.?$/i.test(l));
+  let append = tailPart.trim();
+  const fence = append.match(/^```(?:markdown|md)?\n([\s\S]*?)\n```$/);
+  if (fence) append = fence[1].trim();
+  return { lessons, append: lessons.length ? append : '' };
+}
+
 // ---------------------------------------------------------------- agente travado
 
 export interface StuckTracker {

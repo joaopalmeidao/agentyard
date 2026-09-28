@@ -1586,6 +1586,11 @@
         "command": "worktreeGraph.orchestrator.show",
         "title": "%command.orchestrator.show.title%",
         "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.claude.lessons",
+        "title": "%command.claude.lessons.title%",
+        "category": "AgentYard"
       }
     ],
     "submenus": [
@@ -3279,6 +3284,11 @@
           "command": "worktreeGraph.board.release",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "2_status@2"
+        },
+        {
+          "command": "worktreeGraph.claude.lessons",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_claude@1"
         }
       ],
       "worktreeGraph.wt.open": [

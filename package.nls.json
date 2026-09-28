@@ -478,5 +478,6 @@
   "config.tasks.pauseAtUsage.description": "Task queue and schedules wait when the estimated Claude usage of the 5 h window or of the week reaches this percentage of the budget (claude.sessionBudgetTokens, claude.weeklyBudgetTokens), and start on their own when the window resets. 0 turns it off; without a budget, it never pauses.",
   "config.orchestrator.model.description": "Model of the Claude that splits a task among agents (e.g. opus). Empty: Claude Code's default model.",
   "command.orchestrator.start.title": "✦ Split a task among agents…",
-  "command.orchestrator.show.title": "Tasks split among agents…"
+  "command.orchestrator.show.title": "Tasks split among agents…",
+  "command.claude.lessons.title": "✦ Learn from this worktree's sessions (CLAUDE.md)…"
 }

@@ -168,6 +168,26 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.match(prompt, /post_note/);
   });
 
+  await check('lições: mensagens da pessoa na transcrição e leitura da resposta', () => {
+    const lines = [
+      { type: 'user', message: { role: 'user', content: 'Implemente o login' } },
+      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'feito' }] } },
+      { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'saída' }] } },
+      { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'não use any, use os tipos do zod' }] } },
+      { type: 'user', isMeta: true, message: { role: 'user', content: 'meta' } },
+      { type: 'user', message: { role: 'user', content: '<command-name>/clear</command-name>' } },
+      'linha quebrada {',
+    ].map(x => (typeof x === 'string' ? x : JSON.stringify(x)));
+    assert.deepStrictEqual(A.userMessages(lines.join('\n')), ['Implemente o login', 'não use any, use os tipos do zod']);
+    const p = A.lessonsPrompt({ branch: 'ai/x', sessions: [['a', 'b']], interventions: ['1 negado'], review: ['bug'], claudeMd: '# Regras', diffStat: 'x | 1 +' });
+    assert.match(p, /\[2\] b/);
+    assert.match(p, /# Regras/);
+    const r = A.parseLessons('LESSONS:\n- use zod\n- rode npm test\nCLAUDE_MD:\n```markdown\n- Use zod.\n```');
+    assert.deepStrictEqual(r.lessons, ['use zod', 'rode npm test']);
+    assert.strictEqual(r.append, '- Use zod.');
+    assert.deepStrictEqual(A.parseLessons('LESSONS:\n- (none)\nCLAUDE_MD:\nqualquer'), { lessons: [], append: '' });
+  });
+
   await check('glob das reservas: pasta, *, ** e ?', () => {
     assert.ok(B.matches('src/auth', 'src/auth/login.ts'));
     assert.ok(B.matches('src/auth/**', 'src/auth/a/b.ts'));

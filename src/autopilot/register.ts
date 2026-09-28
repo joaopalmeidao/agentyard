@@ -3,12 +3,14 @@ import type { AgentTerminals } from '../agents';
 import type { AgentFlow } from '../agentFlow/register';
 import type { ClaudeBridge } from '../bridge/register';
 import type { ClaudeIntegration } from '../claude/integration';
+import type { ClaudeService } from '../claude/view';
 import type { Controller } from '../controller';
 import type { Coord } from '../coord/register';
 import { keyOf } from '../agentFlow/head';
 import { t } from '../i18n';
 import type { WorktreeView } from '../model';
 import { AgentBoard } from './boardService';
+import { Lessons } from './lessons';
 import { Orchestrator } from './orchestrator';
 import { AutoReviewer } from './reviewer';
 import { StopGate } from './stopGate';
@@ -20,6 +22,7 @@ interface Deps {
   bridge: ClaudeBridge;
   integration: ClaudeIntegration;
   coord: Coord;
+  claude: ClaudeService;
 }
 
 type WtArg = { path?: string; wtPath?: string; branch?: string } | string | undefined;
@@ -83,6 +86,12 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
   ctx.subscriptions.push(orchestrator);
   reg('orchestrator.start', (task?: string) => orchestrator.start(typeof task === 'string' ? task : undefined));
   reg('orchestrator.show', () => orchestrator.show());
+
+  const lessons = new Lessons(ctl, d.claude, d.integration, reviewer);
+  reg('claude.lessons', async (arg?: WtArg) => {
+    const w = await worktreeOf(ctl, arg, t('Learn from the sessions of which worktree?'));
+    if (w) await lessons.run(w);
+  });
 
   return { gate, reviewer, board, orchestrator };
 }

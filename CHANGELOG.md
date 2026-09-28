@@ -1,6 +1,11 @@
 # Changelog
 
 ## Não lançado
+- **✦ Aprender com as sessões desta worktree (CLAUDE.md)…** (menu Agente da worktree): um Claude sem
+  terminal lê o que você precisou dizer ao agente depois da tarefa (correções, regras, preferências), as
+  intervenções e a revisão automática, e propõe o que acrescentar ao `CLAUDE.md` para os próximos
+  agentes não precisarem das mesmas correções. Você vê as lições e o texto antes, pode editar, e ele
+  entra no `CLAUDE.md` da worktree para ir junto com a branch.
 - **✦ Dividir uma tarefa entre agentes**: um Claude sem terminal lê o código e divide a tarefa em partes
   com dependências; você confere o plano e desmarca o que não quiser. Cada parte ganha a sua worktree, o
   seu agente e os arquivos dela reservados no mural: as independentes começam juntas (até

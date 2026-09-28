@@ -2375,5 +2375,18 @@
   "Try {0} again": "Tentar {0} de novo",
   "Add the ready parts to the merge queue": "Pôr as partes prontas na fila de merge",
   "Start what can start now": "Começar o que já pode começar",
-  "Forget this plan (worktrees stay)": "Esquecer este plano (as worktrees ficam)"
+  "Forget this plan (worktrees stay)": "Esquecer este plano (as worktrees ficam)",
+  "No corrections in the Claude sessions of {0}: nothing to learn from yet.": "Nenhuma correção nas sessões do Claude de {0}: nada para aprender ainda.",
+  "Claude is reading the sessions of {0}…": "O Claude está lendo as sessões de {0}…",
+  "Could not extract the lessons: {0}": "Não deu para tirar as lições: {0}",
+  "Nothing new worth adding to CLAUDE.md from {0}.": "Nada novo que valha pôr no CLAUDE.md a partir de {0}.",
+  "Lessons from {0}": "Lições de {0}",
+  "To append to CLAUDE.md": "Para acrescentar ao CLAUDE.md",
+  "Append to CLAUDE.md of {0}": "Acrescentar ao CLAUDE.md de {0}",
+  "Edit before": "Editar antes",
+  "{0} lesson(s) from {1}.": "{0} lição(ões) de {1}.",
+  "Append this text": "Acrescentar este texto",
+  "Edit the text in the editor and click \"{0}\".": "Edite o texto no editor e clique em \"{0}\".",
+  "CLAUDE.md of {0} updated: commit it with the branch so the next agents get it.": "CLAUDE.md de {0} atualizado: commite junto com a branch para os próximos agentes receberem.",
+  "Learn from the sessions of which worktree?": "Aprender com as sessões de qual worktree?"
 }
