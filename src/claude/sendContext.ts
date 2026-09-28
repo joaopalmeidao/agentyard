@@ -25,33 +25,44 @@ export function selectionLines(sel: { start: { line: number }; end: { line: numb
  * worktree do arquivo, sem apertar Enter, para você completar a mensagem. Sem Claude ali, oferece
  * os de outras worktrees ou abrir um novo.
  */
+/** Worktree (a mais funda) que contém o arquivo. */
+export function worktreeOfFile(ctl: Controller, file: string) {
+  return ctl.state?.worktrees
+    .filter(w => !w.prunable && !w.bare && (file.toLowerCase() + path.sep).startsWith(w.path.toLowerCase() + path.sep))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+}
+
+/**
+ * Claude que recebe o texto: o único aberto na worktree; senão pergunta entre os dessa worktree,
+ * os das outras, ou abrir um novo nela.
+ */
+export async function pickClaude(
+  ctl: Controller,
+  agentTerms: AgentTerminals,
+  wt: { path: string; branch?: string; name: string } | undefined,
+  placeHolder = t('Send to which Claude?'),
+): Promise<OpenAgent | undefined> {
+  const here = wt ? agentTerms.claudeIn(wt.path) : [];
+  if (here.length === 1) return here[0];
+  const others = agentTerms.claudeIn().filter(o => !here.includes(o));
+  type Item = vscode.QuickPickItem & { o?: OpenAgent; open?: boolean };
+  const items: Item[] = [
+    ...here.map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: agentTerms.describe(o), o })),
+    ...(wt && !here.length ? [{ label: `$(add) ${t('Open a Claude in {0}', wt.name)}`, open: true }] : []),
+    ...(others.length ? [{ label: t('Other worktrees'), kind: vscode.QuickPickItemKind.Separator } as Item] : []),
+    ...others.map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: agentTerms.describe(o), o })),
+  ];
+  if (!items.length) {
+    vscode.window.showInformationMessage(t('No Claude Code open by AgentYard. Open one from the panel or the status bar.'));
+    return undefined;
+  }
+  if (items.length === 1 && items[0].open && wt) return agentTerms.start(wt.path, wt.branch, claudeAgentName(ctl), 'claude');
+  const pick = await vscode.window.showQuickPick(items, { placeHolder });
+  if (pick?.open && wt) return agentTerms.start(wt.path, wt.branch, claudeAgentName(ctl), 'claude');
+  return pick?.o;
+}
+
 export function registerSendToClaude(ctx: vscode.ExtensionContext, ctl: Controller, agentTerms: AgentTerminals) {
-  const worktreeOf = (file: string) =>
-    ctl.state?.worktrees
-      .filter(w => !w.prunable && !w.bare && (file.toLowerCase() + path.sep).startsWith(w.path.toLowerCase() + path.sep))
-      .sort((a, b) => b.path.length - a.path.length)[0];
-
-  const pickTarget = async (wt: { path: string; branch?: string; name: string } | undefined): Promise<OpenAgent | undefined> => {
-    const here = wt ? agentTerms.claudeIn(wt.path) : [];
-    if (here.length === 1) return here[0];
-    const others = agentTerms.claudeIn().filter(o => !here.includes(o));
-    type Item = vscode.QuickPickItem & { o?: OpenAgent; open?: boolean };
-    const items: Item[] = [
-      ...here.map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: agentTerms.describe(o), o })),
-      ...(wt && !here.length ? [{ label: `$(add) ${t('Open a Claude in {0}', wt.name)}`, open: true }] : []),
-      ...(others.length ? [{ label: t('Other worktrees'), kind: vscode.QuickPickItemKind.Separator } as Item] : []),
-      ...others.map(o => ({ label: `$(terminal) ${o.terminal.name}`, description: agentTerms.describe(o), o })),
-    ];
-    if (!items.length) {
-      vscode.window.showInformationMessage(t('No Claude Code open by AgentYard. Open one from the panel or the status bar.'));
-      return undefined;
-    }
-    if (items.length === 1 && items[0].open && wt) return agentTerms.start(wt.path, wt.branch, claudeAgentName(ctl), 'claude');
-    const pick = await vscode.window.showQuickPick(items, { placeHolder: t('Send to which Claude?') });
-    if (pick?.open && wt) return agentTerms.start(wt.path, wt.branch, claudeAgentName(ctl), 'claude');
-    return pick?.o;
-  };
-
   ctx.subscriptions.push(
     vscode.commands.registerCommand('worktreeGraph.claude.sendSelection', async (uri?: vscode.Uri, uris?: unknown) => {
       const editor = vscode.window.activeTextEditor;
@@ -66,7 +77,7 @@ export function registerSendToClaude(ctx: vscode.ExtensionContext, ctl: Controll
       // pelo editor: as linhas selecionadas; pelo Explorer: o arquivo inteiro
       const inEditor = !fromExplorer && files.length === 1 && editor?.document.uri.fsPath === files[0];
       const lines = inEditor ? selectionLines(editor!.selection) : undefined;
-      const target = await pickTarget(worktreeOf(files[0]));
+      const target = await pickClaude(ctl, agentTerms, worktreeOfFile(ctl, files[0]));
       if (!target) return;
       const text = files.map(f => mentionOf(f, target.path, lines)).join(' ') + ' ';
       await agentTerms.type(target, text, false);

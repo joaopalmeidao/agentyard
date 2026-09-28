@@ -34,6 +34,7 @@ import { AutoSync } from './sync';
 import { registerClaudeConfig } from './claude/configView';
 import { registerAgentAttention } from './claude/attention';
 import { registerSendToClaude } from './claude/sendContext';
+import { registerClaudeVoice } from './claude/voice';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
 import { t } from './i18n';
@@ -82,6 +83,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
   registerAgentAttention(ctx, ctl, agentTerms);
   registerSendToClaude(ctx, ctl, agentTerms);
+  registerClaudeVoice(ctx, ctl, agentTerms);
   /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */
   const claudeTarget = async (arg?: { path?: string; wtPath?: string; branch?: string }): Promise<{ cwd: string; label: string } | undefined> => {
     const p = arg?.wtPath ?? arg?.path;

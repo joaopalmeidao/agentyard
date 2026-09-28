@@ -1870,5 +1870,11 @@
   "No Claude Code open by AgentYard. Open one from the panel or the status bar.": "Nenhum Claude Code aberto pelo AgentYard. Abra um pelo painel ou pela barra de status.",
   "Send to which Claude?": "Enviar para qual Claude?",
   "Open a file (or select one in the Explorer) to send it to Claude.": "Abra um arquivo (ou selecione um no Explorer) para enviar ao Claude.",
-  "Open in the terminal **{0}**: \"Resume\" brings it to the front.": "Aberta no terminal **{0}**: \"Retomar\" traz ele para frente."
+  "Open in the terminal **{0}**: \"Resume\" brings it to the front.": "Aberta no terminal **{0}**: \"Retomar\" traz ele para frente.",
+  "Talk to which Claude?": "Falar com qual Claude?",
+  "Install VS Code Speech": "Instalar VS Code Speech",
+  "Type instead": "Digitar",
+  "Voice dictation uses the VS Code Speech extension (recognition runs on your machine; the audio is not sent anywhere).": "O ditado por voz usa a extensão VS Code Speech (o reconhecimento roda na sua máquina; o áudio não vai para lugar nenhum).",
+  "Message to {0}": "Mensagem para {0}",
+  "Could not start voice dictation: {0}": "Não deu para começar o ditado por voz: {0}"
 }

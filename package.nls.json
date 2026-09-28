@@ -327,5 +327,8 @@
   "config.claude.notify.description": "Notifications from the Claude Code instances opened by AgentYard.",
   "config.claude.notify.enumDescriptions.0": "When one needs you (permission request or question).",
   "config.claude.notify.enumDescriptions.1": "Also when one finishes its turn.",
-  "config.claude.notify.enumDescriptions.2": "No notifications (the status bar and the panel still show the state)."
+  "config.claude.notify.enumDescriptions.2": "No notifications (the status bar and the panel still show the state).",
+  "command.claude.voice.title": "Talk to Claude (Voice)",
+  "command.claude.voiceStop.title": "Stop Dictation and Send to Claude",
+  "config.claude.voiceSubmit.markdownDescription": "When you stop the dictation with the shortcut (`Ctrl+Alt+M`, the same one that starts it), press Enter to send the message to Claude. Off: the text stays in the terminal for you to review."
 }

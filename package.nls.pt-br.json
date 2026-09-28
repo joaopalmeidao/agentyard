@@ -327,5 +327,8 @@
   "config.claude.notify.description": "Notificações dos Claude Code abertos pelo AgentYard.",
   "config.claude.notify.enumDescriptions.0": "Quando um precisa de você (pedido de permissão ou pergunta).",
   "config.claude.notify.enumDescriptions.1": "Também quando um termina o turno.",
-  "config.claude.notify.enumDescriptions.2": "Sem notificações (a barra de status e o painel continuam mostrando o estado)."
+  "config.claude.notify.enumDescriptions.2": "Sem notificações (a barra de status e o painel continuam mostrando o estado).",
+  "command.claude.voice.title": "Falar com o Claude (voz)",
+  "command.claude.voiceStop.title": "Parar o ditado e enviar ao Claude",
+  "config.claude.voiceSubmit.markdownDescription": "Ao parar o ditado pelo atalho (`Ctrl+Alt+M`, o mesmo que começa), apertar Enter para enviar a mensagem ao Claude. Desligado: o texto fica no terminal para você revisar."
 }

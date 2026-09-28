@@ -326,15 +326,7 @@ export class AgentTerminals implements vscode.Disposable {
    * a sessão começar.
    */
   async type(o: OpenAgent, text: string, submit: boolean): Promise<boolean> {
-    if (o.state === 'waiting') {
-      const go = t('Send anyway');
-      const pick = await vscode.window.showWarningMessage(
-        t('{0} in {1} is waiting for your answer: what you send now goes to that question.', o.agent, o.branch ?? path.basename(o.path)),
-        { modal: true, detail: o.message },
-        go,
-      );
-      if (pick !== go) return false;
-    }
+    if (!(await this.confirmIfWaiting(o))) return false;
     o.terminal.show();
     if (o.state === 'starting') {
       const prev = this.pending.get(o.id);
@@ -350,6 +342,18 @@ export class AgentTerminals implements vscode.Disposable {
     }
     o.terminal.sendText(text, submit);
     return true;
+  }
+
+  /** Com o Claude esperando uma resposta, o que for digitado responde o pedido: confirma antes. */
+  async confirmIfWaiting(o: OpenAgent): Promise<boolean> {
+    if (o.state !== 'waiting') return true;
+    const go = t('Send anyway');
+    const pick = await vscode.window.showWarningMessage(
+      t('{0} in {1} is waiting for your answer: what you send now goes to that question.', o.agent, o.branch ?? path.basename(o.path)),
+      { modal: true, detail: o.message },
+      go,
+    );
+    return pick === go;
   }
 
   private flushPending(o: OpenAgent) {
