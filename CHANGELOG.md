@@ -1,6 +1,14 @@
 # Changelog
 
 ## Não lançado
+- **✦ Dividir uma tarefa entre agentes**: um Claude sem terminal lê o código e divide a tarefa em partes
+  com dependências; você confere o plano e desmarca o que não quiser. Cada parte ganha a sua worktree, o
+  seu agente e os arquivos dela reservados no mural: as independentes começam juntas (até
+  `batch.maxParallel`), e uma parte que depende de outras começa quando elas ficam prontas, empilhada
+  sobre a primeira e com as outras mescladas. Cada agente sabe o que os outros estão fazendo. No fim,
+  **Pôr todas na fila de merge** manda as branches na ordem das dependências. **Tarefas divididas entre
+  agentes…** mostra o andamento e permite tentar de novo uma parte que não terminou
+  (`orchestrator.model`).
 - **⚖ Julgar as tentativas**: no painel *Comparar tentativas*, roda os testes de cada tentativa e pede a
   um Claude sem terminal que compare os diffs e as ordene. Cada coluna ganha a colocação (🥇🥈🥉) e o
   motivo, e o topo traz a recomendação (qual manter e o que trazer das outras). Os testes das

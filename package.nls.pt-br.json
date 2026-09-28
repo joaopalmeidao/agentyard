@@ -475,5 +475,8 @@
   "command.board.show.title": "Mural dos agentes (notas e arquivos reservados)",
   "command.board.post.title": "Nota para todos os agentes…",
   "command.board.release.title": "Soltar as reservas de arquivos",
-  "config.tasks.pauseAtUsage.description": "A fila de tarefas e os agendamentos esperam quando o uso estimado do Claude na janela de 5 h ou na semana chega a esta porcentagem do orçamento (claude.sessionBudgetTokens, claude.weeklyBudgetTokens), e saem sozinhos quando a janela vira. 0 desliga; sem orçamento, nunca pausa."
+  "config.tasks.pauseAtUsage.description": "A fila de tarefas e os agendamentos esperam quando o uso estimado do Claude na janela de 5 h ou na semana chega a esta porcentagem do orçamento (claude.sessionBudgetTokens, claude.weeklyBudgetTokens), e saem sozinhos quando a janela vira. 0 desliga; sem orçamento, nunca pausa.",
+  "config.orchestrator.model.description": "Modelo do Claude que divide uma tarefa entre agentes (ex.: opus). Vazio: o modelo padrão do Claude Code.",
+  "command.orchestrator.start.title": "✦ Dividir uma tarefa entre agentes…",
+  "command.orchestrator.show.title": "Tarefas divididas entre agentes…"
 }

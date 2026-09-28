@@ -174,6 +174,13 @@ export class AgentBoard implements vscode.Disposable {
     await vscode.commands.executeCommand('markdown.showPreview', doc.uri).then(undefined, () => vscode.window.showTextDocument(doc));
   }
 
+  /** Reserva arquivos para uma worktree (o orquestrador, ao começar uma subtarefa). */
+  claimFor(worktree: string, branch: string, patterns: string[], note?: string) {
+    const f = this.file();
+    if (!f || !patterns.length) return;
+    updateBoard(f, b => claim(b, { worktree, branch, patterns, note, now: Date.now(), hours: 24 }));
+  }
+
   async releaseFor(worktree: string) {
     const f = this.file();
     if (!f) return;

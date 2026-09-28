@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const A = require('../out/autopilot/core');
 const B = require('../out/autopilot/board');
+const P = require('../out/autopilot/plan');
 
 let failures = 0;
 const check = async (name, fn) => {
@@ -122,6 +123,49 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.strictEqual(r.reasons.A, 'simples');
     assert.strictEqual(r.recommendation, 'fique com B.');
     assert.strictEqual(A.parseJudge('sem formato', ['A', 'B']), undefined);
+  });
+
+  await check('plano: JSON com cerca, ids, branches únicas, dependências e ciclo', () => {
+    const text = 'Aqui está:\n```json\n' + JSON.stringify({
+      title: 'Pagamentos',
+      subtasks: [
+        { id: 'API', title: 'API de pagamento', branch: 'ai/pay-api', task: 'criar a API', files: ['src/api/**'] },
+        { id: 'ui', title: 'Tela', branch: 'ai/pay-api', task: 'criar a tela', dependsOn: ['api', 'nao-existe'] },
+        { id: 'docs', title: 'Docs', branch: 'feat bad name', task: 'documentar', dependsOn: ['docs'] },
+      ],
+    }) + '\n```';
+    const p = P.normalizePlan(P.extractJson(text), 'ai/', new Set(['ai/tela']));
+    assert.strictEqual(p.title, 'Pagamentos');
+    assert.deepStrictEqual(p.subtasks.map(s => s.id), ['api', 'ui', 'docs']);
+    assert.deepStrictEqual(p.subtasks.map(s => s.branch), ['ai/pay-api', 'ai/pay-api-2', 'ai/docs']);
+    assert.deepStrictEqual(p.subtasks[1].dependsOn, ['api']);
+    assert.deepStrictEqual(p.subtasks[2].dependsOn, [], 'depender de si mesma sai');
+    assert.deepStrictEqual(p.subtasks[0].files, ['src/api/**']);
+    assert.throws(() => P.normalizePlan({ subtasks: [{ id: 'a', task: 'x', dependsOn: ['b'] }, { id: 'b', task: 'y', dependsOn: ['a'] }] }, 'ai/', new Set()), /cycle/);
+    assert.throws(() => P.normalizePlan({ subtasks: [] }, 'ai/', new Set()), /no subtasks/);
+    assert.throws(() => P.normalizePlan({ subtasks: [{ id: 'a' }] }, 'ai/', new Set()), /no instructions/);
+    assert.throws(() => P.extractJson('nada'), /no JSON/);
+  });
+
+  await check('plano: o que começa, empilhamento, bloqueio e ordem da fila', () => {
+    const s = (id, deps = [], status = 'waiting') => ({ id, title: id, branch: `ai/${id}`, task: id, dependsOn: deps, files: [], status });
+    const o = { id: '1', title: 'x', task: 'x', base: 'main', created: 0, subtasks: [s('ui', ['api', 'db']), s('api'), s('db'), s('docs')] };
+    assert.deepStrictEqual(P.startable(o, 2).map(x => x.id), ['api', 'db']);
+    o.subtasks[1].status = 'running';
+    assert.deepStrictEqual(P.startable(o, 2).map(x => x.id), ['db']);
+    o.subtasks[1].status = 'ready';
+    o.subtasks[2].status = 'ready';
+    assert.deepStrictEqual(P.startable(o, 3).map(x => x.id), ['ui', 'docs']);
+    assert.deepStrictEqual(P.startPoint(o, o.subtasks[0]), { from: 'ai/api', merge: ['ai/db'] });
+    assert.deepStrictEqual(P.startPoint(o, o.subtasks[3]), { from: 'main', merge: [] });
+    assert.deepStrictEqual(P.topoOrder(o.subtasks).map(x => x.id), ['api', 'db', 'ui', 'docs']);
+    o.subtasks[1].status = 'failed';
+    assert.deepStrictEqual(P.blockedBy(o).map(x => x.id), ['ui']);
+    assert.strictEqual(P.finished(o), false);
+    const prompt = P.subtaskPrompt(o, o.subtasks[0]);
+    assert.match(prompt, /YOUR PART \(ui\)/);
+    assert.match(prompt, /already contains the work of: ai\/api/);
+    assert.match(prompt, /post_note/);
   });
 
   await check('glob das reservas: pasta, *, ** e ?', () => {

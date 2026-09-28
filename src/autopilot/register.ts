@@ -4,10 +4,12 @@ import type { AgentFlow } from '../agentFlow/register';
 import type { ClaudeBridge } from '../bridge/register';
 import type { ClaudeIntegration } from '../claude/integration';
 import type { Controller } from '../controller';
+import type { Coord } from '../coord/register';
 import { keyOf } from '../agentFlow/head';
 import { t } from '../i18n';
 import type { WorktreeView } from '../model';
 import { AgentBoard } from './boardService';
+import { Orchestrator } from './orchestrator';
 import { AutoReviewer } from './reviewer';
 import { StopGate } from './stopGate';
 import { StuckWatch } from './stuck';
@@ -17,6 +19,7 @@ interface Deps {
   agentFlow: AgentFlow;
   bridge: ClaudeBridge;
   integration: ClaudeIntegration;
+  coord: Coord;
 }
 
 type WtArg = { path?: string; wtPath?: string; branch?: string } | string | undefined;
@@ -39,6 +42,7 @@ export interface Autopilot {
   gate: StopGate;
   reviewer: AutoReviewer;
   board: AgentBoard;
+  orchestrator: Orchestrator;
 }
 
 /**
@@ -75,5 +79,10 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
     if (w) await board.releaseFor(w.path);
   });
 
-  return { gate, reviewer, board };
+  const orchestrator = new Orchestrator(ctl, d.agentFlow, d.agentTerms, board, d.coord);
+  ctx.subscriptions.push(orchestrator);
+  reg('orchestrator.start', (task?: string) => orchestrator.start(typeof task === 'string' ? task : undefined));
+  reg('orchestrator.show', () => orchestrator.show());
+
+  return { gate, reviewer, board, orchestrator };
 }

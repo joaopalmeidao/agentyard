@@ -1575,6 +1575,17 @@
         "command": "worktreeGraph.board.release",
         "title": "%command.board.release.title%",
         "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.orchestrator.start",
+        "title": "%command.orchestrator.start.title%",
+        "category": "AgentYard",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "worktreeGraph.orchestrator.show",
+        "title": "%command.orchestrator.show.title%",
+        "category": "AgentYard"
       }
     ],
     "submenus": [
@@ -1995,6 +2006,21 @@
           "command": "worktreeGraph.board.show",
           "when": "view == worktreeGraph.agents",
           "group": "7_autopilot@3"
+        },
+        {
+          "command": "worktreeGraph.orchestrator.start",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@0"
+        },
+        {
+          "command": "worktreeGraph.orchestrator.show",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@4"
+        },
+        {
+          "command": "worktreeGraph.orchestrator.start",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "5_claude"
         }
       ],
       "view/item/context": [
@@ -4482,6 +4508,11 @@
           "default": 90,
           "minimum": 0,
           "description": "%config.tasks.pauseAtUsage.description%"
+        },
+        "worktreeGraph.orchestrator.model": {
+          "type": "string",
+          "default": "",
+          "description": "%config.orchestrator.model.description%"
         }
       }
     }
