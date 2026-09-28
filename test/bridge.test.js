@@ -149,7 +149,9 @@ fs.mkdirSync(path.join(wt, 'src'), { recursive: true });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   C.writeBridgeInfo({ pid: process.pid, port: server.address().port, token, roots: [repo, wt], started: Date.now() });
   C.installScripts(path.join(__dirname, '..', 'out', 'bridge'));
-  const env = { ...process.env, AGENTYARD_NO_MAIN: '' };
+  // rodando num terminal do AgentYard, as WTGRAPH_* dele calariam o hook (WTGRAPH_BRIDGE=1)
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('WTGRAPH_')));
+  env.AGENTYARD_NO_MAIN = '';
 
   await check('servidor MCP instalado roda pelo comando do .mcp.json e repassa a chamada', async () => {
     const entry = C.mcpServerEntry();
