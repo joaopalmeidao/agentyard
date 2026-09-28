@@ -6,6 +6,40 @@ import { bundle, locale, t } from './i18n';
 
 export type ActionHandler = (action: string, args: Record<string, string>) => Promise<void>;
 
+/**
+ * Mensagens do painel (graph.js): as mesmas no VS Code e no celular (src/remote). No celular, o layout
+ * fica no próprio navegador e não substitui o do VS Code.
+ */
+export async function panelMessage(ctl: Controller, handler: ActionHandler, msg: any, post: (m: unknown) => void, remote = false) {
+  if (msg?.type === 'commitDetails') {
+    try {
+      post({ type: 'commitDetails', sha: msg.sha, details: await commitDetails(ctl, msg.sha) });
+    } catch (e) {
+      post({ type: 'commitDetails', sha: msg.sha, error: (e as Error).message });
+    }
+    return;
+  }
+  if (msg?.type === 'saveUi') {
+    if (!remote) await ctl.ctx.globalState.update('panelUi', msg.ui);
+    return;
+  }
+  if (msg?.type === 'ready') {
+    post({ type: 'ui', ui: remote ? null : ctl.ctx.globalState.get('panelUi') ?? null });
+    post({ type: 'state', state: ctl.state ?? null });
+    ctl.scheduleRefresh(50);
+    return;
+  }
+  if (msg?.type !== 'action' || typeof msg.action !== 'string') return;
+  post({ type: 'busy', busy: true });
+  try {
+    await handler(msg.action, msg.args ?? {});
+  } catch (e) {
+    vscode.window.showErrorMessage((e as Error).message);
+  } finally {
+    post({ type: 'busy', busy: false });
+  }
+}
+
 export class GraphPanel implements vscode.Disposable {
   private static current?: GraphPanel;
   private readonly disposables: vscode.Disposable[] = [];
@@ -38,36 +72,7 @@ export class GraphPanel implements vscode.Disposable {
         if (s) panel.title = `AgentYard · ${s.repoName}`;
       }),
       panel.onDidChangeViewState(e => e.webviewPanel.visible && ctl.scheduleRefresh(50)),
-      panel.webview.onDidReceiveMessage(async msg => {
-        if (msg.type === 'commitDetails') {
-          try {
-            const details = await commitDetails(ctl, msg.sha);
-            panel.webview.postMessage({ type: 'commitDetails', sha: msg.sha, details });
-          } catch (e) {
-            panel.webview.postMessage({ type: 'commitDetails', sha: msg.sha, error: (e as Error).message });
-          }
-          return;
-        }
-        if (msg.type === 'saveUi') {
-          await ctl.ctx.globalState.update('panelUi', msg.ui);
-          return;
-        }
-        if (msg.type === 'ready') {
-          panel.webview.postMessage({ type: 'ui', ui: ctl.ctx.globalState.get('panelUi') ?? null });
-          this.post();
-          ctl.scheduleRefresh(50);
-          return;
-        }
-        if (msg.type !== 'action') return;
-        panel.webview.postMessage({ type: 'busy', busy: true });
-        try {
-          await handler(msg.action, msg.args ?? {});
-        } catch (e) {
-          vscode.window.showErrorMessage((e as Error).message);
-        } finally {
-          panel.webview.postMessage({ type: 'busy', busy: false });
-        }
-      }),
+      panel.webview.onDidReceiveMessage(msg => panelMessage(ctl, handler, msg, m => void panel.webview.postMessage(m))),
     );
   }
 

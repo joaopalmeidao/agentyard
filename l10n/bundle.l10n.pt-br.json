@@ -2284,7 +2284,7 @@
   "Remote access: {0} is not a local address; anyone who reaches this port still needs the token, but prefer 127.0.0.1 with a tunnel.": "Acesso remoto: {0} não é um endereço local; quem alcançar esta porta ainda precisa do token, mas prefira 127.0.0.1 com um túnel.",
   "Turn on": "Ligar",
   "Turn on remote access?": "Ligar o acesso remoto?",
-  "AgentYard serves a read-only page with the state of your agents on this machine (port {0}). To open it on your phone, expose that port with a tunnel of your choice, such as Tailscale.": "O AgentYard serve nesta máquina uma página só leitura com o estado dos seus agentes (porta {0}). Para abrir no celular, exponha essa porta com um túnel de sua escolha, como o Tailscale.",
+  "AgentYard serves on this machine (port {0}) a page with your agents and the main panel, where you can act as in VS Code. To open it on your phone, expose that port with a tunnel of your choice, such as Tailscale.": "O AgentYard serve nesta máquina (porta {0}) uma página com seus agentes e o painel principal, onde você age como no VS Code. Para abrir no celular, exponha essa porta com um túnel de sua escolha, como o Tailscale.",
   "Remote access link copied. Open it on your phone once; it keeps the access.": "Link do acesso remoto copiado. Abra uma vez no celular; ele guarda o acesso.",
   "Remote access link copied (this machine only). To open it on your phone, expose port {0} (e.g. \"tailscale serve --bg {0}\") and set worktreeGraph.remote.publicUrl.": "Link do acesso remoto copiado (só nesta máquina). Para abrir no celular, exponha a porta {0} (ex.: \"tailscale serve --bg {0}\") e preencha worktreeGraph.remote.publicUrl.",
   "Generate new link": "Gerar novo link",
@@ -2396,5 +2396,11 @@
   "Minutes": "Minutos",
   "Review rounds": "Rodadas de revisão",
   "No template sent to an agent yet. Use \"✦ Use Task Template…\" on a worktree.": "Nenhum modelo enviado a um agente ainda. Use \"✦ Usar modelo de tarefa…\" numa worktree.",
-  "Averages of the runs that became ready. Fewer turns, interventions and review rounds mean the template gives the agent what it needs; rewrite the ones at the bottom (Edit Task Template…).": "Médias das execuções que ficaram prontas. Menos turnos, intervenções e rodadas de revisão querem dizer que o modelo dá ao agente o que ele precisa; reescreva os do fim da tabela (Editar modelo de tarefa…)."
+  "Averages of the runs that became ready. Fewer turns, interventions and review rounds mean the template gives the agent what it needs; rewrite the ones at the bottom (Edit Task Template…).": "Médias das execuções que ficaram prontas. Menos turnos, intervenções e rodadas de revisão querem dizer que o modelo dá ao agente o que ele precisa; reescreva os do fim da tabela (Editar modelo de tarefa…).",
+  "Agents": "Agentes",
+  "Panel": "Painel",
+  "Filter": "Filtrar",
+  "OK": "OK",
+  "Cancel": "Cancelar",
+  "Actions from the phone are turned off (worktreeGraph.remote.actions).": "As ações pelo celular estão desligadas (worktreeGraph.remote.actions)."
 }

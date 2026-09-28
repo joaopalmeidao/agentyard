@@ -1157,6 +1157,83 @@ exports.run = async () => {
     g('branch -D velha/pendente');
   });
 
+  await check('acesso remoto: painel no celular recebe o estado e os diálogos da ação que pediu', async () => {
+    const http = require('http');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const port = 7498;
+    await cfg.update('remote.port', port, vscode.ConfigurationTarget.Global);
+    await cfg.update('remote.enabled', true, vscode.ConfigurationTarget.Global);
+    const token = require('../out/remote/core').remoteToken();
+    const auth = { authorization: `Bearer ${token}` };
+    const req = (method, url, body) =>
+      new Promise((resolve, reject) => {
+        const r = http.request({ host: '127.0.0.1', port, path: url, method, headers: { ...auth, 'content-type': 'application/json' } }, res => {
+          let data = '';
+          res.on('data', d => (data += d));
+          res.on('end', () => resolve({ status: res.statusCode, body: data }));
+        });
+        r.on('error', reject);
+        r.end(body ? JSON.stringify(body) : undefined);
+      });
+    await until(async () => (await req('GET', '/panel').catch(() => ({}))).status === 200);
+    assert.ok((await req('GET', '/media/graph.js')).body.includes('acquireVsCodeApi'));
+    assert.strictEqual((await req('GET', '/media/../package.json')).status, 404);
+
+    // aba do celular: fluxo de eventos
+    const client = 'abcdef0123456789';
+    const got = [];
+    const stream = await new Promise((resolve, reject) => {
+      const r = http.get({ host: '127.0.0.1', port, path: `/api/events?c=${client}`, headers: auth }, res => {
+        let buf = '';
+        res.on('data', d => {
+          buf += d;
+          let nl;
+          while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (line) got.push(JSON.parse(line));
+          }
+        });
+        resolve(r);
+      });
+      r.on('error', reject);
+    });
+    try {
+      await until(() => got.some(m => m.type === 'hello'));
+      await req('POST', '/api/msg', { c: client, msg: { type: 'ready' } });
+      const st = await until(() => got.find(m => m.type === 'state' && m.state));
+      assert.ok(st.state.worktrees.some(w => w.branch === 'ai/login-oauth'));
+
+      // ação do celular: a lista de destino e a confirmação do merge aparecem no celular, não no VS Code
+      const before = require('child_process').execSync('git rev-parse ai/refatorar-api', { cwd: ctl.repo.root, encoding: 'utf8' }).trim();
+      await req('POST', '/api/msg', { c: client, msg: { type: 'action', action: 'mergeInto', args: { branch: 'ai/precos-promo' } } });
+      const pick = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'pick'));
+      const i = pick.items.findIndex(x => x.label === 'ai/refatorar-api');
+      assert.ok(i >= 0, JSON.stringify(pick.items));
+      await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: pick.id, value: i } });
+      const confirm = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'message' && m.modal));
+      assert.ok(confirm.modal && confirm.message.includes('ai/precos-promo'), confirm.message);
+      await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: confirm.id } });
+      await until(() => got.some(m => m.type === 'busy' && m.busy === false));
+      const after = require('child_process').execSync('git rev-parse ai/refatorar-api', { cwd: ctl.repo.root, encoding: 'utf8' }).trim();
+      assert.strictEqual(after, before, 'cancelado no celular: nada mesclado');
+
+      // aviso com botões que o VS Code mostra sozinho: espelhado no celular, e a resposta de lá vale
+      const shown = vscode.window.showWarningMessage('Pergunta de teste', 'Sim', 'Não');
+      const mirror = await until(() => got.find(m => m.type === 'dialog' && m.message === 'Pergunta de teste'));
+      assert.ok(!mirror.modal);
+      await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: mirror.id, value: 1 } });
+      assert.strictEqual(await shown, 'Não');
+
+      // sem token não entra
+      assert.strictEqual(await new Promise(r => http.get({ host: '127.0.0.1', port, path: `/api/events?c=${client}` }, res => r(res.statusCode))), 401);
+    } finally {
+      stream.destroy();
+      await cfg.update('remote.enabled', undefined, vscode.ConfigurationTarget.Global);
+      await cfg.update('remote.port', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
   console.log('\n' + results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) throw new Error('falhas nos testes');
 };

@@ -1,0 +1,127 @@
+import { AsyncLocalStorage } from 'async_hooks';
+import * as vscode from 'vscode';
+import type { Hub } from './hub';
+
+/**
+ * Diálogos do VS Code no celular. A extensão tem centenas de showQuickPick/showInputBox/show*Message;
+ * em vez de mexer em cada um, as funções de vscode.window (o objeto da API desta extensão, não o de
+ * outras) passam por aqui:
+ * - ação que veio do celular (runAsRemote): o diálogo aparece só na aba que pediu, e avisos sem botão
+ *   viram um toast lá;
+ * - aviso com botões que o VS Code mostra sozinho (ex.: permissão do Claude) com o celular conectado:
+ *   aparece nos dois lugares e vale a primeira resposta.
+ */
+
+const origin = new AsyncLocalStorage<{ client: string }>();
+
+/** Roda uma ação vinda de uma aba do celular: os diálogos dela vão para essa aba. */
+export function runAsRemote<T>(client: string, fn: () => T): T {
+  return origin.run({ client }, fn);
+}
+
+type Level = 'info' | 'warning' | 'error';
+
+const text = (s: unknown) => (typeof s === 'string' ? s : '');
+
+/** show*Message(message, options?, ...items): separa as opções dos botões. */
+function messageArgs(rest: unknown[]): { options?: vscode.MessageOptions; items: (string | vscode.MessageItem)[] } {
+  const first = rest[0];
+  if (first && typeof first === 'object' && !('title' in (first as object))) return { options: first as vscode.MessageOptions, items: rest.slice(1) as (string | vscode.MessageItem)[] };
+  return { items: rest as (string | vscode.MessageItem)[] };
+}
+
+const itemLabel = (i: string | vscode.MessageItem) => (typeof i === 'string' ? i : i.title);
+
+export function installRemoteDialogs(hub: Hub): vscode.Disposable {
+  const w = vscode.window as unknown as Record<string, (...a: any[]) => any>;
+  const saved: Record<string, (...a: any[]) => any> = {};
+  const patch = (name: string, make: (orig: (...a: any[]) => any) => (...a: any[]) => any) => {
+    const orig = w[name];
+    saved[name] = orig;
+    w[name] = make(orig);
+  };
+  const remoteClient = () => {
+    const c = origin.getStore()?.client;
+    return c && hub.has(c) ? c : undefined;
+  };
+
+  const message = (level: Level) => (orig: (...a: any[]) => any) =>
+    function (this: unknown, msg: string, ...rest: unknown[]) {
+      const client = remoteClient();
+      const { options, items } = messageArgs(rest);
+      const mirror = !client && items.length > 0 && !options?.modal && hub.size > 0;
+      if (!client && !mirror) return orig.call(this, msg, ...rest);
+      if (client && !items.length) {
+        hub.send(client, { type: 'toast', level, message: text(msg), detail: options?.detail });
+        return Promise.resolve(undefined);
+      }
+      const req = hub.request(client, { kind: 'message', level, message: text(msg), detail: options?.detail, modal: !!options?.modal, items: items.map(itemLabel) });
+      const remote = req.promise.then(i => (typeof i === 'number' ? items[i] : undefined));
+      if (client) return remote;
+      // espelho: responde quem chegar primeiro; o botão que sobrar no outro lado não faz nada
+      const local = Promise.resolve(orig.call(this, msg, ...rest)).then(v => {
+        req.cancel();
+        return v;
+      });
+      return Promise.race([local, remote.then(v => (v === undefined ? local : v))]);
+    };
+  patch('showInformationMessage', message('info'));
+  patch('showWarningMessage', message('warning'));
+  patch('showErrorMessage', message('error'));
+
+  patch('showQuickPick', orig =>
+    function (this: unknown, items: unknown, options?: vscode.QuickPickOptions, token?: vscode.CancellationToken) {
+      const client = remoteClient();
+      if (!client) return orig.call(this, items, options, token);
+      return (async () => {
+        const list = (await items) as (string | vscode.QuickPickItem)[];
+        const req = hub.request(client, {
+          kind: 'pick',
+          title: options?.title,
+          placeHolder: options?.placeHolder,
+          many: !!options?.canPickMany,
+          items: list.map(i =>
+            typeof i === 'string'
+              ? { label: i }
+              : { label: i.label, description: i.description, detail: i.detail, picked: i.picked, separator: i.kind === vscode.QuickPickItemKind.Separator },
+          ),
+        });
+        const sub = token?.onCancellationRequested(() => req.cancel());
+        const v = await req.promise;
+        sub?.dispose();
+        if (options?.canPickMany) return Array.isArray(v) ? v.map(i => list[i]).filter(x => x !== undefined) : undefined;
+        return typeof v === 'number' ? list[v] : undefined;
+      })();
+    },
+  );
+
+  patch('showInputBox', orig =>
+    function (this: unknown, options?: vscode.InputBoxOptions, token?: vscode.CancellationToken) {
+      const client = remoteClient();
+      if (!client) return orig.call(this, options, token);
+      const req = hub.request(
+        client,
+        { kind: 'input', title: options?.title, prompt: options?.prompt, value: options?.value, placeHolder: options?.placeHolder, password: !!options?.password },
+        async value => {
+          if (typeof value !== 'string') return 'Invalid value.';
+          const r = await options?.validateInput?.(value);
+          if (!r) return undefined;
+          // aviso ou informação não impedem de confirmar (como no VS Code)
+          if (typeof r === 'string') return r;
+          return r.severity === vscode.InputBoxValidationSeverity.Error ? r.message : undefined;
+        },
+      );
+      const sub = token?.onCancellationRequested(() => req.cancel());
+      return req.promise.then(v => {
+        sub?.dispose();
+        return typeof v === 'string' ? v : undefined;
+      });
+    },
+  );
+
+  return {
+    dispose: () => {
+      for (const [name, fn] of Object.entries(saved)) w[name] = fn;
+    },
+  };
+}
