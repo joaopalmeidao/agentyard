@@ -117,6 +117,17 @@ export function registerTerminalUx(ctx: vscode.ExtensionContext, ctl: Controller
     const o = await agentOf(node, x => !!x.claude && x.state !== 'ended');
     if (o) agentTerms.interrupt(o);
   });
+  // /remote-control (/rc): a sessão passa a poder ser continuada pelo app do Claude ou por claude.ai/code
+  reg('agents.remoteControl', async (node?: unknown) => {
+    // pelo menu do terminal vem o próprio terminal: um `claude` aberto à mão também serve
+    const term = node && typeof node === 'object' && 'sendText' in node ? (node as vscode.Terminal) : undefined;
+    const o = term ? agentTerms.byTerminal(term) : await agentOf(node, x => !!x.claude && x.state !== 'ended');
+    if (o) await agentTerms.type(o, '/remote-control', true);
+    else if (term) {
+      term.show();
+      term.sendText('/remote-control', true);
+    }
+  });
   reg('agents.grid', async (group?: { path?: string }) => {
     let list = agentTerms.list(group?.path);
     if (!list.length) {

@@ -400,6 +400,7 @@
   "command.agents.moveToPanel.title": "Move Agent Terminal to the Panel",
   "command.agents.grid.title": "Agents Side by Side in the Editor",
   "command.agents.interrupt.title": "Interrupt Claude (Esc)",
+  "command.agents.remoteControl.title": "Enable Claude Remote Control (/rc)",
   "command.claude.sendDiagnostics.title": "Send Problems to Claude",
   "command.claude.sendDiff.title": "Send Worktree Diff to Claude",
   "command.claude.sendTerminalSelection.title": "Send Terminal Selection to Claude",

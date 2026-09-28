@@ -303,6 +303,12 @@
         "icon": "$(debug-stop)"
       },
       {
+        "command": "worktreeGraph.agents.remoteControl",
+        "title": "%command.agents.remoteControl.title%",
+        "category": "AgentYard",
+        "icon": "$(remote)"
+      },
+      {
         "command": "worktreeGraph.claude.sendDiagnostics",
         "title": "%command.claude.sendDiagnostics.title%",
         "category": "AgentYard",
@@ -3217,6 +3223,16 @@
         {
           "command": "worktreeGraph.claude.sendTerminalSelection",
           "when": "terminalTextSelected",
+          "group": "9_worktreeGraph@0"
+        },
+        {
+          "command": "worktreeGraph.agents.remoteControl",
+          "group": "9_worktreeGraph@1"
+        }
+      ],
+      "terminal/title/context": [
+        {
+          "command": "worktreeGraph.agents.remoteControl",
           "group": "9_worktreeGraph@0"
         }
       ],
