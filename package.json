@@ -3451,6 +3451,11 @@
           "default": false,
           "description": "%config.mergeQueue.pushBase.description%"
         },
+        "worktreeGraph.mergeQueue.resolveWithAgent": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.mergeQueue.resolveWithAgent.description%"
+        },
         "worktreeGraph.batch.maxParallel": {
           "type": "number",
           "default": 3,

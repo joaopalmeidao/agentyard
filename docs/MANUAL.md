@@ -386,9 +386,22 @@ antes. O texto da tarefa está em `worktreeGraph.prompts.resolveConflict` e
 ### Fila de merge
 
 Para várias branches prontas ao mesmo tempo: **Pôr na fila de merge**. A fila mescla uma por vez,
-trazendo a base antes e rodando as checagens. Na view **Fila de merge**: subir/descer, tirar,
-pausar/retomar, processar agora e limpar. `worktreeGraph.mergeQueue.pushBase` faz push da base
-depois de cada merge.
+trazendo a base antes e rodando as checagens. Dá para pôr várias de uma vez: selecione as
+worktrees na árvore (Ctrl/Shift+clique) e use **Pôr na fila de merge**, ou clique no **+** da view
+e marque as branches na lista (entram na ordem em que aparecem). O painel **Analisar merge** também
+tem **Pôr na fila de merge**.
+
+Se uma branch conflitar com a base ou falhar nas checagens, a fila abre o Claude Code (o primeiro
+agente configurado) na worktree dela com a tarefa de trazer a base, resolver e commitar; o item
+fica **com o agente** e a fila espera. Quando ele termina e commita, a fila tenta de novo a mesma
+branch, mescla e segue para a próxima. Se o terminal for fechado sem commit, ou se a mesma branch
+precisar do agente mais de duas vezes, ela sai da fila com o motivo. Worktree com mudanças não
+commitadas não é entregue ao agente. **Processar a fila agora** volta a tentar os itens que estavam
+com o agente (útil depois de recarregar a janela). Desligue com
+`worktreeGraph.mergeQueue.resolveWithAgent` para a fila só parar no conflito, como antes.
+
+Na view **Fila de merge**: subir/descer, tirar, pausar/retomar, processar agora e limpar.
+`worktreeGraph.mergeQueue.pushBase` faz push da base depois de cada merge.
 
 ### Cherry-pick e reorganizar commits
 
