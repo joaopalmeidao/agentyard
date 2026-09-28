@@ -479,5 +479,6 @@
   "config.orchestrator.model.description": "Modelo do Claude que divide uma tarefa entre agentes (ex.: opus). Vazio: o modelo padrão do Claude Code.",
   "command.orchestrator.start.title": "✦ Dividir uma tarefa entre agentes…",
   "command.orchestrator.show.title": "Tarefas divididas entre agentes…",
-  "command.claude.lessons.title": "✦ Aprender com as sessões desta worktree (CLAUDE.md)…"
+  "command.claude.lessons.title": "✦ Aprender com as sessões desta worktree (CLAUDE.md)…",
+  "command.templates.stats.title": "Modelos de tarefa: como se saem"
 }

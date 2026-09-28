@@ -261,6 +261,65 @@ export function parseLessons(text: string): { lessons: string[]; append: string 
   return { lessons, append: lessons.length ? append : '' };
 }
 
+// ---------------------------------------------------------------- qualidade por modelo de tarefa
+
+export interface TemplateRun {
+  template: string;
+  path: string;
+  branch?: string;
+  at: number;
+  finished?: number;
+  /** Terminou com commits (pronto) ou fechou sem terminar. */
+  ready?: boolean;
+  turns?: number;
+  /** Pedidos de permissão + bloqueios da guarda durante a tarefa. */
+  interventions?: number;
+  tokens?: number;
+  reviewRounds?: number;
+  /** Contadores no começo, para tirar a diferença no fim. */
+  start?: { interventions: number; tokens: number; turns: number };
+}
+
+export interface TemplateStat {
+  template: string;
+  runs: number;
+  finished: number;
+  ready: number;
+  avgMinutes?: number;
+  avgTurns?: number;
+  avgInterventions?: number;
+  avgTokens?: number;
+  avgReviewRounds?: number;
+}
+
+const avg = (xs: (number | undefined)[]) => {
+  const v = xs.filter((x): x is number => typeof x === 'number');
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : undefined;
+};
+
+/** Números por modelo de tarefa, dos que mais rodaram para os que menos rodaram. */
+export function templateStats(runs: TemplateRun[]): TemplateStat[] {
+  const by = new Map<string, TemplateRun[]>();
+  for (const r of runs) by.set(r.template, [...(by.get(r.template) ?? []), r]);
+  return [...by.entries()]
+    .map(([template, rs]) => {
+      const done = rs.filter(r => r.finished);
+      const ok = done.filter(r => r.ready);
+      return {
+        template,
+        runs: rs.length,
+        finished: done.length,
+        ready: ok.length,
+        avgMinutes: avg(ok.map(r => (r.finished! - r.at) / 60_000)),
+        avgTurns: avg(ok.map(r => r.turns)),
+        avgInterventions: avg(ok.map(r => r.interventions)),
+        avgTokens: avg(ok.map(r => r.tokens)),
+        avgReviewRounds: avg(ok.map(r => r.reviewRounds)),
+      };
+    })
+    .sort((a, b) => b.runs - a.runs || a.template.localeCompare(b.template));
+}
+
 // ---------------------------------------------------------------- agente travado
 
 export interface StuckTracker {

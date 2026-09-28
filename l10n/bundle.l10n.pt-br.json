@@ -2388,5 +2388,13 @@
   "Append this text": "Acrescentar este texto",
   "Edit the text in the editor and click \"{0}\".": "Edite o texto no editor e clique em \"{0}\".",
   "CLAUDE.md of {0} updated: commit it with the branch so the next agents get it.": "CLAUDE.md de {0} atualizado: commite junto com a branch para os próximos agentes receberem.",
-  "Learn from the sessions of which worktree?": "Aprender com as sessões de qual worktree?"
+  "Learn from the sessions of which worktree?": "Aprender com as sessões de qual worktree?",
+  "Task templates: how well they work": "Modelos de tarefa: como se saem",
+  "Template": "Modelo",
+  "Runs": "Execuções",
+  "Ready": "Prontas",
+  "Minutes": "Minutos",
+  "Review rounds": "Rodadas de revisão",
+  "No template sent to an agent yet. Use \"✦ Use Task Template…\" on a worktree.": "Nenhum modelo enviado a um agente ainda. Use \"✦ Usar modelo de tarefa…\" numa worktree.",
+  "Averages of the runs that became ready. Fewer turns, interventions and review rounds mean the template gives the agent what it needs; rewrite the ones at the bottom (Edit Task Template…).": "Médias das execuções que ficaram prontas. Menos turnos, intervenções e rodadas de revisão querem dizer que o modelo dá ao agente o que ele precisa; reescreva os do fim da tabela (Editar modelo de tarefa…)."
 }

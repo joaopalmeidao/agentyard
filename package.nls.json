@@ -479,5 +479,6 @@
   "config.orchestrator.model.description": "Model of the Claude that splits a task among agents (e.g. opus). Empty: Claude Code's default model.",
   "command.orchestrator.start.title": "✦ Split a task among agents…",
   "command.orchestrator.show.title": "Tasks split among agents…",
-  "command.claude.lessons.title": "✦ Learn from this worktree's sessions (CLAUDE.md)…"
+  "command.claude.lessons.title": "✦ Learn from this worktree's sessions (CLAUDE.md)…",
+  "command.templates.stats.title": "Task templates: how well they work"
 }

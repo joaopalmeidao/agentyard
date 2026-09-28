@@ -1591,6 +1591,12 @@
         "command": "worktreeGraph.claude.lessons",
         "title": "%command.claude.lessons.title%",
         "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.templates.stats",
+        "title": "%command.templates.stats.title%",
+        "category": "AgentYard",
+        "icon": "$(graph)"
       }
     ],
     "submenus": [
@@ -2026,6 +2032,16 @@
           "command": "worktreeGraph.orchestrator.start",
           "when": "view == worktreeGraph.worktrees",
           "group": "5_claude"
+        },
+        {
+          "command": "worktreeGraph.templates.stats",
+          "when": "view == worktreeGraph.tasks",
+          "group": "9_templates@1"
+        },
+        {
+          "command": "worktreeGraph.templates.stats",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@5"
         }
       ],
       "view/item/context": [

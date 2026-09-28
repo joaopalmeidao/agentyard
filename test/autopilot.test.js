@@ -188,6 +188,25 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.deepStrictEqual(A.parseLessons('LESSONS:\n- (none)\nCLAUDE_MD:\nqualquer'), { lessons: [], append: '' });
   });
 
+  await check('qualidade por modelo: médias só das que ficaram prontas', () => {
+    const s = A.templateStats([
+      { template: 'Bug', path: 'a', at: 0, finished: 600_000, ready: true, turns: 2, interventions: 1, tokens: 1000, reviewRounds: 1 },
+      { template: 'Bug', path: 'b', at: 0, finished: 1_200_000, ready: true, turns: 4, interventions: 3, tokens: 3000 },
+      { template: 'Bug', path: 'c', at: 0, finished: 60_000, ready: false, turns: 9 },
+      { template: 'Bug', path: 'd', at: 0 },
+      { template: 'Docs', path: 'e', at: 0 },
+    ]);
+    assert.deepStrictEqual(s.map(x => x.template), ['Bug', 'Docs']);
+    assert.strictEqual(s[0].runs, 4);
+    assert.strictEqual(s[0].finished, 3);
+    assert.strictEqual(s[0].ready, 2);
+    assert.strictEqual(s[0].avgMinutes, 15);
+    assert.strictEqual(s[0].avgTurns, 3);
+    assert.strictEqual(s[0].avgInterventions, 2);
+    assert.strictEqual(s[0].avgReviewRounds, 1);
+    assert.strictEqual(s[1].avgTurns, undefined);
+  });
+
   await check('glob das reservas: pasta, *, ** e ?', () => {
     assert.ok(B.matches('src/auth', 'src/auth/login.ts'));
     assert.ok(B.matches('src/auth/**', 'src/auth/a/b.ts'));

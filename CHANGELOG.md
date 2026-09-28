@@ -1,6 +1,10 @@
 # Changelog
 
 ## Não lançado
+- **Modelos de tarefa: como se saem**: cada vez que um modelo vai para um agente, o AgentYard guarda
+  quanto ele levou até ficar pronto, os turnos, as intervenções (permissões e bloqueios da guarda), os
+  tokens e as rodadas da revisão automática. O relatório compara os modelos, para você reescrever os
+  que dão mais trabalho (na view Fila de tarefas e na de Agentes abertos).
 - **✦ Aprender com as sessões desta worktree (CLAUDE.md)…** (menu Agente da worktree): um Claude sem
   terminal lê o que você precisou dizer ao agente depois da tarefa (correções, regras, preferências), as
   intervenções e a revisão automática, e propõe o que acrescentar ao `CLAUDE.md` para os próximos

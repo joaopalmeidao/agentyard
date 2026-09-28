@@ -334,7 +334,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     };
   const claudeIntegration = registerClaudeIntegration(ctx, ctl, guard, { agentTerms, agentsTree, agentFlow, coord, openTranscript: id => claude.transcriptById(id) });
   registerRemoteAccess(ctx, ctl, guard);
-  registerAutopilot(ctx, ctl, guard, { agentTerms, agentFlow, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration, coord, claude });
+  const autopilot = registerAutopilot(ctx, ctl, guard, { agentTerms, agentFlow, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration, coord, claude });
 
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
   reg('openGraph', () => GraphPanel.show(ctl, handler));
@@ -532,6 +532,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const env = registerEnv(ctx, ctl, guard);
   actions.worktreeCreatedHooks.push((dir, branch, quiet) => env.afterCreate(dir, branch, quiet));
   const templates = registerTemplates(ctx, ctl, guard, b => issues.linkOf(b)?.key);
+  autopilot.trackTemplates(templates);
   const readySummary = new ReadySummaryService(ctl, agentFlow);
   ctx.subscriptions.push(readySummary);
   const delivery = registerDelivery(ctx, ctl, guard, { activity, pipelines: () => pipelines.pipelines, issueOf: b => issues.linkOf(b) });

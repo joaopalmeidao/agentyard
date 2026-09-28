@@ -12,6 +12,8 @@ import type { WorktreeView } from '../model';
 import { AgentBoard } from './boardService';
 import { Lessons } from './lessons';
 import { Orchestrator } from './orchestrator';
+import type { TemplateService } from '../templates/register';
+import { TemplateStats } from './templateStats';
 import { AutoReviewer } from './reviewer';
 import { StopGate } from './stopGate';
 import { StuckWatch } from './stuck';
@@ -46,6 +48,8 @@ export interface Autopilot {
   reviewer: AutoReviewer;
   board: AgentBoard;
   orchestrator: Orchestrator;
+  /** Liga a qualidade por modelo de tarefa (os modelos são registrados depois). */
+  trackTemplates(templates: TemplateService): void;
 }
 
 /**
@@ -93,5 +97,11 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
     if (w) await lessons.run(w);
   });
 
-  return { gate, reviewer, board, orchestrator };
+  const trackTemplates = (templates: TemplateService) => {
+    const stats = new TemplateStats(ctl, templates, d.agentFlow, d.integration, reviewer);
+    ctx.subscriptions.push(stats);
+    reg('templates.stats', () => stats.report());
+  };
+
+  return { gate, reviewer, board, orchestrator, trackTemplates };
 }

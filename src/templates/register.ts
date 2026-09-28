@@ -12,6 +12,10 @@ const k = (p: string) => path.normalize(p).toLowerCase();
 
 /** Biblioteca de prompts reutilizáveis: padrões, configuração e `.agentyard/templates/*.md` do repositório. */
 export class TemplateService {
+  private readonly sent = new vscode.EventEmitter<{ template: string; path: string; branch?: string }>();
+  /** Um modelo foi para um agente (agora ou pela fila). */
+  readonly onDidSend = this.sent.event;
+
   constructor(private readonly ctl: Controller, private readonly issueOf: (branch: string) => string | undefined) {}
 
   private async mainPath() {
@@ -88,6 +92,7 @@ export class TemplateService {
     if (how === 'queue') await vscode.commands.executeCommand('worktreeGraph.tasks.add', { path: wt.path, branch: wt.branch }, prompt);
     else await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: wt.path, branch: wt.branch, prompt });
     this.ctl.log(how === 'queue' ? t('Template "{0}" sent to {1} (queue)', tpl.name, wt.branch ?? wt.path) : t('Template "{0}" sent to {1} (agent)', tpl.name, wt.branch ?? wt.path));
+    this.sent.fire({ template: tpl.name, path: wt.path, branch: wt.branch });
     return prompt;
   }
 
