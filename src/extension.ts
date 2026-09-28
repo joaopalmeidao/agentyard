@@ -3,6 +3,9 @@ import * as actions from './actions';
 import { agents, AgentTerminals, stateText } from './agents';
 import { AgentsTreeProvider, AgentGroupItem, openAgentOf, terminalOf } from './agentsView';
 import { registerPullRequests } from './prs/view';
+import { registerPrFeedback } from './prs/feedback';
+import { registerStack } from './stack/register';
+import { registerGitExtras } from './gitExtras';
 import * as commits from './commits';
 import { pushBranch, pushMany, pushSelected, PushStatus } from './push';
 import { resolveConflict, ResolveOptions } from './conflicts';
@@ -18,6 +21,7 @@ import { ReadySummaryService } from './env/readySummary';
 import { registerEnv } from './env/register';
 import { registerMigrations } from './migrations/register';
 import { registerTemplates } from './templates/register';
+import { registerLongProjects } from './longProject/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
@@ -33,7 +37,9 @@ import { Projects, ProjectsTreeProvider } from './projects';
 import { AutoSync } from './sync';
 import { registerClaudeConfig } from './claude/configView';
 import { registerAgentAttention } from './claude/attention';
+import { registerClaudeVoice } from './claude/voice';
 import { registerSendToClaude, worktreeOfFile } from './claude/sendContext';
+import { registerClaudeIntegration } from './claude/register';
 import { pickRelevant, registerTerminalUx } from './claude/terminalUx';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
@@ -82,7 +88,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
   registerAgentAttention(ctx, ctl, agentTerms);
+  registerLongProjects(ctx, ctl, agentTerms, claude);
   registerSendToClaude(ctx, ctl, agentTerms);
+  registerClaudeVoice(ctx, ctl, agentTerms);
   registerTerminalUx(ctx, ctl, agentTerms);
   /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */
   const claudeTarget = async (arg?: { path?: string; wtPath?: string; branch?: string }): Promise<{ cwd: string; label: string } | undefined> => {
@@ -321,6 +329,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(`AgentYard: ${(e as Error).message}`);
       }
     };
+  const claudeIntegration = registerClaudeIntegration(ctx, ctl, guard, { agentTerms, agentsTree, agentFlow, coord, openTranscript: id => claude.transcriptById(id) });
 
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
   reg('openGraph', () => GraphPanel.show(ctl, handler));
@@ -505,6 +514,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const pipelines = registerPipelines(ctx, ctl, guard);
   const review = registerReview(ctx, ctl, guard);
   const prs = registerPullRequests(ctx, ctl, guard);
+  registerPrFeedback(ctx, ctl, guard, { prs, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration, agentFlow, pipelines });
+  const stack = registerStack(ctx, ctl, guard, { prs, agentTerms });
+  registerGitExtras(ctx, ctl, guard, { agentTerms });
   const activity = registerActivity(ctx, ctl, guard, {
     claude,
     pipelines: () => pipelines.pipelines,
@@ -536,7 +548,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const guards = registerGuards(ctx, ctl);
   registerMigrations(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion };
+  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion, bridge: claudeIntegration.bridge, claudeIntegration: claudeIntegration.integration, stack };
 }
 
 export function deactivate() {}

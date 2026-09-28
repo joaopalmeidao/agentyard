@@ -2,7 +2,7 @@
 const assert = require('assert');
 const http = require('http');
 const { parseRemote } = require('../out/hosting/core');
-const { GitHubPrBrowser, GitLabPrBrowser, ListOnlyPrBrowser, groupPrs, checkStatus, countDiff, fetchSpecFor, shortText } = require('../out/prs/core');
+const { GitHubPrBrowser, GitLabPrBrowser, ListOnlyPrBrowser, groupPrs, checkStatus, countDiff, fetchSpecFor, shortText, feedbackText, openThreads } = require('../out/prs/core');
 
 let failures = 0;
 const check = async (name, fn) => {
@@ -67,7 +67,38 @@ const iso = daysAgo => new Date(Date.now() - daysAgo * 86400000).toISOString();
       if (u === '/gh/repos/dono/repo/commits/s1/check-runs?per_page=100') return send(200, { check_runs: [{ name: 'test', status: 'completed', conclusion: 'success', html_url: 'r1' }, { name: 'lint', status: 'in_progress', conclusion: null }] });
       if (u === '/gh/repos/dono/repo/commits/s1/status') return send(200, { statuses: [{ context: 'ci/legado', state: 'failure', target_url: 't' }] });
       if (u === '/gh/repos/dono/repo/pulls/1/merge' && req.method === 'PUT') return send(200, { merged: true });
+      if (u === '/gh/graphql' && req.method === 'POST' && body.includes('reviewThreads'))
+        return send(200, {
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  nodes: [
+                    { id: 'T1', isResolved: false, isOutdated: false, path: 'src/a.ts', line: 10, comments: { nodes: [{ author: { login: 'ana' }, body: 'renomeie isso', url: 'u1', createdAt: iso(0.3) }] } },
+                    { id: 'T2', isResolved: true, isOutdated: false, path: 'b.md', line: 1, comments: { nodes: [{ author: { login: 'ana' }, body: 'ok já', createdAt: iso(1) }] } },
+                    { id: 'T3', isResolved: false, isOutdated: true, path: 'src/c.ts', line: null, originalLine: 4, comments: { nodes: [{ author: { login: 'rui' }, body: 'teste?', createdAt: iso(1) }] } },
+                  ],
+                },
+              },
+            },
+          },
+        });
       if (u === '/gh/graphql' && req.method === 'POST') return send(200, { data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } } });
+      if (u === '/gh/repos/dono/repo/pulls/7/reviews?per_page=100')
+        return send(200, [
+          { user: { login: 'ana' }, state: 'CHANGES_REQUESTED', body: 'Faltam testes.', submitted_at: iso(0.3) },
+          { user: { login: 'joao' }, state: 'COMMENTED', body: 'respondi', submitted_at: iso(0.2) },
+          { user: { login: 'rui' }, state: 'APPROVED', body: '', submitted_at: iso(0.2) },
+        ]);
+      if (u === '/gl/projects/time%2Fapi/merge_requests/6/discussions?per_page=100')
+        return send(200, [
+          { id: 'd1', notes: [{ id: 11, resolvable: true, resolved: false, author: { username: 'rui' }, body: 'trate o erro', created_at: iso(0.2), position: { new_path: 'app.py', new_line: 3 } }] },
+          { id: 'd2', notes: [{ id: 12, resolvable: true, resolved: true, author: { username: 'rui' }, body: 'feito', position: { new_path: 'app.py', new_line: 9 } }] },
+          { id: 'd3', notes: [{ id: 13, resolvable: false, author: { username: 'rui' }, body: 'no geral, ok', created_at: iso(0.1) }] },
+          { id: 'd4', notes: [{ id: 14, system: true, body: 'mudou' }] },
+        ]);
+      if (u === '/gl/projects/time%2Fapi/merge_requests/6/discussions/d1/notes' && req.method === 'POST') return send(201, {});
+      if (u === '/gl/projects/time%2Fapi/merge_requests/6/discussions/d1?resolved=true' && req.method === 'PUT') return send(200, {});
       // ---------------- GitLab self-hosted
       if (u === '/gl/user') return send(200, { username: 'joao' });
       if (u.startsWith('/gl/projects/time%2Fapi/merge_requests?state=opened')) return send(200, [
@@ -120,6 +151,23 @@ const iso = daysAgo => new Date(Date.now() - daysAgo * 86400000).toISOString();
     assert.deepStrictEqual(q.body.variables, { id: 'N2' });
   });
 
+  await check('GitHub: conversas de revisão, revisões com texto e resolver com resposta', async () => {
+    const pr = { id: 7, ref: '#7', title: 'Login', url: 'h7' };
+    const fb = await gh.feedback(pr);
+    assert.deepStrictEqual(fb.threads.map(x => `${x.id}:${x.resolved}:${x.line}`), ['T1:false:10', 'T2:true:1', 'T3:false:4']);
+    assert.deepStrictEqual(openThreads(fb).map(x => x.id), ['T1', 'T3']);
+    assert.deepStrictEqual(fb.reviews.map(r => `${r.author}:${r.state}`), ['ana:changes_requested', 'joao:commented'], 'revisão sem texto fica de fora');
+    const q = seen.find(x => x.url === '/gh/graphql' && x.body.query.includes('reviewThreads'));
+    assert.deepStrictEqual(q.body.variables, { owner: 'dono', name: 'repo', n: 7 });
+    const text = feedbackText(pr, fb, 'joao');
+    assert.ok(text.includes('src/a.ts:10') && text.includes('renomeie isso') && text.includes('Faltam testes.') && text.includes('outdated'), text);
+    assert.ok(!text.includes('ok já') && !text.includes('respondi'), 'resolvida e o próprio autor ficam de fora');
+    await gh.resolveThread(pr, 'T1', 'Feito em abc.');
+    const calls = seen.filter(x => x.url === '/gh/graphql').slice(-2);
+    assert.ok(calls[0].body.query.includes('addPullRequestReviewThreadReply') && calls[0].body.variables.body === 'Feito em abc.');
+    assert.ok(calls[1].body.query.includes('resolveReviewThread') && calls[1].body.variables.id === 'T1');
+  });
+
   const gl = new GitLabPrBrowser(parseRemote('git@git.empresa.local:time/api.git', ['git.empresa.local']), 'glpat', `${base}/gl`);
   await check('GitLab self-hosted: grupos, conflito, conversas abertas', async () => {
     const g = await gl.groups(await gl.whoami());
@@ -144,12 +192,24 @@ const iso = daysAgo => new Date(Date.now() - daysAgo * 86400000).toISOString();
     await gl.setDraft({ id: 5, title: 'MR meu' }, true);
     assert.deepStrictEqual(seen.at(-1).body, { title: 'Draft: MR meu' });
   });
+  await check('GitLab: discussões resolvíveis viram conversas; as gerais, revisões; resolver responde e marca', async () => {
+    const pr = { id: 6, ref: '!6', title: 'Revisar', url: 'w6' };
+    const fb = await gl.feedback(pr);
+    assert.deepStrictEqual(fb.threads.map(x => `${x.id}:${x.resolved}:${x.path}:${x.line}`), ['d1:false:app.py:3', 'd2:true:app.py:9']);
+    assert.deepStrictEqual(fb.reviews.map(r => r.body), ['no geral, ok']);
+    await gl.resolveThread(pr, 'd1', 'Feito.');
+    assert.deepStrictEqual(seen.at(-2).body, { body: 'Feito.' });
+    assert.strictEqual(seen.at(-1).url, '/gl/projects/time%2Fapi/merge_requests/6/discussions/d1?resolved=true');
+    assert.ok(feedbackText(pr, { threads: [], reviews: [] }).includes('No unresolved'));
+  });
   await check('Bitbucket/Azure: listagem pelo cliente existente; ações avisam que não há suporte', async () => {
     const fake = { kind: 'azure', label: 'PR', whoami: async () => 'eu', listOpen: async () => [{ id: 3, ref: '!3', url: 'u', title: 't', state: 'open', source: 's', target: 'main' }] };
     const b = new ListOnlyPrBrowser(fake);
     const g = await b.groups('eu');
     assert.deepStrictEqual(g.open.map(p => p.ref), ['!3']);
     assert.strictEqual(b.can.merge, false);
+    assert.strictEqual(b.can.threads, false);
+    await assert.rejects(b.feedback(g.open[0]), /browser/);
     await assert.rejects(b.files(g.open[0]), /browser/);
   });
 

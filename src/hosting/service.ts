@@ -285,6 +285,11 @@ export class RequestService {
     return this.fetching;
   }
 
+  /** Preenchido por src/stack: destino natural da branch (o pai, se estiver empilhada). */
+  preferredTarget?: (branch: string) => string | undefined;
+  /** Preenchido por src/claude: título e descrição gerados pelo Claude (pullRequests.describeWithClaude). */
+  describe?: (branch: string, target: string, subjects: string[], label: 'PR' | 'MR') => Promise<{ title: string; body: string } | undefined>;
+
   /** Publica a branch (push se preciso) e abre o PR/MR. */
   /** `fixedTarget`: destino já decidido (promoção entre estágios do fluxo). */
   async publish(branch: string, fixedTarget?: string) {
@@ -313,12 +318,13 @@ export class RequestService {
     }
 
     const { base } = await this.ctl.base();
-    const targets = [base, ...(await repo.refs()).filter(x => x.kind === 'head' && x.name !== base && x.name !== branch).map(x => x.name)];
+    const preferred = this.preferredTarget?.(branch);
+    const targets = [...new Set([...(preferred ? [preferred] : []), base, ...(await repo.refs()).filter(x => x.kind === 'head' && x.name !== base && x.name !== branch).map(x => x.name)])];
     const target = fixedTarget
       ? { label: fixedTarget }
       : await vscode.window.showQuickPick(
-          targets.map((tgt, i) => ({ label: tgt, description: i === 0 ? 'base' : '' })),
-          { title: t('{0} from {1} to…', L, branch), placeHolder: base },
+          targets.map(tgt => ({ label: tgt, description: tgt === preferred ? t('stacked on it') : tgt === base ? 'base' : '' })),
+          { title: t('{0} from {1} to…', L, branch), placeHolder: preferred ?? base },
         );
     if (!target) return;
 
@@ -327,7 +333,8 @@ export class RequestService {
       vscode.window.showInformationMessage(t('{0} has no commits that {1} does not have.', branch, target.label));
       return;
     }
-    const title = await vscode.window.showInputBox({ title: t('{0} title', L), value: suggestTitle(branch, subjects), ignoreFocusOut: true });
+    const generated = this.describe ? await this.describe(branch, target.label, subjects, L).catch(() => undefined) : undefined;
+    const title = await vscode.window.showInputBox({ title: t('{0} title', L), value: generated?.title ?? suggestTitle(branch, subjects), ignoreFocusOut: true });
     if (!title) return;
     const kind = await vscode.window.showQuickPick(
       [
@@ -343,7 +350,13 @@ export class RequestService {
     if (!(await this.push(branch))) return;
     try {
       const created = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating {0}…', L) }, () =>
-        client.create({ source: branch, target: target.label, title, body: suggestBody(subjects, L, this.issueTrailers(branch)), draft: kind.draft }),
+        client.create({
+          source: branch,
+          target: target.label,
+          title,
+          body: generated ? [generated.body, ...this.issueTrailers(branch)].join('\n\n') : suggestBody(subjects, L, this.issueTrailers(branch)),
+          draft: kind.draft,
+        }),
       );
       this.byBranch.set(branch, created);
       this.ctl.log(t('{0} {1} created: {2}', L, created.ref, created.url));
