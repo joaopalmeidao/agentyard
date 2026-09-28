@@ -77,7 +77,6 @@ html,body{background:var(--vscode-editor-background);color:var(--vscode-foregrou
 .ay-btns button{font-size:15px;padding:9px 14px;border-radius:6px;border:1px solid var(--vscode-button-border);background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 .ay-btns button.primary{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
 .ay-msg{padding:32px 16px;text-align:center;color:var(--vscode-descriptionForeground)}
-#ay-bar{margin:0 -16px}
 /* celular: sem rolagem lateral, uma coluna de cards, histórico só com grafo, descrição e data */
 @media (max-width: 700px){
   body{padding:0 10px 16px;overflow-x:hidden}
