@@ -1,5 +1,18 @@
 # Changelog
 
+## Não lançado
+- **Uso do Claude** (clique no uso na barra de status ou **Uso do Claude Code: limites do plano, contexto
+  e custo** na paleta): uma tela com os limites reais do plano (sessão de 5 h e semana, com a hora em
+  que renovam), o histórico deles em 24 h ou 7 dias, cada Claude Code aberto com modelo, contexto usado,
+  custo, linhas e tempo (de todas as janelas), o custo por dia e a estimativa pelos logs que já existia.
+- **Statusline nos Claude abertos pelo AgentYard** (`worktreeGraph.claude.statusLine`): é por ela que o
+  Claude manda os números reais, sem mexer no seu `settings.json`. Em `keep` (padrão) a sua statusline
+  continua aparecendo; sem uma, aparece a do AgentYard (modelo, branch, contexto, custo, sessão e
+  semana). `agentyard` sempre mostra a do AgentYard, e `off` não mexe na statusline.
+- A barra de status mostra a % real da sessão e da semana (fica amarela a partir de 80%), e a fila de
+  tarefas (`worktreeGraph.tasks.pauseAtUsage`) pausa pelos limites reais quando eles existem, até a
+  janela renovar.
+
 ## 0.17.0
 - **Destino na fila de merge**: ao pôr uma worktree na fila (menu da worktree, grafo, aviso de agente
   pronto e view da fila) você escolhe para onde ela vai. Com um fluxo de estágios configurado, a

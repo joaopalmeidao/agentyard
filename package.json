@@ -3983,6 +3983,21 @@
           "default": true,
           "markdownDescription": "%config.claude.trackState.markdownDescription%"
         },
+        "worktreeGraph.claude.statusLine": {
+          "type": "string",
+          "enum": [
+            "keep",
+            "agentyard",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.claude.statusLine.keep%",
+            "%config.claude.statusLine.agentyard%",
+            "%config.claude.statusLine.off%"
+          ],
+          "default": "keep",
+          "markdownDescription": "%config.claude.statusLine.markdownDescription%"
+        },
         "worktreeGraph.claude.notify": {
           "type": "string",
           "enum": [

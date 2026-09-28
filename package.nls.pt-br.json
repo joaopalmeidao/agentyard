@@ -97,7 +97,7 @@
   "command.claude.copySessionId.title": "Copiar id da sessão",
   "command.claude.newSession.title": "Nova sessão do Claude aqui",
   "command.claude.commands.title": "Comandos do Claude Code…",
-  "command.claude.usage.title": "Uso do Claude Code (janela de 5 h e semana)",
+  "command.claude.usage.title": "Uso do Claude Code: limites do plano, contexto e custo",
   "command.claudeConfig.refresh.title": "Claude: atualizar configuração",
   "command.claudeConfig.newSkill.title": "Claude: nova skill…",
   "command.claudeConfig.copySkill.title": "Copiar para o outro escopo (usuário ↔ projeto)",
@@ -491,5 +491,9 @@
   "command.orchestrator.show.title": "Tarefas divididas entre agentes…",
   "command.claude.lessons.title": "✦ Aprender com as sessões desta worktree (CLAUDE.md)…",
   "command.templates.stats.title": "Modelos de tarefa: como se saem",
-  "config.remoteAccess.actions.description": "Permite que o painel aberto no celular execute ações (mesclar, push, abrir agente…); as confirmações aparecem no celular. Desligado, o painel só mostra."
+  "config.remoteAccess.actions.description": "Permite que o painel aberto no celular execute ações (mesclar, push, abrir agente…); as confirmações aparecem no celular. Desligado, o painel só mostra.",
+  "config.claude.statusLine.keep": "Coletar o uso e manter a sua statusline (do seu settings.json); sem uma, mostrar a do AgentYard.",
+  "config.claude.statusLine.agentyard": "Coletar o uso e sempre mostrar a linha do AgentYard (modelo, branch, contexto, custo, sessão e semana).",
+  "config.claude.statusLine.off": "Não mexer na statusline: a tela de uso fica só com a estimativa pelos logs.",
+  "config.claude.statusLine.markdownDescription": "Statusline dos Claude Code abertos pelo AgentYard (via `--settings`, sem mexer no seu `settings.json`). O Claude manda para ela os limites reais do plano (sessão de 5 h e semana), o contexto usado e o custo; o AgentYard guarda isso para a tela **Uso do Claude**, a barra de status e `#worktreeGraph.tasks.pauseAtUsage#`. Vale para o próximo Claude aberto."
 }

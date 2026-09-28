@@ -7,6 +7,8 @@ import { usagePause, UsagePause } from '../autopilot/core';
 import type { Controller } from '../controller';
 import type { GraphState } from '../model';
 import { locale, t } from '../i18n';
+import type { RateLimit } from './statusLine';
+import type { LiveLimits } from './usage';
 import {
   currentBlock,
   dailyTotals,
@@ -191,8 +193,32 @@ export class ClaudeService implements vscode.Disposable {
     return this.cfg().get<string>('weekStart', 'rolling') === 'monday' ? 'monday' : 'rolling';
   }
 
-  private updateStatus() {
-    if (!this.cfg().get<boolean>('showUsageInStatusBar', true) || !this.sessions.length) {
+  /** Limites reais do plano, vindos da statusline (src/claude/usage.ts); preenchido no registro. */
+  liveLimits?: () => LiveLimits | undefined;
+
+  updateStatus() {
+    if (!this.cfg().get<boolean>('showUsageInStatusBar', true)) {
+      this.status.hide();
+      return;
+    }
+    const live = this.liveLimits?.();
+    if (live && (live.fiveHour || live.sevenDay)) {
+      const pctText = (r?: RateLimit) => (r ? `${Math.round(r.pct)}%` : '—');
+      const worst = Math.max(live.fiveHour?.pct ?? 0, live.sevenDay?.pct ?? 0);
+      this.status.text = `$(sparkle) ${t('session {0} · week {1}', pctText(live.fiveHour), pctText(live.sevenDay))}`;
+      this.status.backgroundColor = worst >= 80 ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
+      const md = new vscode.MarkdownString(undefined, true);
+      md.appendMarkdown(t('**Claude Code usage** — plan limits reported by Claude Code') + '\n\n');
+      const line = (label: string, r?: RateLimit) =>
+        r ? `${label}: **${Math.round(r.pct)}%**${r.resetsAt ? ` · ${t('resets {0}', new Date(r.resetsAt).toLocaleString(locale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}` : ''}\n\n` : '';
+      md.appendMarkdown(line(t('Session (5 h)'), live.fiveHour) + line(t('Week'), live.sevenDay));
+      md.appendMarkdown(t('Updated {0}. Click for the usage screen.', ago(live.at)));
+      this.status.tooltip = md;
+      this.status.show();
+      return;
+    }
+    this.status.backgroundColor = undefined;
+    if (!this.sessions.length) {
       this.status.hide();
       return;
     }
@@ -278,41 +304,27 @@ export class ClaudeService implements vscode.Disposable {
     return s ? renderTranscript(s) : t('Session {0} not found.', id);
   }
 
-  async usagePanel() {
+  /** Uso estimado pelos logs para a tela "Uso do Claude": janela de 5 h, semana, por dia e por worktree. */
+  async estimate() {
     await this.scan();
     const now = Date.now();
     const block = currentBlock(this.sessions, now, this.cfg().get<number>('blockHours', 5));
     const week = weekWindow(this.sessions, this.weekMode(), now);
-    const days = dailyTotals(this.sessions, 7, now);
-    const max = Math.max(1, ...days.map(d => d.tokens));
-    const bar = (n: number) => '█'.repeat(Math.round((n / max) * 20)).padEnd(20, '·');
-    const weekStart = week.start;
     const perWt = [...this.byWorktree()]
       .map(([p, list]) => ({
-        p,
-        tokens: list.reduce((sum, s) => sum + s.events.filter(e => e[0] >= weekStart).reduce((a, e) => a + e[1], 0), 0),
+        name: this.ctl.state?.worktrees.find(w => w.path === p)?.name ?? path.basename(p),
+        tokens: list.reduce((sum, s) => sum + s.events.filter(e => e[0] >= week.start).reduce((a, e) => a + e[1], 0), 0),
       }))
       .filter(x => x.tokens > 0)
       .sort((a, b) => b.tokens - a.tokens)
       .slice(0, 8);
-    const items: vscode.QuickPickItem[] = [
-      { label: t('5 h window'), kind: vscode.QuickPickItemKind.Separator },
-      block
-        ? { label: `$(pulse) ${formatTokens(block.tokens)} tokens`, description: t('{0} → resets at {1}', hhmm(block.start), hhmm(block.end)), detail: t('{0} responses', block.responses) }
-        : { label: '$(circle-slash) ' + t('No active window') },
-      { label: this.weekMode() === 'monday' ? t('Since Monday') : t('Last 7 days'), kind: vscode.QuickPickItemKind.Separator },
-      { label: `$(calendar) ${formatTokens(week.tokens)} tokens`, detail: t('{0} responses', week.responses) },
-      { label: t('Per day'), kind: vscode.QuickPickItemKind.Separator },
-      ...days.map(d => ({ label: `${d.day.slice(5)}  ${bar(d.tokens)}`, description: formatTokens(d.tokens) })),
-      ...(perWt.length ? [{ label: t('Worktrees that used the most this week'), kind: vscode.QuickPickItemKind.Separator } as vscode.QuickPickItem] : []),
-      ...perWt.map(x => ({ label: `$(git-branch) ${this.ctl.state?.worktrees.find(w => w.path === x.p)?.name ?? path.basename(x.p)}`, description: formatTokens(x.tokens) })),
-      { label: '', kind: vscode.QuickPickItemKind.Separator },
-      { label: '$(gear) ' + t('Configure budgets and week'), description: 'worktreeGraph.claude' },
-    ];
-    const pick = await vscode.window.showQuickPick(items, {
-      title: t('Claude Code usage (estimate from local logs; /usage in Claude shows the official limits)'),
-    });
-    if (pick?.label.startsWith('$(gear)')) vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.claude');
+    return {
+      block: block ? { tokens: block.tokens, responses: block.responses, start: block.start, end: block.end } : undefined,
+      week: { tokens: week.tokens, responses: week.responses, monday: this.weekMode() === 'monday' },
+      days: dailyTotals(this.sessions, 7, now),
+      perWt,
+      budgets: this.budgets(),
+    };
   }
 
   /** Comandos de barra/skills e atalhos de sessão para uma worktree. */

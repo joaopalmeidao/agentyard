@@ -3,8 +3,9 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
-import { AGENT_FILE_SUFFIXES, AgentState, EventTail, HookEvent, insertArgs, instrumentCommand, isClaudeCommand, nextState, pruneEvents, withIdeFlag, withoutPermissionArgs, writeHookSettings } from './claude/hooks';
+import { AGENT_FILE_SUFFIXES, AgentState, EventTail, HookEvent, insertArgs, instrumentCommand, isClaudeCommand, nextState, pruneEvents, withIdeFlag, withoutPermissionArgs, writeHookSettings, StatusLineOptions } from './claude/hooks';
 import { describeToolRequest } from './claude/guard';
+import { StatusLineMode, userStatusLineCommand } from './claude/statusLine';
 import { t } from './i18n';
 import { askTask } from './taskInput';
 
@@ -257,6 +258,13 @@ export class AgentTerminals implements vscode.Disposable {
     return path.join(this.ctl.ctx.globalStorageUri.fsPath, 'claude-events');
   }
 
+  /** Statusline que vai junto dos hooks (`claude.statusLine`): grava as métricas de uso de cada terminal. */
+  statusLineOptions(): StatusLineOptions {
+    const mode = this.ctl.cfg().get<StatusLineMode>('claude.statusLine', 'keep');
+    const claudeDir = this.ctl.cfg().get<string>('claude.configDir', '') || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+    return { mode, userCommand: mode === 'keep' ? userStatusLineCommand(claudeDir) : undefined, labels: { session: t('session'), week: t('week') } };
+  }
+
   /** Terminal restaurado depois de recarregar a janela: volta a acompanhar se foi aberto pela extensão. */
   private attach(term: vscode.Terminal): boolean {
     if (term.exitStatus !== undefined || this.open.some(o => o.terminal === term)) return false;
@@ -474,7 +482,7 @@ export class AgentTerminals implements vscode.Disposable {
     if (this.ctl.cfg().get<boolean>('claude.connectIde', false)) command = withIdeFlag(command);
     if (this.tails.has(o.id)) {
       try {
-        command = instrumentCommand(command, writeHookSettings(this.eventsDir()));
+        command = instrumentCommand(command, writeHookSettings(this.eventsDir(), undefined, undefined, this.statusLineOptions()));
         o.state = 'starting';
         o.stateAt = Date.now();
       } catch (e) {
@@ -580,7 +588,7 @@ export class AgentTerminals implements vscode.Disposable {
         const extras = this.launchExtras?.();
         bridged = !!extras && Object.keys(extras.hooks).length > 0;
         // arquivos diferentes com e sem a ponte: um terminal restaurado não herda hooks que não pediu
-        const settings = writeHookSettings(this.eventsDir(), extras?.hooks, bridged ? 'hooks.bridge.settings.json' : 'hooks.settings.json');
+        const settings = writeHookSettings(this.eventsDir(), extras?.hooks, bridged ? 'hooks.bridge.settings.json' : 'hooks.settings.json', this.statusLineOptions());
         command = instrumentCommand(command, settings, extras?.mcpConfig);
         hooks = true;
       } catch (e) {

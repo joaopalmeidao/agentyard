@@ -448,6 +448,36 @@ exports.run = async () => {
     await ctl.refresh();
   });
 
+  await check('uso do Claude: statusline grava, limites reais pausam a fila e a tela abre', async () => {
+    const ev = api.agentTerms.eventsDir();
+    require('fs').mkdirSync(ev, { recursive: true });
+    const soon = Math.floor(Date.now() / 1000) + 3600;
+    const status = {
+      session_id: 'sess-uso',
+      model: { display_name: 'Opus 5.5' },
+      cost: { total_cost_usd: 0.5 },
+      context_window: { used_percentage: 12 },
+      rate_limits: { five_hour: { used_percentage: 95, resets_at: soon }, seven_day: { used_percentage: 40, resets_at: soon + 86400 } },
+    };
+    const file = require('path').join(ev, 'teste-uso.status.json');
+    require('fs').writeFileSync(file, JSON.stringify(status));
+    // tudo síncrono até voltar a 5%: a fila de outros testes não chega a ver os 95% e pausar
+    api.usage.poll();
+    assert.strictEqual(api.usage.limits().fiveHour.pct, 95);
+    const pause = api.ctl.taskDeferred();
+    status.rate_limits.five_hour = { used_percentage: 5, resets_at: soon };
+    require('fs').writeFileSync(file, JSON.stringify(status));
+    require('fs').utimesSync(file, new Date(), new Date(Date.now() + 5000));
+    api.usage.poll();
+    assert.deepStrictEqual([pause.window, pause.pct, pause.until], ['5h', 95, soon * 1000], 'limite real acima de tasks.pauseAtUsage pausa a fila');
+    assert.strictEqual(api.ctl.taskDeferred(), undefined, 'abaixo do limite a fila anda, mesmo com a estimativa');
+    assert.strictEqual(api.agentTerms.statusLineOptions().mode, 'keep');
+    await vscode.commands.executeCommand('worktreeGraph.claude.usage');
+    await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Claude usage');
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    require('fs').rmSync(file, { force: true });
+  });
+
   await check('atividade: painel abre e soma commits e tokens por branch; custo por tarefa com preço', async () => {
     await until(() => api.claude.loaded, 20000);
     await vscode.commands.executeCommand('worktreeGraph.activity');
