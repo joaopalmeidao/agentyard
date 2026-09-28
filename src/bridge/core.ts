@@ -3,9 +3,11 @@
  *
  * Como funciona:
  * - cada janela do VS Code com a extensão abre um servidor HTTP em 127.0.0.1 (porta aleatória, token)
- *   e se anuncia em `<home>/bridges/<pid>.json` com as worktrees do repositório aberto;
+ *   e se anuncia em `<home>/bridges/<pid>.json` com as worktrees do projeto ativo (`roots`) e as dos
+ *   outros projetos da lista do AgentYard (`others`);
  * - o servidor MCP (`agentyard-mcp.js`, stdio) e o hook (`agentyard-hook.js`) ficam em `<home>/bin`,
- *   acham a janela dona do cwd pelo prefixo de caminho mais longo e falam com ela por HTTP;
+ *   acham a janela dona do cwd pelo prefixo de caminho mais longo (uma janela com o projeto ativo
+ *   vence uma que só o tem na lista) e falam com ela por HTTP;
  * - home = AGENTYARD_HOME ou ~/.agentyard.
  *
  * Os Claude Code abertos pela extensão recebem os dois na linha de comando (`--settings` e
@@ -35,8 +37,10 @@ export interface BridgeInfo {
   pid: number;
   port: number;
   token: string;
-  /** Worktrees do repositório aberto na janela. */
+  /** Worktrees do projeto ativo na janela. */
   roots: string[];
+  /** Worktrees dos outros projetos da lista do AgentYard (a janela atende, sem ser o projeto ativo). */
+  others?: string[];
   repo?: string;
   version?: string;
   started: number;
@@ -99,15 +103,47 @@ export function listBridges(home = bridgeHome(), isAlive: (pid: number) => boole
   return out;
 }
 
-/** Janela cujo repositório contém `cwd` (a worktree de caminho mais longo vence). */
-export function pickBridge(bridges: BridgeInfo[], cwd: string): BridgeInfo | undefined {
+function longest(bridges: BridgeInfo[], cwd: string, roots: (b: BridgeInfo) => string[] | undefined): BridgeInfo | undefined {
   let best: { b: BridgeInfo; len: number } | undefined;
   for (const b of bridges) {
-    for (const r of b.roots) {
+    for (const r of roots(b) ?? []) {
       if (isInside(cwd, r) && (!best || r.length > best.len || (r.length === best.len && b.started > best.b.started))) best = { b, len: r.length };
     }
   }
   return best?.b;
+}
+
+/**
+ * Janela cujo projeto contém `cwd` (a worktree de caminho mais longo vence). Primeiro as janelas
+ * com o projeto ativo; sem nenhuma, uma que tenha o projeto na lista.
+ */
+export function pickBridge(bridges: BridgeInfo[], cwd: string): BridgeInfo | undefined {
+  return longest(bridges, cwd, b => b.roots) ?? longest(bridges, cwd, b => b.others);
+}
+
+/**
+ * Worktrees de um repositório lidas do `.git` (sem processo git): a pasta principal e as de
+ * `.git/worktrees/*`/gitdir que ainda existem.
+ */
+export function worktreePathsOf(mainPath: string): string[] {
+  const out = [path.normalize(mainPath)];
+  const dir = path.join(mainPath, '.git', 'worktrees');
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return out;
+  }
+  for (const n of names) {
+    try {
+      const gitdir = fs.readFileSync(path.join(dir, n, 'gitdir'), 'utf8').trim();
+      const wt = path.normalize(path.dirname(path.resolve(dir, n, gitdir)));
+      if (fs.existsSync(wt)) out.push(wt);
+    } catch {
+      /* worktree sem gitdir: ignora */
+    }
+  }
+  return out;
 }
 
 export function findBridge(cwd: string, home = bridgeHome()): BridgeInfo | undefined {

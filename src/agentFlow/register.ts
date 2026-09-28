@@ -3,9 +3,11 @@ import * as vscode from 'vscode';
 import * as actions from '../actions';
 import type { AgentTerminals } from '../agents';
 import type { Controller } from '../controller';
+import { Repo } from '../git';
 import { t } from '../i18n';
 import type { Issue } from '../issues/core';
 import { DEFAULT_ISSUE_PROMPT, renderPrompt } from '../issues/core';
+import { mainPathOf } from '../projects';
 import { Attempts } from './attempts';
 import { keyOf } from './head';
 import { TaskItem, TaskQueue, TasksProvider } from './tasks';
@@ -42,7 +44,10 @@ async function resolveWorktree(ctl: Controller, arg: Arg, placeHolder: string): 
 export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller, agentTerms: AgentTerminals): AgentFlow {
   const notify = async (r: ReadyInfo) => {
     if (!ctl.cfg().get<boolean>('agents.notifyReady', true)) return;
-    const name = r.branch ?? path.basename(r.path);
+    // pronto num projeto da lista que não é o ativo (mark_ready pela ponte): as ações valem para o repositório dele
+    const foreign = ctl.repo && !(ctl.state?.worktrees ?? []).some(w => keyOf(w.path) === keyOf(r.path)) ? await Repo.open(r.path) : undefined;
+    const project = foreign && mainPathOf(foreign);
+    const name = (project ? `${path.basename(project)} · ` : '') + (r.branch ?? path.basename(r.path));
     const L = ctl.requests.label;
     const review = t('Review');
     const analyze = t('Analyze merge');
@@ -71,6 +76,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     );
     if (!pick) return;
     if (pick !== openTerminal) await watch.clearReady(r.path);
+    if (project && pick !== openTerminal) await ctl.setActiveRepo(project);
     if (pick === review && r.branch) await actions.diffWithBase(ctl, r.branch);
     if (pick === queue && r.branch) await vscode.commands.executeCommand('worktreeGraph.mergeQueue.add', r.branch);
     if (pick === queueAuthorized && r.branch) await vscode.commands.executeCommand('worktreeGraph.mergeQueue.addAuthorized', r.branch);

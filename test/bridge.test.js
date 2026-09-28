@@ -60,6 +60,29 @@ fs.mkdirSync(path.join(wt, 'src'), { recursive: true });
     assert.strictEqual(C.pickBridge([a, b], root), undefined);
   });
 
+  await check('pickBridge atende projeto da lista (não ativo), mas a janela com ele ativo vence', () => {
+    const other = path.join(root, 'outro-repo');
+    const lista = { pid: 3, port: 3, token: 'c', roots: [repo], others: [other], started: 5 };
+    const ativo = { pid: 4, port: 4, token: 'd', roots: [other], started: 1 };
+    assert.strictEqual(C.pickBridge([lista], path.join(other, 'src')).pid, 3);
+    assert.strictEqual(C.pickBridge([lista, ativo], path.join(other, 'src')).pid, 4);
+    assert.strictEqual(C.pickBridge([lista, ativo], repo).pid, 3);
+    // anúncio antigo, sem `others`
+    assert.strictEqual(C.pickBridge([{ pid: 5, port: 5, token: 'e', roots: [repo], started: 1 }], other), undefined);
+  });
+
+  await check('worktreePathsOf lê as worktrees do .git sem processo git', () => {
+    const main = path.join(root, 'wt-repo');
+    const linked = path.join(root, 'wt-repo.worktrees', 'feat');
+    fs.mkdirSync(path.join(main, '.git', 'worktrees', 'feat'), { recursive: true });
+    fs.mkdirSync(path.join(main, '.git', 'worktrees', 'sumiu'), { recursive: true });
+    fs.mkdirSync(linked, { recursive: true });
+    fs.writeFileSync(path.join(main, '.git', 'worktrees', 'feat', 'gitdir'), path.join(linked, '.git') + '\n');
+    fs.writeFileSync(path.join(main, '.git', 'worktrees', 'sumiu', 'gitdir'), path.join(root, 'nao-existe', '.git') + '\n');
+    assert.deepStrictEqual(C.worktreePathsOf(main), [path.normalize(main), path.normalize(linked)]);
+    assert.deepStrictEqual(C.worktreePathsOf(path.join(root, 'sem-git')), [path.join(root, 'sem-git')]);
+  });
+
   await check('listBridges apaga anúncios de processos mortos', () => {
     C.writeBridgeInfo({ pid: 999999, port: 5, token: 't', roots: [repo], started: 1 });
     C.writeBridgeInfo({ pid: 888888, port: 6, token: 't', roots: [repo], started: 1 });

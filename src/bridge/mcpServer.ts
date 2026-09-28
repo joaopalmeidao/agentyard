@@ -39,7 +39,7 @@ export async function handle(msg: any, cwd = process.cwd()): Promise<unknown | u
       if (!core.TOOLS.some(t => t.name === name)) return fail(-32602, `Ferramenta desconhecida: ${name}`);
       const bridge = core.findBridge(cwd);
       if (!bridge) {
-        return reply(text('O AgentYard não está aberto para este repositório: abra a pasta do repositório (ou uma worktree dele) no VS Code com a extensão ativa.', true));
+        return reply(text('O AgentYard não está aberto para este repositório: nenhuma janela do VS Code com a extensão tem este repositório como projeto ativo nem na lista de projetos. Adicione-o em Projetos (Adicionar projeto…) ou abra a pasta dele no VS Code.', true));
       }
       try {
         const r = await core.callBridge(bridge, 'tool', { name, args: params?.arguments ?? {}, cwd, agentId: process.env.WTGRAPH_AGENT_ID || undefined });

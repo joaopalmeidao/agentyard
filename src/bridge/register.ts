@@ -10,8 +10,9 @@ import type { AgentFlow } from '../agentFlow/register';
 import { keyOf } from '../agentFlow/head';
 import type { Controller } from '../controller';
 import type { Coord } from '../coord/register';
+import { Repo } from '../git';
 import { t } from '../i18n';
-import type { WorktreeView } from '../model';
+import { resolveBase, type WorktreeView } from '../model';
 import * as core from './core';
 
 interface Deps {
@@ -47,6 +48,24 @@ export interface ToolContext {
 
 export type ToolHandler = (args: Record<string, any>, ctx: ToolContext) => Promise<string | { text: string; isError?: boolean }>;
 
+/**
+ * Worktree de um projeto da lista que não é o ativo na janela: lida direto do git, sem o estado do
+ * grafo. Atende só as ferramentas de FOREIGN_TOOLS.
+ */
+export interface ForeignWorktree {
+  path: string;
+  branch?: string;
+  repoName: string;
+  baseRef: string;
+  ahead: number;
+  behind: number;
+  changes: number;
+  operation?: string;
+}
+
+/** Ferramentas que funcionam numa worktree de projeto não ativo. */
+const FOREIGN_TOOLS = new Set(['status', 'mark_ready', 'notify']);
+
 const BRANCH_RE = /[\s~^:?*[\\]|\.\.|@\{|\/$|^\/|\.lock$/;
 
 /** Saída JSON de um hook (o que o Claude lê no stdout). */
@@ -73,6 +92,8 @@ export class ClaudeBridge implements vscode.Disposable {
   private readonly hooks = new Map<string, HookHandler[]>();
   private readonly tools = new Map<string, ToolHandler>();
   private scriptsOk = false;
+  /** Pastas principais dos projetos da lista do AgentYard (ver setProjects). */
+  private projectPaths: () => string[] = () => [];
 
   constructor(private readonly ctx: vscode.ExtensionContext, private readonly ctl: Controller, private readonly deps: Deps) {
     this.disposables.push(
@@ -108,6 +129,16 @@ export class ClaudeBridge implements vscode.Disposable {
 
   addTool(name: string, fn: ToolHandler) {
     this.tools.set(name, fn);
+  }
+
+  /**
+   * Projetos da lista do AgentYard: a janela também se anuncia como dona das worktrees deles, para
+   * o Claude aberto num projeto que não é o ativo continuar falando com a extensão.
+   */
+  setProjects(list: () => string[], onChange: vscode.Event<void>) {
+    this.projectPaths = list;
+    this.disposables.push(onChange(() => this.announce()));
+    this.announce();
   }
 
   /** Hooks e MCP para o Claude que a extensão vai abrir (vazio com a ponte desligada). */
@@ -155,13 +186,16 @@ export class ClaudeBridge implements vscode.Disposable {
     this.info = undefined;
   }
 
-  /** Atualiza o anúncio com as worktrees do repositório aberto (só reescreve quando mudam). */
+  /** Atualiza o anúncio com as worktrees do projeto ativo e dos outros da lista (só reescreve quando mudam). */
   private announce(force = false) {
     if (!this.info) return;
     const roots = [...new Set([...this.worktrees().map(w => w.path), ...(this.ctl.repo ? [this.ctl.repo.root] : [])])];
+    const mine = new Set(roots.map(keyOf));
+    const others = [...new Set(this.projectPaths().flatMap(p => core.worktreePathsOf(p)))].filter(p => !mine.has(keyOf(p)));
     const repo = this.ctl.repo?.commonDir;
-    if (!force && roots.join('\n') === this.info.roots.join('\n') && repo === this.info.repo) return;
+    if (!force && roots.join('\n') === this.info.roots.join('\n') && others.join('\n') === (this.info.others ?? []).join('\n') && repo === this.info.repo) return;
     this.info.roots = roots;
+    this.info.others = others;
     this.info.repo = repo;
     try {
       core.writeBridgeInfo(this.info);
@@ -228,6 +262,28 @@ export class ClaudeBridge implements vscode.Disposable {
     return w;
   }
 
+  /** Worktree de outro projeto da lista (não o ativo) que contém `p`, lida direto do git. */
+  async foreign(p: string | undefined): Promise<ForeignWorktree | undefined> {
+    if (!p || this.worktreeAt(p) || !(this.info?.others ?? []).some(r => core.isInside(p, r))) return undefined;
+    const repo = await Repo.open(p);
+    if (!repo) return undefined;
+    const [refs, st, head] = await Promise.all([repo.refs(), repo.status(repo.root), repo.run(['symbolic-ref', '--short', '-q', 'HEAD'])]);
+    const { baseRef } = await resolveBase(repo, refs, '', this.ctl.cfg().get<boolean>('autoSync.fetchRemote', false));
+    const [ahead, behind] = await repo.aheadBehind('HEAD', baseRef);
+    const main = path.basename(repo.commonDir).toLowerCase() === '.git' ? path.dirname(repo.commonDir) : repo.root;
+    const branch = head.code === 0 ? head.stdout.trim() || undefined : undefined;
+    return { path: repo.root, branch, repoName: path.basename(main), baseRef, ahead, behind, changes: st.changes, operation: st.operation };
+  }
+
+  private describeForeign(w: ForeignWorktree): string {
+    return [
+      `${w.branch ?? '(detached)'} — ${w.path}`,
+      `  ${w.ahead} commit(s) ahead and ${w.behind} behind ${w.baseRef}`,
+      `  ${w.changes} uncommitted file(s)${w.operation ? ` · ${w.operation} in progress` : ''}`,
+      `  (${w.repoName} is not the active project in AgentYard: only status, mark_ready and notify work here; the user can switch to it in the Projects view for the rest)`,
+    ].join('\n');
+  }
+
   private describe(w: WorktreeView): string {
     const parts = [
       `${w.branch ?? '(detached)'} — ${w.path}${w.isMain ? ' (main worktree)' : ''}${w.isBase ? ' (base)' : ''}`,
@@ -283,7 +339,9 @@ export class ClaudeBridge implements vscode.Disposable {
       if (!s) throw new Error('AgentYard is still loading the repository; try again in a moment.');
       return s;
     };
-    this.addTool('status', async (args, { cwd }) => {
+    this.addTool('status', async (args, { cwd, open }) => {
+      const f = args.worktree ? undefined : await this.foreign(open?.path ?? cwd);
+      if (f) return `Repository ${f.repoName}, base ${f.baseRef}.\n${this.describeForeign(f)}`;
       const s = state();
       return `Repository ${s.repoName}, base ${s.baseRef}.\n${this.describe(this.resolve(args.worktree, cwd))}`;
     });
@@ -330,22 +388,25 @@ export class ClaudeBridge implements vscode.Disposable {
       return `Worktree ${branch} created at ${dir}.${task ? ' An agent was opened there with the task.' : ''}`;
     });
     this.addTool('mark_ready', async (args, { cwd, open }) => {
-      const w = this.resolve(open?.path, cwd);
-      if (w.statusKnown && w.changes > 0) return { text: `There are still ${w.changes} uncommitted file(s) in ${w.branch ?? w.name}. Commit before marking it ready.`, isError: true };
+      const f = await this.foreign(open?.path ?? cwd);
+      const w = f ?? this.resolve(open?.path, cwd);
+      const where = w.branch ?? ('name' in w ? w.name : path.basename(w.path));
+      if ((f || ('statusKnown' in w && w.statusKnown)) && w.changes > 0) return { text: `There are still ${w.changes} uncommitted file(s) in ${where}. Commit before marking it ready.`, isError: true };
       const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
-      if (summary) this.ctl.log(t('Claude marked {0} as ready: {1}', w.branch ?? w.name, summary));
+      if (summary) this.ctl.log(t('Claude marked {0} as ready: {1}', where, summary));
       if (!(await flow().watch.markReady(w.path, w.branch, w.ahead))) {
-        return `Not marked yet: AgentYard still has to check ${w.branch ?? w.name} (the checks when you stop, or the automatic review). Finish your turn; if something comes back, fix it.`;
+        return `Not marked yet: AgentYard still has to check ${where} (the checks when you stop, or the automatic review). Finish your turn; if something comes back, fix it.`;
       }
-      return `${w.branch ?? w.name} marked as ready for review.`;
+      return `${where} marked as ready for review.`;
     });
     this.addTool('notify', async (args, { cwd, open }) => {
       const message = String(args.message ?? '').trim();
       if (!message) throw new Error('Give the message.');
-      const w = this.worktreeAt(open?.path ?? cwd);
+      const w = this.worktreeAt(open?.path ?? cwd) ?? (await this.foreign(open?.path ?? cwd));
+      const where = w && ('name' in w ? w.branch ?? w.name : w.branch ?? path.basename(w.path));
       const show = args.level === 'error' ? vscode.window.showErrorMessage : args.level === 'warning' ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
       const go = t('Show terminal');
-      void show(`Claude${w ? ` (${w.branch ?? w.name})` : ''}: ${message}`, ...(w ? [go] : [])).then(p => void (p && w && this.focusAgent(w.path, open)));
+      void show(`Claude${where ? ` (${where})` : ''}: ${message}`, ...(w ? [go] : [])).then(p => void (p && w && this.focusAgent(w.path, open)));
       return 'Notification shown.';
     });
   }
@@ -354,7 +415,16 @@ export class ClaudeBridge implements vscode.Disposable {
     const fn = this.tools.get(name);
     if (!fn) throw new Error(`Unknown tool: ${name}`);
     this.log(`tool ${name} (${path.basename(cwd)})`);
-    const r = await fn(args, { cwd, open: this.openById(agentId) });
+    const open = this.openById(agentId);
+    if (!FOREIGN_TOOLS.has(name) && !args.worktree) {
+      const f = await this.foreign(open?.path ?? cwd);
+      if (f) {
+        throw new Error(
+          `${f.repoName} is not the active project in AgentYard, so \`${name}\` is not available here (only status, mark_ready and notify). The user can switch to ${f.repoName} in the Projects view.`,
+        );
+      }
+    }
+    const r = await fn(args, { cwd, open });
     return typeof r === 'string' ? { text: r } : r;
   }
 
