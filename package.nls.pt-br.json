@@ -113,6 +113,7 @@
   "command.claudeConfig.checkMemoryIndex.title": "Verificar índice MEMORY.md",
   "command.claudeConfig.revealMemory.title": "Revelar pasta de memória",
   "command.claudeConfig.reveal.title": "Abrir no Explorer",
+  "command.features.title": "Ligar/desligar recursos (recursos, MCP, plugins)…",
   "command.claudeConfig.openFolder.title": "Claude: abrir arquivos do Claude…",
   "command.claudeConfig.toggleLearning.title": "Claude: aprender com o uso (ligar/desligar)",
   "command.claudeConfig.learn.title": "Claude: aprender com esta sessão",

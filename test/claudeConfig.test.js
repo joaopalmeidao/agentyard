@@ -124,6 +124,34 @@ check('memória: criar atualiza o índice; excluir remove a linha; verificar ín
   assert.ok(!fs.existsSync(file));
 });
 
+check('recursos: MCP do .mcp.json liga/desliga no settings.local.json', () => {
+  const p = path.join(root, 'mcp-proj');
+  fs.mkdirSync(path.join(p, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(p, '.mcp.json'), JSON.stringify({ mcpServers: { db: {}, web: {} } }));
+  fs.writeFileSync(path.join(p, '.claude', 'settings.json'), JSON.stringify({ disabledMcpjsonServers: ['web'], outra: 1 }));
+  assert.deepStrictEqual(C.listMcpjsonServers(p).map(s => [s.name, s.on]), [['db', true], ['web', false]]);
+  C.setMcpjsonServer(p, 'db', false);
+  C.setMcpjsonServer(p, 'web', true);
+  assert.deepStrictEqual(C.listMcpjsonServers(p).map(s => [s.name, s.on]), [['db', false], ['web', true]]);
+  const local = JSON.parse(fs.readFileSync(path.join(p, '.claude', 'settings.local.json'), 'utf8'));
+  assert.deepStrictEqual(local, { enabledMcpjsonServers: ['web'], disabledMcpjsonServers: ['db'] });
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(p, '.claude', 'settings.json'), 'utf8')), { disabledMcpjsonServers: [], outra: 1 });
+  assert.deepStrictEqual(C.listMcpjsonServers(path.join(root, 'nada')), []);
+});
+
+check('recursos: plugins e disableAllHooks', () => {
+  const f = path.join(root, 'plug.json');
+  fs.writeFileSync(f, JSON.stringify({ enabledPlugins: { 'a@m': true, 'b@m': false } }));
+  assert.deepStrictEqual(C.listPlugins(f).map(p => [p.name, p.on]), [['a@m', true], ['b@m', false]]);
+  C.setPlugin(f, 'a@m', false);
+  assert.strictEqual(C.listPlugins(f)[0].on, false);
+  assert.strictEqual(C.hooksDisabled(f), false);
+  C.setHooksDisabled(f, true);
+  assert.strictEqual(C.hooksDisabled(f), true);
+  C.setHooksDisabled(f, false);
+  assert.ok(!('disableAllHooks' in JSON.parse(fs.readFileSync(f, 'utf8'))));
+});
+
 const L = require('../out/claude/learn');
 
 check('aprender com o uso: bloco no CLAUDE.md entra uma vez e sai sem mexer no resto', () => {

@@ -113,6 +113,7 @@
   "command.claudeConfig.checkMemoryIndex.title": "Check MEMORY.md Index",
   "command.claudeConfig.revealMemory.title": "Reveal Memory Folder",
   "command.claudeConfig.reveal.title": "Open in File Manager",
+  "command.features.title": "Turn Features On/Off (Features, MCP, Plugins)…",
   "command.claudeConfig.openFolder.title": "Claude: Open Claude Files…",
   "command.claudeConfig.toggleLearning.title": "Claude: Learn from Use (On/Off)",
   "command.claudeConfig.learn.title": "Claude: Learn from This Session",

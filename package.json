@@ -772,6 +772,12 @@
         "icon": "$(folder-opened)"
       },
       {
+        "command": "worktreeGraph.features",
+        "title": "%command.features.title%",
+        "category": "AgentYard",
+        "icon": "$(settings)"
+      },
+      {
         "command": "worktreeGraph.claudeConfig.openFolder",
         "title": "%command.claudeConfig.openFolder.title%",
         "category": "AgentYard",
@@ -1781,6 +1787,11 @@
           "group": "1_sync"
         },
         {
+          "command": "worktreeGraph.features",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "2_log@0"
+        },
+        {
           "command": "worktreeGraph.showLog",
           "when": "view == worktreeGraph.worktrees",
           "group": "2_log"
@@ -1879,6 +1890,11 @@
           "command": "worktreeGraph.claude.refreshSessions",
           "when": "view == worktreeGraph.claudeSessions",
           "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.features",
+          "when": "view == worktreeGraph.claudeConfig",
+          "group": "navigation@0"
         },
         {
           "command": "worktreeGraph.claudeConfig.learn",

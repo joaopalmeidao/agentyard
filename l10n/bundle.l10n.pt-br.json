@@ -2538,5 +2538,16 @@
   "- When a procedure took several attempts or is likely to repeat, create a skill for it (or improve the existing one) and tell me in one line.": "- Quando um procedimento levou várias tentativas ou tende a se repetir, crie uma skill para ele (ou melhore a que já existe) e me avise numa linha.",
   "- When a skill turns out to be wrong or incomplete, fix it in the same session.": "- Quando uma skill se mostrar errada ou incompleta, corrija na mesma sessão.",
   "- Do not save what the code, the git history or CLAUDE.md already say.": "- Não grave o que o código, o histórico do git ou o CLAUDE.md já dizem.",
-  "{0} does not exist.": "{0} não existe."
+  "{0} does not exist.": "{0} não existe.",
+  "workspace": "workspace",
+  "memories and skills saved by Claude itself (user CLAUDE.md)": "memórias e skills gravadas pelo próprio Claude (CLAUDE.md do usuário)",
+  "Your Claude Code hooks": "Seus hooks do Claude Code",
+  "disableAllHooks in {0}": "disableAllHooks em {0}",
+  "AgentYard MCP tools (status, overlaps, mark_ready…)": "ferramentas MCP do AgentYard (status, overlaps, mark_ready…)",
+  ".mcp.json of the project · only for you (settings.local.json)": ".mcp.json do projeto · só para você (settings.local.json)",
+  "MCP servers": "Servidores MCP",
+  "Claude plugins": "Plugins do Claude",
+  "Turn features on and off": "Ligar e desligar recursos",
+  "Checked = on. Type to filter; Enter applies (new Claude sessions pick up Claude changes).": "Marcado = ligado. Digite para filtrar; Enter aplica (as mudanças do Claude valem para sessões novas).",
+  "{0} feature(s) turned on, {1} turned off.": "{0} recurso(s) ligado(s), {1} desligado(s)."
 }

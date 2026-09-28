@@ -12,6 +12,25 @@
 - A barra de status mostra a % real da sessão e da semana (fica amarela a partir de 80%), e a fila de
   tarefas (`worktreeGraph.tasks.pauseAtUsage`) pausa pelos limites reais quando eles existem, até a
   janela renovar.
+- **Ligar/desligar recursos** (⚙ na view Claude: configuração, menu … da view Worktrees ou paleta): uma
+  lista com caixas de seleção de tudo que dá para ligar e desligar: Aprender com o uso, seus hooks do
+  Claude Code (`disableAllHooks`), o MCP do AgentYard, os servidores MCP do `.mcp.json` do projeto (só
+  para você, em `settings.local.json`), os plugins do Claude e todas as opções liga/desliga do
+  AgentYard. Enter aplica só o que mudou.
+- **O Claude aprende com o uso** (view Claude: configuração): **Aprender com o uso** põe um bloco no
+  seu `~/.claude/CLAUDE.md` pedindo que o Claude grave correções e preferências como memórias e
+  procedimentos repetidos como skills enquanto trabalha (e tira de novo, sem mexer no resto).
+  **Aprender com esta sessão** (na view, no botão de uma sessão, retomando-a se estiver fechada) pede
+  ao Claude que revise a conversa e crie ou atualize memórias e skills nos lugares certos.
+  **Organizar a memória com o Claude** junta duplicadas, apaga o que ficou velho e arruma o índice, e
+  **Melhorar com o Claude** numa skill a corrige com o que a sessão mostrou.
+- **Memórias de worktrees para o projeto**: memórias que ficaram na pasta de uma worktree podem ir,
+  uma a uma ou todas, para a memória do projeto (com o MEMORY.md), para não se perderem quando a
+  worktree for removida.
+- **Arquivos do Claude no Explorer**: o botão 📁 abre a pasta do Claude, as skills e comandos do
+  usuário, a pasta `.claude` do projeto, a memória e as transcrições das sessões no gerenciador de
+  arquivos, numa nova janela do VS Code ou no workspace. Cada escopo e grupo da view também ganhou
+  **Abrir no Explorer**.
 
 ## 0.17.0
 - **Destino na fila de merge**: ao pôr uma worktree na fila (menu da worktree, grafo, aviso de agente

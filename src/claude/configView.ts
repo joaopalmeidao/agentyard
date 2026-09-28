@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import type { AgentTerminals, OpenAgent } from '../agents';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
+import { featuresMenu } from './features';
 import { contextFile, mentionOf, pickClaude } from './sendContext';
 import type { ClaudeService, SessionItem } from './view';
 import { curateMemoryPrompt, hasLearningBlock, improveSkillPrompt, learningBlock, LearnTargets, learnPrompt, moveAllMemories, moveMemory, withLearningBlock, withoutLearningBlock } from './learn';
@@ -527,10 +528,17 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
       go,
     );
     if (ok !== go) return;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, on ? withoutLearningBlock(cur) : withLearningBlock(cur));
-    this.refresh();
+    this.setLearning(!on);
     vscode.window.showInformationMessage(on ? t('Learning from use turned off.') : t('Learning from use turned on: new Claude sessions will save memories and skills as they work.'));
+  }
+
+  setLearning(on: boolean) {
+    const file = this.userClaudeMd();
+    const cur = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    if (hasLearningBlock(cur) === on) return;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, on ? withLearningBlock(cur) : withoutLearningBlock(cur));
+    this.refresh();
   }
 
   /** Onde o Claude grava o que aprende, para um Claude aberto em `cwd`. */
@@ -739,6 +747,15 @@ export function registerClaudeConfig(ctx: vscode.ExtensionContext, ctl: Controll
     if (p) return svc.openInOS(p);
   });
   reg('openFolder', () => svc.openFolder());
+  ctx.subscriptions.push(
+    vscode.commands.registerCommand('worktreeGraph.features', async () => {
+      try {
+        await featuresMenu(ctx, svc);
+      } catch (e) {
+        vscode.window.showErrorMessage(`AgentYard: ${(e as Error).message}`);
+      }
+    }),
+  );
   reg('toggleLearning', () => svc.toggleLearning());
   reg('learn', (item?: SessionItem) => svc.learn(item));
   reg('curateMemory', (n?: GroupNode) => svc.curateMemory(n));

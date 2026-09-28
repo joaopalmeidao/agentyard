@@ -1259,7 +1259,7 @@ exports.run = async () => {
       const before = require('child_process').execSync('git rev-parse ai/refatorar-api', { cwd: ctl.repo.root, encoding: 'utf8' }).trim();
       await req('POST', '/api/msg', { c: client, msg: { type: 'action', action: 'mergeInto', args: { branch: 'ai/precos-promo' } } });
       const pick = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'pick'));
-      const i = pick.items.findIndex(x => x.label === 'ai/refatorar-api');
+      const i = pick.items.findIndex(x => x.label.replace(/^\$\([\w-]+\) /, '') === 'ai/refatorar-api');
       assert.ok(i >= 0, JSON.stringify(pick.items));
       await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: pick.id, value: i } });
       const confirm = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'message' && m.modal));
