@@ -1,6 +1,10 @@
 # Changelog
 
 ## Não lançado
+- **⚖ Julgar as tentativas**: no painel *Comparar tentativas*, roda os testes de cada tentativa e pede a
+  um Claude sem terminal que compare os diffs e as ordene. Cada coluna ganha a colocação (🥇🥈🥉) e o
+  motivo, e o topo traz a recomendação (qual manter e o que trazer das outras). Os testes das
+  tentativas passam a usar os mesmos comandos do portão do Stop, das checagens ou o `testCommand`.
 - **Fila que respeita o limite de uso**: quando o uso estimado do Claude na janela de 5 h ou na semana
   chega a `tasks.pauseAtUsage` (90%) do orçamento (`claude.sessionBudgetTokens`,
   `claude.weeklyBudgetTokens`), a fila de tarefas e os agendamentos esperam a janela virar e saem

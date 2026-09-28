@@ -111,6 +111,19 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.strictEqual(A.usagePause({ ...base, block: undefined }), undefined);
   });
 
+  await check('juiz: prompt com todas as tentativas e leitura do ranking', () => {
+    const at = l => ({ letter: l, branch: `try/x-${l.toLowerCase()}`, variation: '', commits: 1, files: 2, added: 3, deleted: 1, testsOk: l !== 'B', testTail: 'erro X', diff: 'd'.repeat(200_000) });
+    const p = A.judgePrompt('fazer login', [at('A'), at('B')]);
+    assert.match(p, /fazer login/);
+    assert.match(p, /Attempt B[\s\S]*FAILED[\s\S]*erro X/);
+    assert.ok(p.length < 170_000);
+    const r = A.parseJudge('RANKING: B, A\nA: simples\nB: completo\nRECOMMENDATION: fique com B.', ['A', 'B', 'C']);
+    assert.deepStrictEqual(r.ranking, ['B', 'A', 'C']);
+    assert.strictEqual(r.reasons.A, 'simples');
+    assert.strictEqual(r.recommendation, 'fique com B.');
+    assert.strictEqual(A.parseJudge('sem formato', ['A', 'B']), undefined);
+  });
+
   await check('glob das reservas: pasta, *, ** e ?', () => {
     assert.ok(B.matches('src/auth', 'src/auth/login.ts'));
     assert.ok(B.matches('src/auth/**', 'src/auth/a/b.ts'));

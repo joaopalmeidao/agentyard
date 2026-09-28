@@ -2342,5 +2342,14 @@
   "Task queue paused: {0} is at {1}% of the budget; resumes at {2}.": "Fila de tarefas pausada: {0} está em {1}% do orçamento; volta às {2}.",
   "Run anyway": "Rodar mesmo assim",
   "Task queue paused: {0} is at {1}% of the Claude budget. The queued tasks start at {2}.": "Fila de tarefas pausada: {0} está em {1}% do orçamento do Claude. As tarefas da fila começam às {2}.",
-  "paused until {0} (Claude usage)": "pausada até {0} (uso do Claude)"
+  "paused until {0} (Claude usage)": "pausada até {0} (uso do Claude)",
+  "At least two attempts are needed to judge.": "São precisas pelo menos duas tentativas para julgar.",
+  "Judging the attempts of \"{0}\"": "Julgando as tentativas de \"{0}\"",
+  "tests of {0}": "testes de {0}",
+  "comparing the diffs": "comparando os diffs",
+  "The judge did not answer in the expected format.": "O juiz não respondeu no formato esperado.",
+  "Could not judge the attempts: {0}": "Não deu para julgar as tentativas: {0}",
+  "place {0}": "{0}º lugar",
+  "Runs the tests of each attempt and asks Claude to compare the diffs and rank them": "Roda os testes de cada tentativa e pede ao Claude que compare os diffs e as ordene",
+  "Judge": "Julgar"
 }

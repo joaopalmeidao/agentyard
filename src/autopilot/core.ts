@@ -127,6 +127,72 @@ export function reviewFeedback(issues: string[], round: number, max: number): st
   ].join('\n');
 }
 
+// ---------------------------------------------------------------- juiz das tentativas
+
+export interface JudgeAttempt {
+  letter: string;
+  branch: string;
+  variation: string;
+  commits: number;
+  files: number;
+  added: number;
+  deleted: number;
+  /** undefined: sem teste. */
+  testsOk?: boolean;
+  testTail?: string;
+  diff: string;
+}
+
+export interface JudgeResult {
+  /** Letras da melhor para a pior. */
+  ranking: string[];
+  reasons: Record<string, string>;
+  recommendation: string;
+}
+
+const MAX_JUDGE_DIFF = 150_000;
+
+export function judgePrompt(task: string, attempts: JudgeAttempt[]): string {
+  const per = Math.floor(MAX_JUDGE_DIFF / Math.max(1, attempts.length));
+  return [
+    'Several coding agents solved the same task, each in its own branch. Compare the attempts and rank them from best to worst.',
+    `The task:\n${task}`,
+    'Judge, in this order: does it do what the task asks (completely, and nothing unrelated); correctness and edge cases; tests passing and test quality; simplicity and fit with the existing code; size of the change.',
+    ...attempts.map(a =>
+      [
+        `=== Attempt ${a.letter} (${a.branch})${a.variation ? ` — guidance: ${a.variation}` : ''}`,
+        `${a.commits} commit(s), ${a.files} file(s), +${a.added} −${a.deleted}; tests: ${a.testsOk === undefined ? 'not run' : a.testsOk ? 'passed' : 'FAILED'}`,
+        a.testsOk === false && a.testTail ? `End of the test output:\n${a.testTail}` : '',
+        'Diff:',
+        a.diff.length > per ? `${a.diff.slice(0, per)}\n… (diff truncated)` : a.diff || '(no changes)',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    ),
+    'Answer in this exact format and nothing else:',
+    `RANKING: ${attempts.map(a => a.letter).join(', ')}   (best first, the letters only)`,
+    ...attempts.map(a => `${a.letter}: <one line: the main strength or problem>`),
+    'RECOMMENDATION: <two or three sentences: which one to keep and whether something from another attempt is worth bringing over>',
+  ]
+    .filter(x => x !== '')
+    .join('\n\n');
+}
+
+export function parseJudge(text: string, letters: string[]): JudgeResult | undefined {
+  const known = new Set(letters.map(l => l.toUpperCase()));
+  const line = text.match(/RANKING:\s*(.+)/i)?.[1] ?? '';
+  const ranking = [...new Set((line.match(/\b[A-H]\b/gi) ?? []).map(x => x.toUpperCase()).filter(x => known.has(x)))];
+  if (!ranking.length) return undefined;
+  for (const l of letters.map(x => x.toUpperCase())) if (!ranking.includes(l)) ranking.push(l);
+  const reasons: Record<string, string> = {};
+  for (const l of known) {
+    const m = text.match(new RegExp(`^\\s*${l}\\s*:\\s*(.+)$`, 'mi'));
+    if (m) reasons[l] = m[1].trim();
+  }
+  const recommendation = (text.match(/RECOMMENDATION:\s*([\s\S]+)$/i)?.[1] ?? '').trim();
+  return { ranking, reasons, recommendation };
+}
+
 // ---------------------------------------------------------------- agente travado
 
 export interface StuckTracker {
