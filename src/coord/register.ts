@@ -204,18 +204,23 @@ export class Coord implements vscode.Disposable {
     if (!v) void this.runQueue();
   }
 
-  /** Põe uma ou várias branches no fim da fila, na ordem dada; elas entram no destino uma por vez. */
-  async enqueue(branches: string | string[], target?: string) {
+  /**
+   * Põe uma ou várias branches no fim da fila, na ordem dada; elas entram no destino uma por vez.
+   * `authorized`: o agente que resolver conflitos delas já abre autorizado (vale também para quem já estava na fila).
+   */
+  async enqueue(branches: string | string[], target?: string, opts: { authorized?: boolean } = {}) {
     const tgt = target ?? (await this.ctl.base()).base;
     const items = this.queue();
     const already: string[] = [];
     for (const branch of typeof branches === 'string' ? [branches] : branches) {
       if (branch === tgt) continue;
-      if (items.some(i => i.branch === branch && QUEUED.includes(i.status))) {
-        already.push(branch);
+      const queued = items.find(i => i.branch === branch && QUEUED.includes(i.status));
+      if (queued) {
+        if (opts.authorized && !queued.authorized) queued.authorized = true;
+        else already.push(branch);
         continue;
       }
-      items.push({ branch, target: tgt, status: 'waiting', added: Date.now() });
+      items.push({ branch, target: tgt, status: 'waiting', added: Date.now(), authorized: opts.authorized || undefined });
     }
     if (already.length) vscode.window.showInformationMessage(t('{0} is already in the merge queue.', already.join(', ')));
     await this.saveQueue(items);
@@ -223,7 +228,7 @@ export class Coord implements vscode.Disposable {
   }
 
   /** Branches locais que ainda não estão na fila (para escolher várias de uma vez). */
-  async pickForQueue(): Promise<string[]> {
+  async pickForQueue(authorized = false): Promise<string[]> {
     const repo = this.ctl.repo;
     if (!repo) return [];
     const { base } = await this.ctl.base();
@@ -233,7 +238,7 @@ export class Coord implements vscode.Disposable {
       .map(r => ({ label: r.name, description: r.subject }));
     const picks = await vscode.window.showQuickPick(items, {
       canPickMany: true,
-      title: t('Add to merge queue → {0}', base),
+      title: authorized ? t('Add to merge queue → {0} (Claude authorized to resolve conflicts)', base) : t('Add to merge queue → {0}', base),
       placeHolder: t('Pick the branches; they go into {0} one at a time, in this order', base),
     });
     return picks?.map(p => p.label) ?? [];
@@ -250,6 +255,15 @@ export class Coord implements vscode.Disposable {
     this.ctl.log(t('Merge queue: {0} → {1}: {2}', item.branch, item.target, item.status) + (item.reason ? ` (${item.reason})` : ''));
     if (item.status === 'failed') void vscode.window.showWarningMessage(t('Merge queue: {0} left the queue — {1}.', item.branch, item.reason ?? ''));
     void this.runQueue();
+  }
+
+  /** Liga/desliga a autorização do agente para um item que ainda está na fila. */
+  async toggleAuthorized(branch: string) {
+    const items = this.queue();
+    const item = items.find(i => i.branch === branch && QUEUED.includes(i.status));
+    if (!item) return;
+    item.authorized = !item.authorized || undefined;
+    await this.saveQueue(items);
   }
 
   async remove(branch: string) {
@@ -345,15 +359,20 @@ export class Coord implements vscode.Disposable {
     if (st.operation || st.changes) return false;
     const files = (await repo.mergePreview(i.branch, i.target))?.files ?? [];
     const prompt = t(
-      'Branch {0} is in the merge queue to go into {1}, and it stopped: {2}. In this worktree, bring in {1} ({3}), resolve the conflicts{4} preserving the intent of both changes, make the checks and tests pass and commit. Do not merge into {1} yourself: when you finish and commit, the queue merges {0} and moves on to the next branch. If anything is ambiguous, ask before deciding.',
+      'Branch {0} is in the merge queue to go into {1}, and it stopped: {2}. In this worktree, bring in {1} ({3}), resolve the conflicts{4} preserving the intent of both changes, make the checks and tests pass and commit. Do not merge into {1} yourself: when you finish and commit, the queue merges {0} and moves on to the next branch.',
       i.branch,
       i.target,
       reason,
       `git merge ${i.target}`,
       files.length ? ` (${files.join(', ')})` : '',
-    );
+    ) +
+      ' ' +
+      (i.authorized
+        ? t('Nobody is watching this terminal: do not stop to ask; when something is ambiguous, pick what best keeps both changes and explain the choice in the commit message.')
+        : t('If anything is ambiguous, ask before deciding.'));
     i.agentPath = wt.path;
-    await this.agentTerms.launchWithPrompt(wt.path, i.branch, prompt, resolverName(this.ctl));
+    const permissionMode = i.authorized ? this.ctl.cfg().get<string>('mergeQueue.authorizedPermissionMode', 'auto') : undefined;
+    await this.agentTerms.launchWithPrompt(wt.path, i.branch, prompt, resolverName(this.ctl), { permissionMode });
     void vscode.window.showInformationMessage(t('Merge queue: {0} stopped ({1}); {2} is resolving it and the queue continues when it finishes.', i.branch, reason, resolverName(this.ctl)));
     return true;
   }
@@ -528,7 +547,7 @@ const label = (st: MergeItem['status']): string =>
 class MergeQueueItem extends vscode.TreeItem {
   constructor(readonly item: MergeItem) {
     super(item.branch, vscode.TreeItemCollapsibleState.None);
-    this.description = `→ ${item.target} · ${label(item.status)}`;
+    this.description = `→ ${item.target} · ${label(item.status)}${item.authorized ? ` · ✦ ${t('authorized')}` : ''}`;
     this.tooltip = item.reason ?? `${item.branch} → ${item.target}`;
     this.iconPath = new vscode.ThemeIcon(ICON[item.status][0], new vscode.ThemeColor(ICON[item.status][1]));
     this.contextValue = `mergeQueue-${item.status}`;
@@ -570,19 +589,24 @@ export function registerCoord(ctx: vscode.ExtensionContext, ctl: Controller, age
   reg('showOverlaps', (a?: { path?: string }) => coord.showOverlap(a?.path ? { path: a.path } : undefined));
   reg('mergeQueueAdd', (a?: { branch?: string }) => a?.branch && coord.enqueue(a.branch));
   // Árvore com várias selecionadas: (clicada, selecionadas[]); sem argumento: escolhe várias.
-  reg('mergeQueue.add', async (arg?: any, second?: any) => {
+  const add = (authorized: boolean) => async (arg?: any, second?: any) => {
     if (Array.isArray(second) && second.length) {
       const bs = second.map(x => (typeof x === 'string' ? x : x?.branch)).filter((b): b is string => !!b);
-      if (bs.length) return coord.enqueue(bs);
+      if (bs.length) return coord.enqueue(bs, undefined, { authorized });
     }
     const target = typeof second === 'string' ? second : undefined;
     if (arg === undefined) {
-      const bs = await coord.pickForQueue();
-      return bs.length ? coord.enqueue(bs, target) : undefined;
+      const bs = await coord.pickForQueue(authorized);
+      return bs.length ? coord.enqueue(bs, target, { authorized }) : undefined;
     }
     const b = await branchOf(arg);
-    if (b) await coord.enqueue(b, target);
-  });
+    if (b) await coord.enqueue(b, target, { authorized });
+  };
+  reg('mergeQueue.add', add(false));
+  // Mesma coisa, mas o Claude que resolver os conflitos já abre autorizado e a fila segue sozinha.
+  reg('mergeQueue.addAuthorized', add(true));
+  reg('mergeQueueAddAuthorized', (a?: { branch?: string }) => a?.branch && coord.enqueue(a.branch, undefined, { authorized: true }));
+  reg('mergeQueue.toggleAuthorized', (it?: MergeQueueItem) => it && coord.toggleAuthorized(it.item.branch));
   reg('mergeQueue.remove', (it?: MergeQueueItem) => it && coord.remove(it.item.branch));
   reg('mergeQueue.moveUp', (it?: MergeQueueItem) => it && coord.move(it.item.branch, -1));
   reg('mergeQueue.moveDown', (it?: MergeQueueItem) => it && coord.move(it.item.branch, 1));

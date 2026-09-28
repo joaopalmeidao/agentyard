@@ -90,6 +90,8 @@ export interface MergeItem {
   agentTries?: number;
   /** Worktree onde o agente está resolvendo o item. */
   agentPath?: string;
+  /** O agente que resolver este item já abre autorizado (`mergeQueue.authorizedPermissionMode`), sem parar para perguntar. */
+  authorized?: boolean;
 }
 
 /** Passos da fila; injetados para a regra ser testável sem git nem VS Code. */

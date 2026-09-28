@@ -1091,6 +1091,22 @@
         "icon": "$(add)"
       },
       {
+        "command": "worktreeGraph.mergeQueue.addAuthorized",
+        "title": "%command.mergeQueue.addAuthorized.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.mergeQueue.toggleAuthorized",
+        "title": "%command.mergeQueue.toggleAuthorized.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.mergeQueueAddAuthorized",
+        "title": "%command.mergeQueueAddAuthorized.title%",
+        "category": "AgentYard"
+      },
+      {
         "command": "worktreeGraph.mergeQueue.remove",
         "title": "%command.mergeQueue.remove.title%",
         "category": "AgentYard",
@@ -1787,6 +1803,11 @@
           "command": "worktreeGraph.mergeQueue.resume",
           "when": "view == worktreeGraph.mergeQueue",
           "group": "navigation@4"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.addAuthorized",
+          "when": "view == worktreeGraph.mergeQueue",
+          "group": "1_q@0"
         },
         {
           "command": "worktreeGraph.mergeQueue.clearFinished",
@@ -2596,6 +2617,16 @@
           "group": "2_merge@7"
         },
         {
+          "command": "worktreeGraph.mergeQueue.addAuthorized",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree(-fav)?$/",
+          "group": "2_merge@8"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.toggleAuthorized",
+          "when": "view == worktreeGraph.mergeQueue && viewItem =~ /^mergeQueue-(waiting|running|agent|awaiting-pr)$/",
+          "group": "1_q@1"
+        },
+        {
           "command": "worktreeGraph.coord.showOverlaps",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "2_merge@8"
@@ -3058,6 +3089,14 @@
         },
         {
           "command": "worktreeGraph.mergeQueueAdd",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.mergeQueueAddAuthorized",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.mergeQueue.toggleAuthorized",
           "when": "false"
         },
         {
@@ -3973,6 +4012,21 @@
           "type": "boolean",
           "default": true,
           "description": "%config.mergeQueue.resolveWithAgent.description%"
+        },
+        "worktreeGraph.mergeQueue.authorizedPermissionMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "acceptEdits",
+            "bypassPermissions"
+          ],
+          "enumDescriptions": [
+            "%config.mergeQueue.authorizedPermissionMode.auto%",
+            "%config.mergeQueue.authorizedPermissionMode.acceptEdits%",
+            "%config.mergeQueue.authorizedPermissionMode.bypassPermissions%"
+          ],
+          "default": "auto",
+          "markdownDescription": "%config.mergeQueue.authorizedPermissionMode.markdownDescription%"
         },
         "worktreeGraph.batch.maxParallel": {
           "type": "number",

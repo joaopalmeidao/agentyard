@@ -460,6 +460,14 @@ commitadas não é entregue ao agente. **Processar a fila agora** volta a tentar
 com o agente (útil depois de recarregar a janela). Desligue com
 `worktreeGraph.mergeQueue.resolveWithAgent` para a fila só parar no conflito, como antes.
 
+Para a fila andar sozinha, use **Pôr na fila de merge (Claude resolve os conflitos)** (menu da
+worktree, do grafo, **…** da view **Fila de merge**, painel **Analisar merge** ou o aviso de
+pronto para revisar). Quando essa branch parar, o Claude já abre autorizado — no modo de
+`worktreeGraph.mergeQueue.authorizedPermissionMode` (padrão `auto`; `acceptEdits` ainda pergunta
+antes de comandos; `bypassPermissions` aprova tudo) — e com a instrução de não parar para
+perguntar, decidindo e explicando no commit. Na view, o item aparece com **✦ autorizado**; clique
+com o botão direito para autorizar ou desautorizar um item que já está na fila.
+
 Na view **Fila de merge**: subir/descer, tirar, pausar/retomar, processar agora e limpar.
 `worktreeGraph.mergeQueue.pushBase` faz push da base depois de cada merge.
 

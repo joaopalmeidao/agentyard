@@ -157,6 +157,18 @@ export function insertArgs(cmd: string, args: string): string {
   return m ? `${m[1]} ${args.trim()}${m[2]}` : cmd;
 }
 
+/**
+ * Tira de `args` o que escolhe o modo de permissão (`--permission-mode x`, `--dangerously-skip-permissions`),
+ * para um modo pedido por quem abre valer sobre o de `claude.extraArgs`.
+ */
+export function withoutPermissionArgs(args: string): string {
+  return args
+    .replace(/(^|\s)--permission-mode(?:=|\s+)\S+/g, ' ')
+    .replace(/(^|\s)--dangerously-skip-permissions(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Argumentos do Claude escolhidos em "Abrir Claude com opções…". */
 export function claudeArgs(o: { model?: string; permissionMode?: string; systemPrompt?: string }, quote: (s: string) => string): string {
   return [
