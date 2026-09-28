@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as actions from './actions';
-import { agents, AgentTerminals } from './agents';
+import { agents, AgentTerminals, stateText } from './agents';
 import { AgentsTreeProvider, AgentGroupItem, openAgentOf, terminalOf } from './agentsView';
 import { registerPullRequests } from './prs/view';
 import * as commits from './commits';
@@ -34,7 +34,8 @@ import { Projects, ProjectsTreeProvider } from './projects';
 import { AutoSync } from './sync';
 import { registerClaudeConfig } from './claude/configView';
 import { registerAgentAttention } from './claude/attention';
-import { registerSendToClaude } from './claude/sendContext';
+import { registerSendToClaude, worktreeOfFile } from './claude/sendContext';
+import { pickRelevant, registerTerminalUx } from './claude/terminalUx';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
 import { t } from './i18n';
@@ -84,6 +85,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   registerAgentAttention(ctx, ctl, agentTerms);
   registerLongProjects(ctx, ctl, agentTerms, claude);
   registerSendToClaude(ctx, ctl, agentTerms);
+  registerTerminalUx(ctx, ctl, agentTerms);
   /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */
   const claudeTarget = async (arg?: { path?: string; wtPath?: string; branch?: string }): Promise<{ cwd: string; label: string } | undefined> => {
     const p = arg?.wtPath ?? arg?.path;
@@ -343,8 +345,13 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
   // botão da barra de status: o primeiro agente configurado, na worktree desta janela
   const here = () => ctl.state?.worktrees.find(w => w.isCurrent);
+  // a worktree do arquivo aberto no editor; sem ele, a desta janela
+  const focused = () => {
+    const f = vscode.window.activeTextEditor?.document.uri;
+    return (f?.scheme === 'file' && worktreeOfFile(ctl, f.fsPath)) || here();
+  };
   reg('launchAgentHere', (mode?: 'new') => {
-    const w = here();
+    const w = focused();
     const dir = w?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     return launchAgent(dir ? { path: dir, branch: w?.branch } : undefined, agents(ctl)[0]?.name, mode);
   });
@@ -354,7 +361,19 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const updateAgentStatus = () => {
     const a = agents(ctl)[0];
     if (!a || !ctl.repo || !ctl.cfg().get<boolean>('agentStatusBar', true)) return agentStatus.hide();
-    const w = here();
+    const w = focused();
+    // já há um agente aqui: mostra o estado dele, e o clique traz o terminal
+    const open = w && pickRelevant(agentTerms.list(w.path));
+    if (open) {
+      const icon = open.state === 'waiting' ? 'bell-dot' : open.state === 'working' ? 'loading~spin' : 'sparkle';
+      const state = stateText(open.state);
+      agentStatus.text = `$(${icon}) ${open.agent} · ${w!.branch ?? w!.name}${state ? ` · ${state}` : ''}`;
+      agentStatus.tooltip = [open.terminal.name, open.message, t('Click to go to the terminal.')].filter(Boolean).join('\n');
+      agentStatus.command = { command: 'worktreeGraph.agents.show', title: t('Show terminal'), arguments: [{ kind: 'terminal', open }] };
+      agentStatus.show();
+      return;
+    }
+    agentStatus.command = 'worktreeGraph.launchAgentHere';
     agentStatus.text = `$(sparkle) ${a.name}`;
     agentStatus.tooltip =
       (w ? t('Open {0} in a terminal in the {1} worktree', a.name, w.name) : t('Open {0} in a terminal in this folder', a.name)) +
@@ -390,6 +409,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
     agentStatus,
     whereStatus,
     ctl.onDidChange(updateStatusItems),
+    agentTerms.onDidChange(updateAgentStatus),
+    vscode.window.onDidChangeActiveTextEditor(updateAgentStatus),
     vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph') && updateStatusItems()),
   );
   updateStatusItems();

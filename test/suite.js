@@ -200,6 +200,67 @@ exports.run = async () => {
     await cfg.update('claude.notify', undefined, vscode.ConfigurationTarget.Global);
   });
 
+  await check('claude: permissão respondida, fim da sessão retomado e fechado', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    await cfg.update('claude.notify', 'off', G);
+    await cfg.update('claude.onSessionEnd', 'keep', G);
+    // retomar usa o comando configurado: "claude --version" sai logo, sem abrir um Claude de verdade
+    const agentsBefore = cfg.inspect('agents').globalValue;
+    await cfg.update('agents', [{ name: 'Claude Code', command: 'claude --version' }], G);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const o = await agentTerms.start(wt.path, wt.branch, 'Claude Code', 'claude --version');
+    const file = path.join(agentTerms.eventsDir(), `${o.id}.jsonl`);
+    const emit = e => fs.appendFileSync(file, JSON.stringify({ session_id: 'sessao-fim', ...e }) + '\n');
+    emit({ hook_event_name: 'SessionStart' });
+    await until(() => o.state === 'idle');
+    assert.strictEqual(agentTerms.answerPermission(o, true), false, 'sem pedido em aberto não responde');
+    emit({ hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+    await until(() => o.state === 'waiting');
+    assert.strictEqual(o.notificationType, 'permission_prompt');
+    assert.strictEqual(agentTerms.answerPermission(o, false), true);
+    emit({ hook_event_name: 'PostToolUse' });
+    await until(() => o.state === 'working');
+    assert.strictEqual(o.notificationType, undefined);
+    emit({ hook_event_name: 'SessionEnd' });
+    await until(() => o.state === 'ended');
+    assert.ok(o.terminal.exitStatus === undefined, 'keep: o terminal fica');
+    agentTerms.resumeInPlace(o);
+    assert.strictEqual(o.state, 'starting', 'retomado no mesmo terminal');
+    await cfg.update('claude.onSessionEnd', 'close', G);
+    emit({ hook_event_name: 'SessionEnd' });
+    await until(() => !agentTerms.list().includes(o));
+    await cfg.update('claude.onSessionEnd', undefined, G);
+    await cfg.update('claude.notify', undefined, G);
+    await cfg.update('agents', agentsBefore, G);
+  });
+
+  await check('terminal de agente: ao lado, dividido, mover e grade', async () => {
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    await cfg.update('agentTerminalLocation', 'editorBeside', G);
+    const a = await agentTerms.start(wt.path, wt.branch, 'Eco', 'echo ao-lado', { name: 'Eco · lado' });
+    await until(() => agentTerms.inEditor(a.terminal));
+    await agentTerms.moveTo(a, 'panel');
+    await until(() => !agentTerms.inEditor(a.terminal));
+    await cfg.update('agentTerminalLocation', 'split', G);
+    const b = await agentTerms.start(wt.path, wt.branch, 'Eco', 'echo dividido', { name: 'Eco · dividido' });
+    assert.strictEqual(b.terminal.creationOptions.location.parentTerminal, a.terminal, 'dividido com o da mesma worktree');
+    await vscode.commands.executeCommand('worktreeGraph.agents.grid', { path: wt.path });
+    await until(() => agentTerms.inEditor(a.terminal) && agentTerms.inEditor(b.terminal));
+    const groupOf = term => vscode.window.tabGroups.all.findIndex(g => g.tabs.some(t => t.input instanceof vscode.TabInputTerminal && t.label === term.name));
+    assert.notStrictEqual(groupOf(a.terminal), groupOf(b.terminal), 'uma coluna para cada');
+    a.terminal.dispose();
+    b.terminal.dispose();
+    await until(() => !agentTerms.list(wt.path).some(o => o === a || o === b));
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await vscode.commands.executeCommand('workbench.action.editorLayoutSingle');
+    await cfg.update('agentTerminalLocation', undefined, G);
+  });
+
   await check('estado detalhado (status e comparação) chega em segundo plano', async () => {
     await until(() => ctl.state && ctl.state.pending === 0, 30000);
     const wt = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');

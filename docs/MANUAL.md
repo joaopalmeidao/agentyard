@@ -174,7 +174,45 @@ apagar. **Mover alterações para outra worktree…** leva o trabalho não commi
 - **Abrir agente com uma tarefa** pede o texto antes de abrir.
 
 Um terminal por worktree e agente: clicar de novo só traz o terminal para frente.
-`worktreeGraph.agentTerminalLocation` escolhe entre o painel de terminais e uma aba do editor.
+`worktreeGraph.agentTerminalLocation` escolhe onde o terminal abre: `panel` (painel de terminais),
+`editor` (aba no grupo ativo), `editorBeside` (aba ao lado do código), `split` (no painel, dividido
+com o outro terminal de agente da mesma worktree) ou `auto` (tarefas no painel, sessões interativas
+ao lado do código). Agentes abertos com uma tarefa não tiram o foco de onde você está
+(`worktreeGraph.agentTerminalFocus`).
+
+### Organizar os terminais
+
+- Na view de agentes abertos: **Mover para o editor** / **Mover para o painel**, **Interromper o
+  Claude (Esc)** e, no grupo da worktree ou no título da view, **Agentes lado a lado no editor**
+  (até 4 colunas; com mais, você escolhe quais).
+- `worktreeGraph.agentFollowEditor`: abrir um arquivo de outra worktree traz para frente o terminal
+  de agente dela que está no painel, sem tirar o foco do editor.
+- A barra de status acompanha a worktree do arquivo aberto: com um agente ali, mostra o estado dele
+  ("Claude Code · feat/x · trabalhando") e o clique leva ao terminal; sem agente, abre um.
+- `Ctrl+Alt+Shift+J` vai ao Claude que está esperando você.
+
+### Mandar contexto ao Claude
+
+- **Enviar ao Claude (@menção)** (`Ctrl+Alt+Shift+K` no editor): o arquivo e as linhas selecionadas.
+- **Enviar problemas ao Claude** (menu do editor): os erros e avisos do arquivo (ou da seleção) numa
+  linha, com `@arquivo#L`.
+- **Enviar diff da worktree ao Claude** (grupo da view de agentes, paleta): tudo o que a branch mudou
+  desde a base, commitado ou não, num arquivo `.diff` mencionado.
+- **Enviar seleção do terminal ao Claude** (menu do terminal, `Ctrl+Alt+Shift+K` com texto
+  selecionado): a saída de um teste ou build, num arquivo mencionado.
+
+Nada disso aperta Enter: você completa a mensagem.
+
+### Permissões, fim da sessão e `/ide`
+
+- `worktreeGraph.claude.answerFromNotification` (experimental) põe **Permitir** e **Negar** na
+  notificação de um pedido de permissão.
+- Quando uma sessão termina e você não está olhando para o terminal, a extensão oferece **Retomar
+  aqui** (o mesmo terminal, com `--resume`) ou **Fechar terminal** (`worktreeGraph.claude.onSessionEnd`).
+- O Claude só se conecta ao VS Code (`/ide`: diffs no editor, seleção e problemas) quando a pasta
+  dele está dentro do workspace. Com a extensão do Claude Code instalada, abrir um Claude numa
+  worktree fora do workspace oferece adicioná-la como pasta (`worktreeGraph.claude.ideWorkspace`).
+  `worktreeGraph.claude.connectIde` abre o Claude com `--ide` para conectar já ao abrir.
 
 ### Configurar a lista
 
@@ -638,7 +676,9 @@ Todas começam com `worktreeGraph.`. As mais usadas:
 | `worktreeRoot` | `<repo>.worktrees` | onde as worktrees nascem |
 | `postCreateCommand` | | comando após criar a worktree |
 | `agents` | Claude, Codex, Gemini | CLIs de agente |
-| `agentTerminalLocation` | `panel` | `panel` ou `editor` |
+| `agentTerminalLocation` | `panel` | `panel`, `editor`, `editorBeside`, `split` ou `auto` |
+| `agentTerminalFocus` | `interactive` | se o terminal novo pega o foco |
+| `agentFollowEditor` | `false` | terminal da worktree do arquivo aberto vem para frente |
 | `noFastForwardIntoBase` | `true` | `--no-ff` ao mesclar na base |
 | `remote` | `origin` | remoto para push e PR/MR |
 | `refreshIntervalSeconds` | `15` | atualização do painel |

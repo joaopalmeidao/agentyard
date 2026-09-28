@@ -136,6 +136,13 @@ export function instrumentCommand(cmd: string, settingsFile: string): string {
   return m ? `${m[1]} --settings "${settingsFile}"${m[2]}` : cmd;
 }
 
+/** Põe `--ide` logo depois do `claude` (conecta ao VS Code ao abrir); outros comandos ficam como estão. */
+export function withIdeFlag(cmd: string): string {
+  if (!isClaudeCommand(cmd) || /(^|\s)--ide(\s|$)/.test(cmd)) return cmd;
+  const m = cmd.match(/^(\s*\S+)([\s\S]*)$/);
+  return m ? `${m[1]} --ide${m[2]}` : cmd;
+}
+
 /**
  * Lê eventos de um pedaço do arquivo. Linhas que não fecham um JSON ficam em `rest` (o hook pode
  * estar no meio da escrita) e voltam na próxima leitura.

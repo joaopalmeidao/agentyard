@@ -248,6 +248,48 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "worktreeGraph.agents.moveToEditor",
+        "title": "%command.agents.moveToEditor.title%",
+        "category": "AgentYard",
+        "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "worktreeGraph.agents.moveToPanel",
+        "title": "%command.agents.moveToPanel.title%",
+        "category": "AgentYard",
+        "icon": "$(layout-panel)"
+      },
+      {
+        "command": "worktreeGraph.agents.grid",
+        "title": "%command.agents.grid.title%",
+        "category": "AgentYard",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "worktreeGraph.agents.interrupt",
+        "title": "%command.agents.interrupt.title%",
+        "category": "AgentYard",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "worktreeGraph.claude.sendDiagnostics",
+        "title": "%command.claude.sendDiagnostics.title%",
+        "category": "AgentYard",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "worktreeGraph.claude.sendDiff",
+        "title": "%command.claude.sendDiff.title%",
+        "category": "AgentYard",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreeGraph.claude.sendTerminalSelection",
+        "title": "%command.claude.sendTerminalSelection.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "worktreeGraph.openFileInWorktree",
         "title": "%command.openFileInWorktree.title%",
         "category": "AgentYard",
@@ -1602,6 +1644,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "worktreeGraph.agents.grid",
+          "when": "view == worktreeGraph.agents",
+          "group": "navigation@5"
+        },
+        {
           "command": "worktreeGraph.longProjects.new",
           "when": "view == worktreeGraph.longProjects",
           "group": "navigation@1"
@@ -1660,8 +1707,38 @@
         },
         {
           "command": "worktreeGraph.agents.transcript",
-          "when": "view == worktreeGraph.agents && viewItem == agentTerminalSession",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminalSession/",
           "group": "1_open@1"
+        },
+        {
+          "command": "worktreeGraph.agents.interrupt",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal.*\\.claude$/",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.agents.moveToEditor",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal/",
+          "group": "2_move@0"
+        },
+        {
+          "command": "worktreeGraph.agents.moveToPanel",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal/",
+          "group": "2_move@1"
+        },
+        {
+          "command": "worktreeGraph.agents.interrupt",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal.*\\.claude$/",
+          "group": "3_claude@0"
+        },
+        {
+          "command": "worktreeGraph.agents.grid",
+          "when": "view == worktreeGraph.agents && viewItem == agentGroup",
+          "group": "2_move@0"
+        },
+        {
+          "command": "worktreeGraph.claude.sendDiff",
+          "when": "view == worktreeGraph.agents && viewItem == agentGroup",
+          "group": "3_claude@0"
         },
         {
           "command": "worktreeGraph.agents.close",
@@ -2684,6 +2761,10 @@
           "when": "false"
         },
         {
+          "command": "worktreeGraph.claude.sendTerminalSelection",
+          "when": "terminalFocus && terminalTextSelected"
+        },
+        {
           "command": "worktreeGraph.longProjects.retryMilestone",
           "when": "false"
         },
@@ -2706,12 +2787,24 @@
           "command": "worktreeGraph.claude.sendSelection",
           "when": "resourceScheme == file",
           "group": "9_worktreeGraph@2"
+        },
+        {
+          "command": "worktreeGraph.claude.sendDiagnostics",
+          "when": "resourceScheme == file",
+          "group": "9_worktreeGraph@3"
         }
       ],
       "explorer/context": [
         {
           "command": "worktreeGraph.claude.sendSelection",
           "when": "!explorerResourceIsFolder",
+          "group": "9_worktreeGraph@0"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "worktreeGraph.claude.sendTerminalSelection",
+          "when": "terminalTextSelected",
           "group": "9_worktreeGraph@0"
         }
       ]
@@ -2796,14 +2889,40 @@
           "type": "string",
           "enum": [
             "panel",
-            "editor"
+            "editor",
+            "editorBeside",
+            "split",
+            "auto"
           ],
           "enumDescriptions": [
             "%config.agentTerminalLocation.enumDescriptions.0%",
-            "%config.agentTerminalLocation.enumDescriptions.1%"
+            "%config.agentTerminalLocation.enumDescriptions.1%",
+            "%config.agentTerminalLocation.enumDescriptions.2%",
+            "%config.agentTerminalLocation.enumDescriptions.3%",
+            "%config.agentTerminalLocation.enumDescriptions.4%"
           ],
           "default": "panel",
           "description": "%config.agentTerminalLocation.description%"
+        },
+        "worktreeGraph.agentTerminalFocus": {
+          "type": "string",
+          "enum": [
+            "interactive",
+            "always",
+            "never"
+          ],
+          "enumDescriptions": [
+            "%config.agentTerminalFocus.enumDescriptions.0%",
+            "%config.agentTerminalFocus.enumDescriptions.1%",
+            "%config.agentTerminalFocus.enumDescriptions.2%"
+          ],
+          "default": "interactive",
+          "description": "%config.agentTerminalFocus.description%"
+        },
+        "worktreeGraph.agentFollowEditor": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.agentFollowEditor.description%"
         },
         "worktreeGraph.noFastForwardIntoBase": {
           "type": "boolean",
@@ -3060,6 +3179,44 @@
           ],
           "default": "waiting",
           "description": "%config.claude.notify.description%"
+        },
+        "worktreeGraph.claude.answerFromNotification": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.claude.answerFromNotification.markdownDescription%"
+        },
+        "worktreeGraph.claude.onSessionEnd": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "close",
+            "keep"
+          ],
+          "enumDescriptions": [
+            "%config.claude.onSessionEnd.enumDescriptions.0%",
+            "%config.claude.onSessionEnd.enumDescriptions.1%",
+            "%config.claude.onSessionEnd.enumDescriptions.2%"
+          ],
+          "default": "ask",
+          "description": "%config.claude.onSessionEnd.description%"
+        },
+        "worktreeGraph.claude.connectIde": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.claude.connectIde.markdownDescription%"
+        },
+        "worktreeGraph.claude.ideWorkspace": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.claude.ideWorkspace.enumDescriptions.0%",
+            "%config.claude.ideWorkspace.enumDescriptions.1%"
+          ],
+          "default": "ask",
+          "markdownDescription": "%config.claude.ideWorkspace.markdownDescription%"
         },
         "worktreeGraph.claude.sessionBudgetTokens": {
           "type": "number",
@@ -3441,7 +3598,26 @@
           "description": "%config.longProjects.maxSessionsPerMilestone.description%"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "worktreeGraph.claude.sendSelection",
+        "key": "ctrl+alt+shift+k",
+        "mac": "cmd+alt+shift+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "worktreeGraph.claude.sendTerminalSelection",
+        "key": "ctrl+alt+shift+k",
+        "mac": "cmd+alt+shift+k",
+        "when": "terminalFocus && terminalTextSelected"
+      },
+      {
+        "command": "worktreeGraph.agents.pickWaiting",
+        "key": "ctrl+alt+shift+j",
+        "mac": "cmd+alt+shift+j"
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",
