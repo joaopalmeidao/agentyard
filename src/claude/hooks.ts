@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { STATUS_SUFFIX, statusLineSetting, StatusLineLabels, StatusLineMode, writeStatusLineFiles } from './statusLine';
 
 /**
  * Estado dos Claude Code abertos pela extensão, contado pelos hooks do próprio Claude.
@@ -55,7 +56,7 @@ export function projectHookCommand(eventsDir: string, event: string): string {
  * Hooks de estado e dos projetos longos; `extra` acrescenta grupos por evento (os da ponte com o
  * AgentYard, src/bridge).
  */
-export function hookSettings(eventsDir: string, extra: Record<string, unknown[]> = {}) {
+export function hookSettings(eventsDir: string, extra: Record<string, unknown[]> = {}, statusLine = false) {
   const hook = { type: 'command', command: hookCommand(eventsDir), timeout: 5 };
   const hooks: Record<string, unknown[]> = {};
   for (const e of HOOK_EVENTS) {
@@ -64,7 +65,14 @@ export function hookSettings(eventsDir: string, extra: Record<string, unknown[]>
     hooks[e] = [TOOL_EVENTS.has(e) ? { matcher: '*', hooks: list } : { hooks: list }];
   }
   for (const [e, groups] of Object.entries(extra)) hooks[e] = [...(hooks[e] ?? []), ...groups];
-  return { hooks };
+  return statusLine ? { hooks, statusLine: statusLineSetting(eventsDir) } : { hooks };
+}
+
+/** Statusline que acompanha o settings (src/claude/statusLine.ts); sem ela, `statusLine` fica de fora. */
+export interface StatusLineOptions {
+  mode: StatusLineMode;
+  userCommand?: string;
+  labels: StatusLineLabels;
 }
 
 /**
@@ -121,12 +129,17 @@ function writeIfChanged(file: string, text: string) {
   if (old !== text) fs.writeFileSync(file, text, 'utf8');
 }
 
-/** Grava (só se mudou) o arquivo passado com --settings e o script dos projetos; devolve o caminho do settings. */
-export function writeHookSettings(eventsDir: string, extra: Record<string, unknown[]> = {}, name = 'hooks.settings.json'): string {
+/**
+ * Grava (só se mudou) o arquivo passado com --settings, o script dos projetos e o da statusline;
+ * devolve o caminho do settings.
+ */
+export function writeHookSettings(eventsDir: string, extra: Record<string, unknown[]> = {}, name = 'hooks.settings.json', statusLine?: StatusLineOptions): string {
   fs.mkdirSync(eventsDir, { recursive: true });
   const file = path.join(eventsDir, name);
-  writeIfChanged(file, JSON.stringify(hookSettings(eventsDir, extra), null, 2));
+  const withStatus = !!statusLine && statusLine.mode !== 'off';
+  writeIfChanged(file, JSON.stringify(hookSettings(eventsDir, extra, withStatus), null, 2));
   writeIfChanged(path.join(eventsDir, PROJECT_SCRIPT), PROJECT_SCRIPT_BODY);
+  if (statusLine && withStatus) writeStatusLineFiles(eventsDir, statusLine.mode, statusLine.userCommand, statusLine.labels, writeIfChanged);
   return file;
 }
 
@@ -266,7 +279,7 @@ export class EventTail {
 }
 
 /** Arquivos por terminal além dos eventos: os dos projetos longos. */
-export const AGENT_FILE_SUFFIXES = ['.jsonl', '.project', '.context.md', '.turn', '.retries', '.gate'];
+export const AGENT_FILE_SUFFIXES = ['.jsonl', '.project', '.context.md', '.turn', '.retries', '.gate', STATUS_SUFFIX, '.status.tmp'];
 
 /** Apaga arquivos de terminal (eventos e dos projetos) com mais de `maxAgeMs` que não estejam em `keep`. */
 export function pruneEvents(eventsDir: string, keep: Set<string>, maxAgeMs = 2 * 86400_000, now = Date.now()) {

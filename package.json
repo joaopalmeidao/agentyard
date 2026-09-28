@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "AgentYard",
   "description": "%extension.description%",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "publisher": "joaopalmeidao",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
@@ -3982,6 +3982,21 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.claude.trackState.markdownDescription%"
+        },
+        "worktreeGraph.claude.statusLine": {
+          "type": "string",
+          "enum": [
+            "keep",
+            "agentyard",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.claude.statusLine.keep%",
+            "%config.claude.statusLine.agentyard%",
+            "%config.claude.statusLine.off%"
+          ],
+          "default": "keep",
+          "markdownDescription": "%config.claude.statusLine.markdownDescription%"
         },
         "worktreeGraph.claude.notify": {
           "type": "string",

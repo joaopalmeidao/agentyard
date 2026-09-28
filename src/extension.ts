@@ -44,6 +44,8 @@ import { registerRemoteAccess } from './remote/register';
 import { registerAutopilot } from './autopilot/register';
 import { pickRelevant, registerTerminalUx } from './claude/terminalUx';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
+import { ClaudeUsage } from './claude/usage';
+import { UsagePanel } from './claude/usagePanel';
 import { WorktreeTreeProvider } from './treeView';
 import { t } from './i18n';
 
@@ -87,7 +89,15 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(projects, vscode.window.createTreeView('worktreeGraph.projects', { treeDataProvider: new ProjectsTreeProvider(projects) }));
   const decorations = new WorktreeDecorations(ctl);
   const claude = new ClaudeService(ctl, agentTerms);
-  ctl.taskDeferred = () => claude.usagePause();
+  const usage = new ClaudeUsage(ctl, agentTerms);
+  const usagePanel = new UsagePanel(ctx, ctl, agentTerms, usage, claude);
+  claude.liveLimits = () => usage.limits();
+  ctx.subscriptions.push(usage, usagePanel, usage.onDidChange(() => claude.updateStatus()));
+  // com os limites reais da statusline, eles decidem; sem eles, a estimativa pelos logs
+  ctl.taskDeferred = () => {
+    const real = usage.pause();
+    return real === 'unknown' ? claude.usagePause() : real;
+  };
   const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
   registerAgentAttention(ctx, ctl, agentTerms);
@@ -495,7 +505,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     const target = await claudeTarget(item);
     if (target) await claude.commands(target.cwd, target.label);
   });
-  reg('claude.usage', () => claude.usagePanel());
+  reg('claude.usage', () => usagePanel.show());
   reg('publishRequest', async item => {
     const b = await actions.pickBranch(ctl, item, t('Publish a PR/MR for which branch?'));
     if (b) await ctl.requests.publish(b);
@@ -563,7 +573,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const guards = registerGuards(ctx, ctl);
   registerMigrations(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, panelAction: handler, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion, bridge: claudeIntegration.bridge, claudeIntegration: claudeIntegration.integration, stack };
+  return { ctl, tree, treeView, agentTerms, actions, panelAction: handler, sync, GraphPanel, ready, decorations, projects, issues, claude, usage, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion, bridge: claudeIntegration.bridge, claudeIntegration: claudeIntegration.integration, stack };
 }
 
 export function deactivate() {}

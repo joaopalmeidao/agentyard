@@ -235,6 +235,96 @@ check('insideFolders', () => {
   assert.ok(insideFolders(ws.toUpperCase(), [ws]));
 });
 
+// ---------- statusline: métricas de uso ----------
+const sl = require('../out/claude/statusLine');
+const statusJson = {
+  session_id: 'sess-1',
+  cwd: 'C:\\repo\\wt',
+  workspace: { current_dir: 'C:\\repo\\wt' },
+  model: { id: 'claude-opus-5-5', display_name: 'Opus 5.5' },
+  cost: { total_cost_usd: 1.234, total_duration_ms: 90000, total_lines_added: 12, total_lines_removed: 3 },
+  context_window: { total_input_tokens: 1, context_window_size: 200000, used_percentage: 42.4, remaining_percentage: 57.6, current_usage: { input_tokens: 5 } },
+  rate_limits: { five_hour: { used_percentage: 81.2, resets_at: 1790000000 }, seven_day: { used_percentage: 23, resets_at: 1790500000 } },
+};
+const labels = { session: 'sessão', week: 'semana' };
+
+check('hookSettings com statusLine; writeHookSettings grava o script e o repasse', () => {
+  assert.strictEqual(hookSettings(dir).statusLine, undefined);
+  const s = hookSettings('C:\\x\\ev', {}, true);
+  assert.strictEqual(s.statusLine.command, 'bash "C:/x/ev/statusline.sh" "C:/x/ev"');
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-sl-'));
+  const f = writeHookSettings(d, {}, 'a.json', { mode: 'keep', userCommand: 'python ~/.claude/statusline.py', labels });
+  assert.ok(JSON.parse(fs.readFileSync(f, 'utf8')).statusLine);
+  assert.strictEqual(fs.readFileSync(path.join(d, 'statusline.user'), 'utf8').trim(), 'python ~/.claude/statusline.py');
+  writeHookSettings(d, {}, 'a.json', { mode: 'agentyard', userCommand: 'x', labels });
+  assert.ok(!fs.existsSync(path.join(d, 'statusline.user')), 'agentyard: sem repasse');
+  const off = writeHookSettings(d, {}, 'b.json', { mode: 'off', labels });
+  assert.strictEqual(JSON.parse(fs.readFileSync(off, 'utf8')).statusLine, undefined);
+  fs.rmSync(d, { recursive: true, force: true });
+});
+
+check('userStatusLineCommand lê o settings.json do usuário', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-cfg-'));
+  assert.strictEqual(sl.userStatusLineCommand(d), undefined);
+  fs.writeFileSync(path.join(d, 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: ' meu.sh ' } }));
+  assert.strictEqual(sl.userStatusLineCommand(d), 'meu.sh');
+  fs.rmSync(d, { recursive: true, force: true });
+});
+
+check('parseStatus e currentPct', () => {
+  const s = sl.parseStatus('t1', JSON.stringify(statusJson), 5);
+  assert.strictEqual(s.model, 'Opus 5.5');
+  assert.strictEqual(s.contextPct, 42.4);
+  assert.strictEqual(s.usd, 1.234);
+  assert.strictEqual(s.fiveHour.resetsAt, 1790000000 * 1000);
+  assert.strictEqual(s.sevenDay.pct, 23);
+  assert.strictEqual(sl.parseStatus('t', 'meio json', 0), undefined);
+  assert.strictEqual(sl.parseStatus('t', '{}', 0).fiveHour, undefined);
+  assert.strictEqual(sl.currentPct(s.fiveHour, 1790000000 * 1000 + 1), 0, 'janela renovada');
+  assert.strictEqual(sl.currentPct(s.fiveHour, 0), 81.2);
+});
+
+check('recordUsage: limites mais recentes, amostras e custo por dia', () => {
+  const h = sl.emptyHistory();
+  const day1 = new Date(2026, 8, 27, 10).getTime();
+  const day2 = new Date(2026, 8, 28, 10).getTime();
+  const snap = (at, usd, five) => ({ ...sl.parseStatus('t', JSON.stringify({ ...statusJson, cost: { total_cost_usd: usd }, rate_limits: { five_hour: { used_percentage: five } } }), at) });
+  assert.ok(sl.recordUsage(h, [snap(day1, 2, 10)], day1));
+  assert.ok(sl.recordUsage(h, [snap(day2, 5, 10)], day2));
+  sl.recordUsage(h, [snap(day2 + 1000, 6, 30)], day2);
+  assert.strictEqual(h.latest.fiveHour.pct, 30);
+  assert.deepStrictEqual(h.limits.map(x => x.five), [10, 10, 30], 'amostra nova quando muda ou depois de 10 min');
+  assert.ok(!sl.recordUsage(h, [snap(day2 + 1000, 6, 30)], day2), 'o mesmo snapshot não muda nada');
+  const days = sl.costPerDay(h, 2, day2);
+  assert.deepStrictEqual(days.map(d => d.usd), [2, 4], 'dia 2 conta só o que a sessão gastou nele');
+  sl.recordUsage(h, [], day2 + 9 * 86400_000);
+  assert.deepStrictEqual([h.limits.length, Object.keys(h.sessions).length], [0, 0], 'mais de 8 dias sai');
+});
+
+check('statusline de verdade no bash: grava o JSON e desenha a linha', () => {
+  if (!bash) return console.log('     (sem bash, pulado)');
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-slrun-'));
+  const script = path.join(d, 'statusline.sh');
+  fs.writeFileSync(script, sl.statusLineScript(labels));
+  const env = { ...process.env, WTGRAPH_AGENT_ID: 'term9' };
+  const input = JSON.stringify(statusJson, null, 2);
+  const out = execFileSync(bash, [script.replace(/\\/g, '/'), d.replace(/\\/g, '/')], { input, env, cwd: d }).toString('utf8');
+  const plain = out.replace(/\x1b\[[0-9;]*m/g, '');
+  assert.ok(plain.includes('Opus 5.5'), plain);
+  assert.ok(plain.includes('ctx 42%'), plain);
+  assert.ok(plain.includes('$1.23'), plain);
+  assert.ok(plain.includes('sessão 81%'), plain);
+  assert.ok(plain.includes('semana 23%'), plain);
+  assert.ok(out.includes('\x1b[31m'), 'acima de 80% em vermelho');
+  const saved = sl.readStatuses(d);
+  assert.deepStrictEqual(saved.map(s => [s.id, s.contextPct]), [['term9', 42.4]]);
+  // com a statusline do usuário: o JSON vai para ela e a saída é a dela
+  fs.writeFileSync(path.join(d, 'statusline.user'), 'cat > /dev/null; printf minha-linha\n');
+  const mine = execFileSync(bash, [script.replace(/\\/g, '/'), d.replace(/\\/g, '/')], { input, env, cwd: d }).toString('utf8');
+  assert.strictEqual(mine, 'minha-linha');
+  fs.rmSync(d, { recursive: true, force: true });
+});
+
 fs.rmSync(dir, { recursive: true, force: true });
 if (failures) {
   console.log(`${failures} falha(s)`);

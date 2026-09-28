@@ -1,6 +1,26 @@
 # Changelog
 
 ## Não lançado
+- **Uso do Claude** (clique no uso na barra de status ou **Uso do Claude Code: limites do plano, contexto
+  e custo** na paleta): uma tela com os limites reais do plano (sessão de 5 h e semana, com a hora em
+  que renovam), o histórico deles em 24 h ou 7 dias, cada Claude Code aberto com modelo, contexto usado,
+  custo, linhas e tempo (de todas as janelas), o custo por dia e a estimativa pelos logs que já existia.
+- **Statusline nos Claude abertos pelo AgentYard** (`worktreeGraph.claude.statusLine`): é por ela que o
+  Claude manda os números reais, sem mexer no seu `settings.json`. Em `keep` (padrão) a sua statusline
+  continua aparecendo; sem uma, aparece a do AgentYard (modelo, branch, contexto, custo, sessão e
+  semana). `agentyard` sempre mostra a do AgentYard, e `off` não mexe na statusline.
+- A barra de status mostra a % real da sessão e da semana (fica amarela a partir de 80%), e a fila de
+  tarefas (`worktreeGraph.tasks.pauseAtUsage`) pausa pelos limites reais quando eles existem, até a
+  janela renovar.
+
+## 0.17.0
+- **Destino na fila de merge**: ao pôr uma worktree na fila (menu da worktree, grafo, aviso de agente
+  pronto e view da fila) você escolhe para onde ela vai. Com um fluxo de estágios configurado, a
+  sugestão segue o fluxo: o 1º estágio (dev) para uma feature ou o estágio seguinte para um estágio,
+  depois os outros estágios, a base e as demais branches locais. **Mesclar em…** usa a mesma ordem.
+- **Ponte do Claude em todos os projetos**: `status`, `mark_ready` e `notify` funcionam numa worktree
+  de qualquer projeto da lista, não só do ativo (lidos direto do git). A janela com o projeto ativo
+  tem prioridade, e o aviso de pronto troca para o projeto antes das ações.
 - **Ver commits da branch…** (paleta, botão direito numa worktree ou branch na view Worktrees e menu da
   branch no painel): escolha qualquer branch, local ou remota, e veja a lista de commits dela. Começa
   só com o que a base não tem; um botão alterna para o histórico completo. Enter mostra os arquivos do

@@ -97,7 +97,7 @@
   "command.claude.copySessionId.title": "Copy Session ID",
   "command.claude.newSession.title": "New Claude Session Here",
   "command.claude.commands.title": "Claude Code Commands…",
-  "command.claude.usage.title": "Claude Code Usage (5-Hour Window and Week)",
+  "command.claude.usage.title": "Claude Code Usage: Plan Limits, Context and Cost",
   "command.claudeConfig.refresh.title": "Claude: Refresh Configuration",
   "command.claudeConfig.newSkill.title": "Claude: New Skill…",
   "command.claudeConfig.copySkill.title": "Copy to the Other Scope (User ↔ Project)",
@@ -491,5 +491,9 @@
   "command.orchestrator.show.title": "Tasks split among agents…",
   "command.claude.lessons.title": "✦ Learn from this worktree's sessions (CLAUDE.md)…",
   "command.templates.stats.title": "Task templates: how well they work",
-  "config.remoteAccess.actions.description": "Lets the panel opened on the phone run actions (merge, push, open agent…); the confirmations appear on the phone. Off, the panel only shows."
+  "config.remoteAccess.actions.description": "Lets the panel opened on the phone run actions (merge, push, open agent…); the confirmations appear on the phone. Off, the panel only shows.",
+  "config.claude.statusLine.keep": "Collect usage and keep your own status line (from your settings.json); without one, show the AgentYard line.",
+  "config.claude.statusLine.agentyard": "Collect usage and always show the AgentYard line (model, branch, context, cost, session and week).",
+  "config.claude.statusLine.off": "Don't touch the status line: the usage screen only has the estimate from the logs.",
+  "config.claude.statusLine.markdownDescription": "Status line of the Claude Code opened by AgentYard (via `--settings`, without touching your `settings.json`). Claude sends it the real plan limits (5-hour session and week), the context used and the cost; AgentYard records them for the **Claude usage** screen, the status bar and `#worktreeGraph.tasks.pauseAtUsage#`. Applies to the next Claude opened."
 }
