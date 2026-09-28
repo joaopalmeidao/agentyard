@@ -96,7 +96,7 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<Node>, vscode
       : t('{0} in {1}\nOpened {2}.\nClick to bring the terminal to the front.', o.agent, o.path, sinceText(o.started));
     item.tooltip = [base, o.message && `⚠ ${o.message}`, o.sessionId && t('Session {0}', o.sessionId)].filter(Boolean).join('\n');
     item.iconPath = stateIcon(o);
-    item.contextValue = o.sessionId ? 'agentTerminalSession' : 'agentTerminal';
+    item.contextValue = (o.sessionId ? 'agentTerminalSession' : 'agentTerminal') + (o.claude ? '.claude' : '');
     item.command = { command: 'worktreeGraph.agents.show', title: t('Show terminal'), arguments: [node] };
     return item;
   }

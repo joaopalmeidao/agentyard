@@ -10,8 +10,10 @@ Module._resolveFilename = function (r, ...a) {
   return r === 'vscode' ? 'vscode' : orig.call(this, r, ...a);
 };
 require.cache.vscode = { id: 'vscode', filename: 'vscode', loaded: true, exports: {} };
-const { hookCommand, hookSettings, writeHookSettings, isClaudeCommand, instrumentCommand, insertArgs, claudeArgs, parseEvents, nextState, EventTail, pruneEvents } = require('../out/claude/hooks');
-const { mentionOf, selectionLines } = require('../out/claude/sendContext');
+const { hookCommand, hookSettings, writeHookSettings, isClaudeCommand, instrumentCommand, insertArgs, claudeArgs, withIdeFlag, parseEvents, nextState, EventTail, pruneEvents } = require('../out/claude/hooks');
+const { mentionOf, selectionLines, diagnosticsText } = require('../out/claude/sendContext');
+const { placementOf, keepsFocus } = require('../out/agents');
+const { pickRelevant, insideFolders } = require('../out/claude/terminalUx');
 
 let failures = 0;
 const check = (name, fn) => {
@@ -61,9 +63,15 @@ check('insertArgs e claudeArgs', () => {
 
 check('hookSettings: um hook por evento, matcher só nos de ferramenta', () => {
   const s = hookSettings(dir);
-  assert.deepStrictEqual(Object.keys(s.hooks).sort(), ['Notification', 'PermissionRequest', 'PostToolUse', 'SessionEnd', 'SessionStart', 'Stop', 'UserPromptSubmit']);
+  assert.deepStrictEqual(Object.keys(s.hooks).sort(), ['Notification', 'PermissionRequest', 'PostToolUse', 'PreCompact', 'SessionEnd', 'SessionStart', 'Stop', 'UserPromptSubmit']);
   assert.strictEqual(s.hooks.PostToolUse[0].matcher, '*');
   assert.strictEqual(s.hooks.Stop[0].matcher, undefined);
+  // projetos longos: segundo hook só em SessionStart, UserPromptSubmit e Stop (este com timeout longo)
+  assert.strictEqual(s.hooks.Stop[0].hooks.length, 2);
+  assert.ok(s.hooks.Stop[0].hooks[1].timeout >= 600);
+  assert.ok(s.hooks.Stop[0].hooks[1].command.includes('.project'));
+  assert.strictEqual(s.hooks.PostToolUse[0].hooks.length, 1);
+  assert.strictEqual(s.hooks.SessionStart[0].hooks.length, 2);
   assert.ok(!hookCommand('C:\\x\\y').includes('\\'), 'caminho com barras normais para o bash');
 });
 
@@ -74,6 +82,7 @@ check('writeHookSettings só regrava quando muda', () => {
   writeHookSettings(dir);
   assert.strictEqual(fs.statSync(f).mtimeMs, 0);
   assert.ok(m > 0 && JSON.parse(fs.readFileSync(f, 'utf8')).hooks.Stop);
+  assert.ok(fs.readFileSync(path.join(dir, 'project-hook.sh'), 'utf8').includes('MAX_RETRIES'));
 });
 
 check('parseEvents: linhas inteiras, sobra incompleta volta', () => {
@@ -158,6 +167,65 @@ check('selectionLines', () => {
   assert.deepStrictEqual(selectionLines(sel(4, 4, 10)), { start: 5, end: 5 });
   assert.deepStrictEqual(selectionLines(sel(4, 8, 0)), { start: 5, end: 8 });
   assert.deepStrictEqual(selectionLines(sel(4, 8, 2)), { start: 5, end: 9 });
+});
+
+check('withIdeFlag põe --ide logo depois do claude', () => {
+  assert.strictEqual(withIdeFlag('claude'), 'claude --ide');
+  assert.strictEqual(withIdeFlag('claude --resume abc'), 'claude --ide --resume abc');
+  assert.strictEqual(withIdeFlag('claude --ide -c'), 'claude --ide -c');
+  assert.strictEqual(withIdeFlag('codex'), 'codex');
+  assert.strictEqual(instrumentCommand(withIdeFlag('claude x'), '/s.json'), 'claude --settings "/s.json" --ide x');
+});
+
+check('diagnosticsText: uma linha, erros primeiro, mensagem cortada', () => {
+  const root = path.resolve('/repo/wt');
+  const file = path.join(root, 'src', 'a.ts');
+  const text = diagnosticsText(file, root, [
+    { line: 9, severity: 'warning', message: 'não usado' },
+    { line: 3, severity: 'error', message: 'tipo\nerrado', source: 'ts' },
+  ]);
+  assert.strictEqual(text, '@src/a.ts#L3 (error, ts: tipo errado); @src/a.ts#L9 (warning: não usado)');
+  assert.ok(!text.includes('\n'));
+  const long = diagnosticsText(file, root, [{ line: 1, severity: 'info', message: 'x'.repeat(500) }]);
+  assert.ok(long.length < 260 && long.endsWith('…)'));
+  assert.strictEqual(diagnosticsText(file, root, Array.from({ length: 30 }, (_, i) => ({ line: i + 1, severity: 'error', message: 'e' })), 5).split('; ').length, 5);
+});
+
+check('placementOf e keepsFocus', () => {
+  assert.strictEqual(placementOf(undefined, false, false), 'panel');
+  assert.strictEqual(placementOf('editor', true, false), 'editor');
+  assert.strictEqual(placementOf('editorBeside', false, false), 'beside');
+  assert.strictEqual(placementOf('split', false, true), 'split');
+  assert.strictEqual(placementOf('split', false, false), 'panel', 'sem outro terminal para dividir');
+  assert.strictEqual(placementOf('auto', true, false), 'panel');
+  assert.strictEqual(placementOf('auto', false, false), 'beside');
+  assert.strictEqual(keepsFocus('interactive', true), true);
+  assert.strictEqual(keepsFocus('interactive', false), false);
+  assert.strictEqual(keepsFocus(undefined, true), true);
+  assert.strictEqual(keepsFocus('always', true), false);
+  assert.strictEqual(keepsFocus('never', false), true);
+});
+
+check('pickRelevant: esperando > trabalhando > sua vez; empate fica com o mais recente', () => {
+  const a = { state: 'idle', started: 1 };
+  const b = { state: 'working', started: 2 };
+  const c = { state: 'waiting', started: 3 };
+  const d = { state: 'ended', started: 9 };
+  const e = { started: 5 };
+  assert.strictEqual(pickRelevant([a, b, c, d]), c);
+  assert.strictEqual(pickRelevant([a, b]), b);
+  assert.strictEqual(pickRelevant([a, e]), a);
+  assert.strictEqual(pickRelevant([{ state: 'idle', started: 1 }, a, { state: 'idle', started: 7 }]).started, 7);
+  assert.strictEqual(pickRelevant([d]), undefined);
+});
+
+check('insideFolders', () => {
+  const ws = path.resolve('/repo/app');
+  assert.ok(insideFolders(ws, [ws]));
+  assert.ok(insideFolders(path.join(ws, 'pkg'), [ws + path.sep]));
+  assert.ok(!insideFolders(path.resolve('/repo/app-wt'), [ws]), 'prefixo não é pasta-mãe');
+  assert.ok(!insideFolders(path.resolve('/repo/worktrees/x'), [ws]));
+  assert.ok(insideFolders(ws.toUpperCase(), [ws]));
 });
 
 fs.rmSync(dir, { recursive: true, force: true });

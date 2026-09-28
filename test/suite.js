@@ -58,9 +58,9 @@ exports.run = async () => {
 
   await check('comandos registrados', async () => {
     const all = await vscode.commands.getCommands(true);
-    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
+    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask', 'longProjects.new', 'longProjects.start']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
     // o painel foca views pelos comandos <view>.focus que o VS Code cria para cada view declarada
-    for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules', 'mergeQueue']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
+    for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules', 'mergeQueue', 'longProjects']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
   });
 
   await check('árvore: worktrees + branches sem worktree', async () => {
@@ -201,6 +201,67 @@ exports.run = async () => {
     o.terminal.dispose();
     await until(() => !fs.existsSync(file));
     await cfg.update('claude.notify', undefined, vscode.ConfigurationTarget.Global);
+  });
+
+  await check('claude: permissão respondida, fim da sessão retomado e fechado', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    await cfg.update('claude.notify', 'off', G);
+    await cfg.update('claude.onSessionEnd', 'keep', G);
+    // retomar usa o comando configurado: "claude --version" sai logo, sem abrir um Claude de verdade
+    const agentsBefore = cfg.inspect('agents').globalValue;
+    await cfg.update('agents', [{ name: 'Claude Code', command: 'claude --version' }], G);
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    const o = await agentTerms.start(wt.path, wt.branch, 'Claude Code', 'claude --version');
+    const file = path.join(agentTerms.eventsDir(), `${o.id}.jsonl`);
+    const emit = e => fs.appendFileSync(file, JSON.stringify({ session_id: 'sessao-fim', ...e }) + '\n');
+    emit({ hook_event_name: 'SessionStart' });
+    await until(() => o.state === 'idle');
+    assert.strictEqual(agentTerms.answerPermission(o, true), false, 'sem pedido em aberto não responde');
+    emit({ hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+    await until(() => o.state === 'waiting');
+    assert.strictEqual(o.notificationType, 'permission_prompt');
+    assert.strictEqual(agentTerms.answerPermission(o, false), true);
+    emit({ hook_event_name: 'PostToolUse' });
+    await until(() => o.state === 'working');
+    assert.strictEqual(o.notificationType, undefined);
+    emit({ hook_event_name: 'SessionEnd' });
+    await until(() => o.state === 'ended');
+    assert.ok(o.terminal.exitStatus === undefined, 'keep: o terminal fica');
+    agentTerms.resumeInPlace(o);
+    assert.strictEqual(o.state, 'starting', 'retomado no mesmo terminal');
+    await cfg.update('claude.onSessionEnd', 'close', G);
+    emit({ hook_event_name: 'SessionEnd' });
+    await until(() => !agentTerms.list().includes(o));
+    await cfg.update('claude.onSessionEnd', undefined, G);
+    await cfg.update('claude.notify', undefined, G);
+    await cfg.update('agents', agentsBefore, G);
+  });
+
+  await check('terminal de agente: ao lado, dividido, mover e grade', async () => {
+    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
+    const G = vscode.ConfigurationTarget.Global;
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
+    await cfg.update('agentTerminalLocation', 'editorBeside', G);
+    const a = await agentTerms.start(wt.path, wt.branch, 'Eco', 'echo ao-lado', { name: 'Eco · lado' });
+    await until(() => agentTerms.inEditor(a.terminal));
+    await agentTerms.moveTo(a, 'panel');
+    await until(() => !agentTerms.inEditor(a.terminal));
+    await cfg.update('agentTerminalLocation', 'split', G);
+    const b = await agentTerms.start(wt.path, wt.branch, 'Eco', 'echo dividido', { name: 'Eco · dividido' });
+    assert.strictEqual(b.terminal.creationOptions.location.parentTerminal, a.terminal, 'dividido com o da mesma worktree');
+    await vscode.commands.executeCommand('worktreeGraph.agents.grid', { path: wt.path });
+    await until(() => agentTerms.inEditor(a.terminal) && agentTerms.inEditor(b.terminal));
+    const groupOf = term => vscode.window.tabGroups.all.findIndex(g => g.tabs.some(t => t.input instanceof vscode.TabInputTerminal && t.label === term.name));
+    assert.notStrictEqual(groupOf(a.terminal), groupOf(b.terminal), 'uma coluna para cada');
+    a.terminal.dispose();
+    b.terminal.dispose();
+    await until(() => !agentTerms.list(wt.path).some(o => o === a || o === b));
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await vscode.commands.executeCommand('workbench.action.editorLayoutSingle');
+    await cfg.update('agentTerminalLocation', undefined, G);
   });
 
   await check('estado detalhado (status e comparação) chega em segundo plano', async () => {
@@ -673,6 +734,21 @@ exports.run = async () => {
     fs.unlinkSync(path.join(to.path, 'nota.txt'));
     const root = await tree.getChildren();
     assert.ok(root.some(n => n.kind === 'stashes'), 'grupo Stashes na árvore');
+  });
+
+  await check('trocar de branch: a worktree passa para outra branch e volta', async () => {
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const head = p => execSync('git branch --show-current', { cwd: p, encoding: 'utf8' }).trim();
+    execSync('git branch tmp/troca', { cwd: wt.path });
+    assert.strictEqual(await api.gitOps.switchBranch(wt.path, 'tmp/troca', { confirm: false }), true);
+    assert.strictEqual(head(wt.path), 'tmp/troca');
+    await ctl.refresh();
+    assert.ok(ctl.state.worktrees.some(w => w.path === wt.path && w.branch === 'tmp/troca'), 'estado mostra a branch nova');
+    assert.strictEqual(await api.gitOps.switchBranch(wt.path, 'ai/precos-promo', { confirm: false }), true);
+    assert.strictEqual(head(wt.path), 'ai/precos-promo');
+    execSync('git branch -D tmp/troca', { cwd: wt.path });
+    await ctl.refresh();
   });
 
   await check('reorganizar commits: fixup junta dois commits e "Desfazer" volta', async () => {

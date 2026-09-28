@@ -1,6 +1,6 @@
 // Regras de coordenação (src/coord/core.ts). Uso: node test/coord.test.js
 const assert = require('assert');
-const { isActive, findOverlaps, overlapSummary, processNext, resolveAwaiting, batchPlan, budgetLevel } = require('../out/coord/core');
+const { isActive, findOverlaps, overlapSummary, processNext, resolveAwaiting, agentFinished, MAX_AGENT_TRIES, batchPlan, budgetLevel } = require('../out/coord/core');
 
 let failures = 0;
 const check = async (name, fn) => {
@@ -88,6 +88,40 @@ const now = 1_800_000_000;
     const items = [item('a', 'done'), item('b', 'running'), item('c')];
     const r = await processNext(items, steps());
     assert.strictEqual(r.branch, 'b');
+  });
+
+  await check('fila: conflito vai para o agente, a fila espera e retoma o mesmo item quando ele termina', async () => {
+    const items = [item('a'), item('b')];
+    let conflict = true;
+    const handed = [];
+    const s = { ...steps({ sync: () => (conflict ? 'conflito ao trazer main' : undefined) }), async handoff(i, r) { handed.push([i.branch, r]); return true; } };
+    const r1 = await processNext(items, s);
+    assert.deepStrictEqual([r1.branch, r1.status, r1.agentTries], ['a', 'agent', 1]);
+    assert.deepStrictEqual(handed, [['a', 'conflito ao trazer main']]);
+    assert.strictEqual(await processNext(items, s), undefined, 'b espera o agente');
+    assert.strictEqual(agentFinished(items, 'b', true), undefined, 'b não estava com o agente');
+    conflict = false;
+    assert.strictEqual(agentFinished(items, 'a', true).status, 'waiting');
+    assert.strictEqual((await processNext(items, s)).branch, 'a', 'a volta antes de b');
+    assert.strictEqual(items[0].status, 'done');
+    assert.strictEqual((await processNext(items, s)).branch, 'b');
+  });
+
+  await check('fila: agente que para sem commitar tira o item; limite de tentativas; sem agente, falha como antes', async () => {
+    const items = [item('a'), item('b')];
+    const s = { ...steps({ checks: () => false }), handoff: async () => true };
+    await processNext(items, s);
+    const f = agentFinished(items, 'a', false);
+    assert.strictEqual(f.status, 'failed');
+    assert.ok(f.reason.includes('checks failed'));
+    // b: entregue MAX_AGENT_TRIES vezes, depois sai da fila
+    for (let n = 0; n < MAX_AGENT_TRIES; n++) {
+      assert.strictEqual((await processNext(items, s)).status, 'agent');
+      agentFinished(items, 'b', true);
+    }
+    assert.strictEqual((await processNext(items, s)).status, 'failed');
+    const lone = [item('c')];
+    assert.strictEqual((await processNext(lone, { ...steps({ sync: () => 'x' }), handoff: async () => false })).status, 'failed', 'agente recusou');
   });
 
   await check('lote: respeita o limite de agentes simultâneos', () => {

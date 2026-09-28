@@ -1201,6 +1201,7 @@
       ];
       if (wt) {
         git.push('<hr>');
+        git.push(item('switchBranch', t('Switch branch…'), { path: wt.path }));
         git.push(item('stashCreate', t('Stash changes…'), { path: wt.path }));
         git.push(item('moveChanges', t('Move changes to another worktree…'), { path: wt.path }));
         if (!isBase) git.push(item('reorganizeCommits', t('Reorganize commits (squash, reorder, drop)…'), { path: wt.path }));

@@ -60,10 +60,20 @@ export function registerAgentAttention(ctx: vscode.ExtensionContext, ctl: Contro
       await new Promise(r => setTimeout(r, 1500));
       if (o.asking || o.state !== 'waiting') return;
       if (!vscode.window.state.focused) osNotify(ctl, t('{0} in {1} needs you', o.agent, where(o)), o.message ?? t('waiting for your answer'));
+      // pedido de permissão: dá para responder daqui (Enter aceita a opção marcada, Esc recusa)
+      const answer = o.notificationType === 'permission_prompt' && ctl.cfg().get<boolean>('claude.answerFromNotification', false);
+      const allow = t('Allow');
+      const deny = t('Deny');
+      const asked = o.stateAt;
       pick = await vscode.window.showWarningMessage(
         t('{0} in {1} needs you: {2}', o.agent, where(o), o.message ?? t('waiting for your answer')),
-        show,
+        ...(answer ? [allow, deny, show] : [show]),
       );
+      if (pick === allow || pick === deny) {
+        // a notificação pode ter ficado aberta enquanto você respondeu no terminal (ou veio outro pedido)
+        if (o.stateAt !== asked || !agentTerms.answerPermission(o, pick === allow)) vscode.window.showInformationMessage(t('{0} in {1} is no longer waiting.', o.agent, where(o)));
+        return;
+      }
     } else if (mode === 'all' && o.state === 'idle' && previous === 'working') {
       if (!vscode.window.state.focused) osNotify(ctl, 'AgentYard', t('{0} in {1} finished and is waiting for your next message.', o.agent, where(o)));
       pick = await vscode.window.showInformationMessage(t('{0} in {1} finished and is waiting for your next message.', o.agent, where(o)), show);
