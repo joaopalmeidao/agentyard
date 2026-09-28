@@ -52,11 +52,16 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     const queueAuthorized = t('✦ Queue (Claude resolves conflicts)');
     const publish = t('Publish {0}', L);
     const openTerminal = t('Open terminal');
+    const extra = watch.describers
+      .map(f => f(r.path))
+      .filter(Boolean)
+      .join(' · ');
     const pick = await vscode.window.showInformationMessage(
       '✓ ' +
         (r.commits
           ? t('{0}: the agent finished ({1} new commit(s)). Ready for review.', name, r.commits)
-          : t('{0}: the agent finished. Ready for review.', name)),
+          : t('{0}: the agent finished. Ready for review.', name)) +
+        (extra ? ` (${extra})` : ''),
       review,
       queue,
       queueAuthorized,

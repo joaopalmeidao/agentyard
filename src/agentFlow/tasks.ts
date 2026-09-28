@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { AgentTerminals } from '../agents';
+import type { UsagePause } from '../autopilot/core';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
 import { keyOf } from './head';
@@ -31,6 +32,12 @@ export class TaskQueue implements vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
   private readonly disposables: vscode.Disposable[] = [this.changed];
+  /** Worktrees com a próxima tarefa esperando o uso do Claude baixar. */
+  private readonly paused = new Set<string>();
+  private pauseEnd = 0;
+  private pauseTimer?: NodeJS.Timeout;
+  /** "Rodar mesmo assim": ignora a pausa até esta hora. */
+  private bypassUntil = 0;
 
   constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals, watch: AgentWatch) {
     this.disposables.push(watch.onDidFinish(e => void this.onFinished(e.path, e.ready)));
@@ -94,8 +101,54 @@ export class TaskQueue implements vscode.Disposable {
       this.ctl.log(t('Task queue: {0} stopped because the budget ran out.', p));
       return;
     }
+    const pause = this.bypassUntil > Date.now() ? undefined : this.ctl.taskDeferred?.();
+    if (pause && this.queue(p)?.tasks.some(x => x.status === 'waiting')) {
+      this.defer(p, pause);
+      return;
+    }
     const next = this.queue(p)?.tasks.find(x => x.status === 'waiting');
     if (next) await this.run(p, next.id);
+  }
+
+  /** Até quando a fila está esperando o uso do Claude baixar (0: não está). */
+  pausedUntil() {
+    return this.paused.size ? this.pauseEnd : 0;
+  }
+
+  /**
+   * Uso do Claude perto do orçamento (`tasks.pauseAtUsage`): as tarefas esperam a janela virar e
+   * saem sozinhas depois. Avisa uma vez por pausa, com "Rodar mesmo assim".
+   */
+  private defer(p: string, pause: UsagePause) {
+    const first = !this.paused.size;
+    this.paused.add(keyOf(p));
+    this.pauseEnd = pause.until;
+    if (this.pauseTimer) clearTimeout(this.pauseTimer);
+    this.pauseTimer = setTimeout(() => void this.resumePaused(), Math.max(60_000, pause.until - Date.now() + 60_000));
+    this.changed.fire();
+    if (!first) return;
+    const when = new Date(pause.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const what = pause.window === 'week' ? t('the week') : t('the 5 h window');
+    this.ctl.log(t('Task queue paused: {0} is at {1}% of the budget; resumes at {2}.', what, pause.pct, when));
+    const run = t('Run anyway');
+    void vscode.window.showWarningMessage(t('Task queue paused: {0} is at {1}% of the Claude budget. The queued tasks start at {2}.', what, pause.pct, when), run).then(pick => {
+      if (pick !== run) return;
+      this.bypassUntil = pause.until;
+      void this.resumePaused();
+    });
+  }
+
+  private async resumePaused() {
+    const paths = [...this.paused];
+    this.paused.clear();
+    if (this.pauseTimer) clearTimeout(this.pauseTimer);
+    this.pauseTimer = undefined;
+    this.changed.fire();
+    const all = this.all();
+    for (const k of paths) {
+      const q = all[k];
+      if (q && !q.tasks.some(x => x.status === 'running')) await this.startNext(q.path);
+    }
   }
 
   /** Manda a tarefa para o agente agora (a que estava rodando volta para a fila). */
@@ -157,6 +210,7 @@ export class TaskQueue implements vscode.Disposable {
   }
 
   dispose() {
+    if (this.pauseTimer) clearTimeout(this.pauseTimer);
     this.disposables.forEach(d => d.dispose());
   }
 }
@@ -176,11 +230,12 @@ function statusLabel(status: TaskStatus): string {
 
 class QueueItem extends vscode.TreeItem {
   readonly kind = 'taskQueue';
-  constructor(readonly q: Queue) {
+  constructor(readonly q: Queue, pausedUntil = 0) {
     super(q.branch ?? path.basename(q.path), vscode.TreeItemCollapsibleState.Expanded);
     this.id = `tq:${keyOf(q.path)}`;
     const waiting = q.tasks.filter(x => x.status === 'waiting').length;
-    this.description = [q.tasks.some(x => x.status === 'running') ? t('running') : '', waiting ? t('{0} in queue', waiting) : ''].filter(Boolean).join(' · ');
+    const paused = pausedUntil && waiting && !q.tasks.some(x => x.status === 'running') ? t('paused until {0} (Claude usage)', new Date(pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : '';
+    this.description = [q.tasks.some(x => x.status === 'running') ? t('running') : '', waiting ? t('{0} in queue', waiting) : '', paused].filter(Boolean).join(' · ');
     this.iconPath = new vscode.ThemeIcon('list-ordered');
     this.contextValue = 'taskQueue';
   }
@@ -212,7 +267,7 @@ export class TasksProvider implements vscode.TreeDataProvider<QueueItem | TaskIt
   }
 
   getChildren(el?: QueueItem | TaskItem): (QueueItem | TaskItem)[] {
-    if (!el) return Object.values(this.tasks.all()).map(q => new QueueItem(q));
+    if (!el) return Object.values(this.tasks.all()).map(q => new QueueItem(q, this.tasks.pausedUntil()));
     if (el instanceof QueueItem) return el.q.tasks.map((x, i) => new TaskItem(el.q, x, i));
     return [];
   }

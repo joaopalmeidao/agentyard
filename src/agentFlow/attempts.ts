@@ -1,8 +1,9 @@
-import { exec } from 'child_process';
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import * as actions from '../actions';
 import type { AgentTerminals } from '../agents';
+import { gateCommands, JudgeResult, judgePrompt, parseJudge, runCommands, tail } from '../autopilot/core';
+import { runHeadless } from '../claude/headless';
 import type { Controller } from '../controller';
 import { gitUri } from '../diff';
 import { locale, t } from '../i18n';
@@ -15,6 +16,8 @@ export interface AttemptGroup {
   base: string;
   created: number;
   attempts: { letter: string; branch: string; path: string; variation: string }[];
+  /** Parecer do juiz (⚖ Julgar no painel). */
+  judge?: JudgeResult & { at: number };
 }
 
 function defaultVariations(): string[] {
@@ -59,7 +62,7 @@ export class Attempts {
     return this.ctl.ctx.workspaceState.get<AttemptGroup[]>(this.storeKey(), []);
   }
 
-  private async saveGroup(g: AttemptGroup) {
+  async saveGroup(g: AttemptGroup) {
     await this.ctl.ctx.workspaceState.update(this.storeKey(), [g, ...this.groups().filter(x => x.id !== g.id)].slice(0, 20));
   }
 
@@ -160,6 +163,7 @@ interface AttemptStats {
 export class ComparePanel {
   private static readonly open = new Map<string, ComparePanel>();
   private readonly tests = new Map<string, AttemptStats['test']>();
+  private judging = false;
 
   static async show(ctl: Controller, g: AttemptGroup, attempts: Attempts) {
     const cur = ComparePanel.open.get(g.id);
@@ -233,21 +237,12 @@ export class ComparePanel {
         return;
       case 'test': {
         if (!a) return;
-        const cmd = this.ctl.cfg().get<string>('autoSync.testCommand', '').trim();
-        if (!cmd) {
-          const go = await vscode.window.showWarningMessage(t('Configure worktreeGraph.autoSync.testCommand to run the attempts\' tests.'), t('Open settings'));
-          if (go) vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.autoSync.testCommand');
-          return;
-        }
-        this.tests.set(a.branch, 'running');
-        await this.load();
-        const res = await new Promise<{ ok: boolean; out: string }>(r =>
-          exec(cmd, { cwd: a.path, timeout: 15 * 60_000, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, so, se) => r({ ok: !err, out: `${so}${se}` })),
-        );
-        this.tests.set(a.branch, { ok: res.ok, at: Date.now(), tail: res.out.split(/\r?\n/).slice(-15).join('\n') });
-        this.ctl.log(`[${t('attempt {0}', a.branch)}] ${cmd} → ${res.ok ? 'ok' : t('failed')}`);
+        if (!this.testCommands().length) return this.askTestCommand();
+        await this.runTest(a);
         return this.load();
       }
+      case 'judge':
+        return this.judge();
       case 'diff': {
         if (!a) return;
         const others = this.g.attempts.filter(x => x.branch !== a.branch);
@@ -295,6 +290,90 @@ export class ComparePanel {
     }
   }
 
+  /** Comandos de teste das tentativas: os do portão do Stop, os de antes do merge ou o testCommand. */
+  private testCommands(): string[] {
+    const c = this.ctl.cfg();
+    return gateCommands(c.get<string[]>('claude.stopGate.commands', []), c.get<string[]>('checks.beforeMerge', []), c.get<string>('autoSync.testCommand', ''));
+  }
+
+  private async askTestCommand() {
+    const go = await vscode.window.showWarningMessage(t('Configure worktreeGraph.autoSync.testCommand to run the attempts\' tests.'), t('Open settings'));
+    if (go) vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.autoSync.testCommand');
+  }
+
+  private async runTest(a: AttemptGroup['attempts'][number]) {
+    const cmds = this.testCommands();
+    this.tests.set(a.branch, 'running');
+    await this.load();
+    const res = await runCommands(cmds, a.path, 15 * 60_000);
+    this.tests.set(a.branch, { ok: res.ok, at: Date.now(), tail: tail(res.output, 15) });
+    this.ctl.log(`[${t('attempt {0}', a.branch)}] ${cmds.join(' && ')} → ${res.ok ? 'ok' : t('failed')}`);
+  }
+
+  /**
+   * ⚖ Julgar: roda os testes de cada tentativa (se houver comando) e pede a um Claude sem terminal
+   * que compare os diffs e ordene as tentativas, com o motivo de cada uma e uma recomendação.
+   */
+  private async judge() {
+    if (this.judging) return;
+    const repo = this.ctl.repo!;
+    const wts = await repo.worktreesFast();
+    const live = this.g.attempts.filter(a => wts.some(w => w.branch === a.branch && !w.prunable));
+    if (live.length < 2) {
+      vscode.window.showInformationMessage(t('At least two attempts are needed to judge.'));
+      return;
+    }
+    this.judging = true;
+    try {
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Judging the attempts of "{0}"', this.g.title), cancellable: false }, async progress => {
+        if (this.testCommands().length) {
+          for (const a of live) {
+            const cur = this.tests.get(a.branch);
+            if (cur && cur !== 'running') continue;
+            progress.report({ message: t('tests of {0}', a.letter) });
+            await this.runTest(a);
+          }
+        }
+        progress.report({ message: t('comparing the diffs') });
+        const stats = await this.stats();
+        const input = await Promise.all(
+          live.map(async a => {
+            const s = stats.get(a.branch)!;
+            const test = this.tests.get(a.branch);
+            const diff = await repo.run(['diff', '--no-color', `${this.g.base}...${a.branch}`]);
+            return {
+              letter: a.letter,
+              branch: a.branch,
+              variation: a.variation,
+              commits: s.commits,
+              files: s.files,
+              added: s.added,
+              deleted: s.deleted,
+              testsOk: test && test !== 'running' ? test.ok : undefined,
+              testTail: test && test !== 'running' ? test.tail : undefined,
+              diff: diff.stdout,
+            };
+          }),
+        );
+        const r = await runHeadless(judgePrompt(this.g.prompt, input), {
+          cwd: repo.root,
+          bin: this.ctl.cfg().get<string>('claude.headlessCommand', 'claude'),
+          model: this.ctl.cfg().get<string>('agents.autoReview.model', '') || undefined,
+          timeoutMs: 15 * 60_000,
+        });
+        const verdict = parseJudge(r.text, live.map(a => a.letter));
+        if (!verdict) throw new Error(t('The judge did not answer in the expected format.'));
+        this.g.judge = { ...verdict, at: Date.now() };
+        await this.attempts.saveGroup(this.g);
+      });
+    } catch (e) {
+      vscode.window.showErrorMessage(t('Could not judge the attempts: {0}', (e as Error).message));
+    } finally {
+      this.judging = false;
+    }
+    await this.load();
+  }
+
   private async discardOthers(keep: string) {
     await this.ctl.refresh();
     const paths = this.g.attempts.filter(x => x.branch !== keep).map(x => x.path);
@@ -315,8 +394,12 @@ export class ComparePanel {
               ? `<span class="chip ${s.test.ok ? 'ok' : 'bad'}" title="${esc(s.test.tail)}">${s.test.ok ? '✓ ' + t('tests passed') : '✗ ' + t('tests failed')}</span>`
               : `<span class="chip muted">${t('tests not run')}</span>`;
         const b = esc(a.branch);
+        const rank = this.g.judge ? this.g.judge.ranking.indexOf(a.letter) : -1;
+        const medal = rank < 0 ? '' : `<span class="chip ${rank === 0 ? 'ok' : 'muted'}" title="${esc(this.g.judge?.reasons[a.letter] ?? '')}">${['🥇', '🥈', '🥉'][rank] ?? '#' + (rank + 1)} ${esc(t('place {0}', rank + 1))}</span>`;
+        const reason = rank >= 0 && this.g.judge?.reasons[a.letter] ? `<div class="last">⚖ ${esc(this.g.judge.reasons[a.letter])}</div>` : '';
         return `<div class="card attempt ${s.exists ? '' : 'conflict'}">
-          <div class="card-head"><span class="branch">${esc(a.letter)} · ${b}</span></div>
+          <div class="card-head"><span class="branch">${esc(a.letter)} · ${b}</span>${medal}</div>
+          ${reason}
           <div class="last">${a.variation ? esc(a.variation) : `<span class="muted">${t('just the task')}</span>`}</div>
           ${s.exists
             ? `<div class="stats">
@@ -343,8 +426,9 @@ export class ComparePanel {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${w.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${css}"></head><body class="attempts-page">
 <header class="toolbar"><div class="title"><span class="repo">${t('Compare attempts')}</span><span class="muted">${esc(this.g.title)} · ${esc(t('from {0}', this.g.base))}</span></div>
-<div class="tools"><button data-action="refresh" title="${t('Refresh numbers')}">↻</button></div></header>
+<div class="tools"><button data-action="judge" title="${t('Runs the tests of each attempt and asks Claude to compare the diffs and rank them')}"${this.judging ? ' disabled' : ''}>⚖ ${t('Judge')}</button><button data-action="refresh" title="${t('Refresh numbers')}">↻</button></div></header>
 <div class="verdict ok">${esc(this.g.prompt.split(/\r?\n/)[0])}</div>
+${this.g.judge ? `<div class="verdict">⚖ ${esc(this.g.judge.ranking.join(' > '))}${this.g.judge.recommendation ? ` — ${esc(this.g.judge.recommendation)}` : ''}</div>` : ''}
 <div class="cards attempts">${cols}</div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();

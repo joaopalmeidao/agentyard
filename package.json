@@ -1536,6 +1536,67 @@
         "title": "%command.longProjects.forget.title%",
         "category": "AgentYard",
         "icon": "$(discard)"
+      },
+      {
+        "command": "worktreeGraph.claude.configureStopGate",
+        "title": "%command.claude.configureStopGate.title%",
+        "category": "AgentYard",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "worktreeGraph.agents.configureAutoReview",
+        "title": "%command.agents.configureAutoReview.title%",
+        "category": "AgentYard",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "worktreeGraph.agents.autoReviewNow",
+        "title": "%command.agents.autoReviewNow.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.agents.showAutoReview",
+        "title": "%command.agents.showAutoReview.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.board.show",
+        "title": "%command.board.show.title%",
+        "category": "AgentYard",
+        "icon": "$(note)"
+      },
+      {
+        "command": "worktreeGraph.board.post",
+        "title": "%command.board.post.title%",
+        "category": "AgentYard",
+        "icon": "$(megaphone)"
+      },
+      {
+        "command": "worktreeGraph.board.release",
+        "title": "%command.board.release.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.orchestrator.start",
+        "title": "%command.orchestrator.start.title%",
+        "category": "AgentYard",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "worktreeGraph.orchestrator.show",
+        "title": "%command.orchestrator.show.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.claude.lessons",
+        "title": "%command.claude.lessons.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.templates.stats",
+        "title": "%command.templates.stats.title%",
+        "category": "AgentYard",
+        "icon": "$(graph)"
       }
     ],
     "submenus": [
@@ -1936,6 +1997,51 @@
           "command": "worktreeGraph.longProjects.new",
           "when": "view == worktreeGraph.longProjects",
           "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.claude.configureStopGate",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@1"
+        },
+        {
+          "command": "worktreeGraph.agents.configureAutoReview",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@2"
+        },
+        {
+          "command": "worktreeGraph.board.post",
+          "when": "view == worktreeGraph.agents",
+          "group": "navigation@6"
+        },
+        {
+          "command": "worktreeGraph.board.show",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@3"
+        },
+        {
+          "command": "worktreeGraph.orchestrator.start",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@0"
+        },
+        {
+          "command": "worktreeGraph.orchestrator.show",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@4"
+        },
+        {
+          "command": "worktreeGraph.orchestrator.start",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "5_claude"
+        },
+        {
+          "command": "worktreeGraph.templates.stats",
+          "when": "view == worktreeGraph.tasks",
+          "group": "9_templates@1"
+        },
+        {
+          "command": "worktreeGraph.templates.stats",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@5"
         }
       ],
       "view/item/context": [
@@ -3179,6 +3285,26 @@
           "command": "worktreeGraph.sendPrFeedback",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "3_review@3"
+        },
+        {
+          "command": "worktreeGraph.agents.autoReviewNow",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_review@4"
+        },
+        {
+          "command": "worktreeGraph.agents.showAutoReview",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_review@5"
+        },
+        {
+          "command": "worktreeGraph.board.release",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_status@2"
+        },
+        {
+          "command": "worktreeGraph.claude.lessons",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_claude@1"
         }
       ],
       "worktreeGraph.wt.open": [
@@ -4310,6 +4436,114 @@
           "default": 3,
           "minimum": 0,
           "description": "%config.longProjects.maxSessionsPerMilestone.description%"
+        },
+        "worktreeGraph.claude.stopGate": {
+          "type": "string",
+          "default": "changes",
+          "enum": [
+            "changes",
+            "always",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.claude.stopGate.enumDescriptions.0%",
+            "%config.claude.stopGate.enumDescriptions.1%",
+            "%config.claude.stopGate.enumDescriptions.2%"
+          ],
+          "description": "%config.claude.stopGate.description%"
+        },
+        "worktreeGraph.claude.stopGate.commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "%config.claude.stopGate.commands.description%"
+        },
+        "worktreeGraph.claude.stopGate.maxRetries": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "%config.claude.stopGate.maxRetries.description%"
+        },
+        "worktreeGraph.agents.autoReview": {
+          "type": "string",
+          "default": "off",
+          "enum": [
+            "ready",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.agents.autoReview.enumDescriptions.0%",
+            "%config.agents.autoReview.enumDescriptions.1%"
+          ],
+          "description": "%config.agents.autoReview.description%"
+        },
+        "worktreeGraph.agents.autoReview.maxRounds": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "description": "%config.agents.autoReview.maxRounds.description%"
+        },
+        "worktreeGraph.agents.autoReview.model": {
+          "type": "string",
+          "default": "",
+          "description": "%config.agents.autoReview.model.description%"
+        },
+        "worktreeGraph.agents.autoReview.focus": {
+          "type": "string",
+          "default": "",
+          "description": "%config.agents.autoReview.focus.description%"
+        },
+        "worktreeGraph.claude.stuck.repeats": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "%config.claude.stuck.repeats.description%"
+        },
+        "worktreeGraph.claude.stuck.minutes": {
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "description": "%config.claude.stuck.minutes.description%"
+        },
+        "worktreeGraph.claude.board": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.claude.board.description%"
+        },
+        "worktreeGraph.claude.claims": {
+          "type": "string",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "block",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.claude.claims.enumDescriptions.0%",
+            "%config.claude.claims.enumDescriptions.1%",
+            "%config.claude.claims.enumDescriptions.2%"
+          ],
+          "description": "%config.claude.claims.description%"
+        },
+        "worktreeGraph.claude.claims.hours": {
+          "type": "number",
+          "default": 4,
+          "minimum": 0.25,
+          "maximum": 24,
+          "description": "%config.claude.claims.hours.description%"
+        },
+        "worktreeGraph.tasks.pauseAtUsage": {
+          "type": "number",
+          "default": 90,
+          "minimum": 0,
+          "description": "%config.tasks.pauseAtUsage.description%"
+        },
+        "worktreeGraph.orchestrator.model": {
+          "type": "string",
+          "default": "",
+          "description": "%config.orchestrator.model.description%"
         }
       }
     }
@@ -4320,7 +4554,7 @@
     "package": "tsc -p ./ && node scripts/package-dist.js",
     "dist": "node scripts/dist.js",
     "publish": "vsce publish",
-    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/longProject.test.js && node test/claudeGuard.test.js && node test/turns.test.js && node test/bridge.test.js && node test/remote.test.js && node test/stack.test.js && node test/sparse.test.js && node test/headless.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
+    "test": "tsc -p ./ && node test/hosting.test.js && bash test/ci.test.sh && node test/issues.test.js && node test/issuesCreate.test.js && node test/sessions.test.js && node test/claudeHooks.test.js && node test/longProject.test.js && node test/claudeGuard.test.js && node test/turns.test.js && node test/bridge.test.js && node test/autopilot.test.js && node test/remote.test.js && node test/stack.test.js && node test/sparse.test.js && node test/headless.test.js && node test/claudeConfig.test.js && node test/pipelines.test.js && node test/guards.test.js && node test/review.test.js && node test/agentFlow.test.js && node test/gitOps.test.js && node test/platforms.test.js && node test/reviewPlatforms.test.js && node test/ciBranches.test.js && node test/schedule.test.js && node test/coord.test.js && node test/env.test.js && node test/delivery.test.js && node test/junction.test.js && node test/prs.test.js && node test/promotion.test.js && node test/migrations.test.js && node test/summary.test.js && node test/l10n.test.js && node test/run.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

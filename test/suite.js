@@ -1211,7 +1211,7 @@ exports.run = async () => {
       const i = pick.items.findIndex(x => x.label === 'ai/refatorar-api');
       assert.ok(i >= 0, JSON.stringify(pick.items));
       await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: pick.id, value: i } });
-      const confirm = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'message'));
+      const confirm = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'message' && m.modal));
       assert.ok(confirm.modal && confirm.message.includes('ai/precos-promo'), confirm.message);
       await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: confirm.id } });
       await until(() => got.some(m => m.type === 'busy' && m.busy === false));

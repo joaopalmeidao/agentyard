@@ -27,7 +27,7 @@ export async function handle(msg: any, cwd = process.cwd()): Promise<unknown | u
         capabilities: { tools: {} },
         serverInfo: { name: core.SERVER_NAME, version: '1' },
         instructions:
-          'Ferramentas do AgentYard (extensão do VS Code que organiza worktrees e agentes em paralelo). Use `status` para saber a situação desta worktree, `overlaps` antes de mexer em arquivos que outros agentes podem estar editando, `pr_feedback` e `ci_status` para ver o que a revisão e o CI pediram, e `mark_ready` quando terminar e tiver commitado.',
+          'Ferramentas do AgentYard (extensão do VS Code que organiza worktrees e agentes em paralelo). Use `status` para saber a situação desta worktree, `overlaps` antes de mexer em arquivos que outros agentes podem estar editando, `pr_feedback` e `ci_status` para ver o que a revisão e o CI pediram, `post_note`/`claim_files` para avisar os outros agentes de uma mudança que os afeta ou reservar arquivos antes de uma mudança grande, e `mark_ready` quando terminar e tiver commitado.',
       });
     }
     case 'ping':

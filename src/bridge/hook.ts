@@ -28,7 +28,7 @@ async function main() {
     const bridge = core.findBridge(cwd);
     if (bridge) {
       const event = String(payload.hook_event_name ?? '');
-      reply = (await core.callBridge(bridge, 'hook', { ...payload, cwd, agentId: process.env.WTGRAPH_AGENT_ID || undefined }, core.hookWaitMs(event))) ?? {};
+      reply = (await core.callBridge(bridge, 'hook', { ...payload, cwd, agentId: process.env.WTGRAPH_AGENT_ID || undefined, headless: process.env.WTGRAPH_HEADLESS === '1' || undefined }, core.hookWaitMs(event))) ?? {};
     }
   } catch {
     /* a extensão é opcional para o Claude */

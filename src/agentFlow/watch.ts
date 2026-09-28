@@ -31,6 +31,12 @@ export interface AgentFinish {
   ready: boolean;
 }
 
+/**
+ * Portão antes do "pronto": devolve false para segurar (o agente recebeu trabalho de volta e
+ * continua; a worktree segue acompanhada e é checada de novo no próximo fim de turno).
+ */
+export type ReadyGate = (info: ReadyInfo) => Promise<boolean>;
+
 const READY_KEY = 'agentFlow.ready';
 const TICK_MS = 30_000;
 
@@ -50,6 +56,12 @@ export class AgentWatch implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [this.finished];
   private timer?: NodeJS.Timeout;
   private checking = new Set<string>();
+  /** Algo ainda está rodando na worktree (ex.: o portão do Stop): não decide agora. */
+  readonly holds: ((p: string) => boolean)[] = [];
+  /** Portões antes de marcar "pronto" (ex.: o revisor automático), na ordem. */
+  readonly gates: ReadyGate[] = [];
+  /** Texto a mais na notificação de pronto (ex.: "checagens passaram", "revisão automática: OK"). */
+  readonly describers: ((p: string) => string | undefined)[] = [];
 
   constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals, private readonly onReady: (r: ReadyInfo) => void) {
     this.disposables.push(
@@ -154,6 +166,7 @@ export class AgentWatch implements vscode.Disposable {
       const known = agentState !== undefined && agentState !== 'starting';
       const done = known ? agentState === 'idle' || agentState === 'ended' : Date.now() - s.lastActivity >= this.idleMs();
       if (!(force || s.closed || s.execEnded || done)) return false;
+      if (!s.closed && this.holds.some(h => h(s.path))) return false;
       const moved = !!s.lastHead && s.lastHead !== s.headAtStart;
       if (!moved) {
         if (s.closed) {
@@ -171,8 +184,14 @@ export class AgentWatch implements vscode.Disposable {
         const r = await repo.run(['rev-list', '--count', `${s.headAtStart}..${s.lastHead}`], s.path);
         commits = Number(r.stdout.trim()) || 0;
       }
-      this.sessions.delete(key);
       const info: ReadyInfo = { path: s.path, branch: s.branch, at: Date.now(), commits };
+      if (!s.closed && !(await this.passGates(info))) {
+        // o agente voltou a trabalhar: o próximo fim de turno checa de novo
+        s.execEnded = false;
+        s.lastActivity = Date.now();
+        return false;
+      }
+      this.sessions.delete(key);
       await this.setReady(info);
       this.finished.fire({ path: s.path, branch: s.branch, ready: true });
       this.onReady(info);
@@ -183,13 +202,38 @@ export class AgentWatch implements vscode.Disposable {
   }
 
   /** O próprio agente disse que terminou (ferramenta MCP mark_ready): marca pronto já. */
-  async markReady(p: string, branch: string | undefined, commits: number) {
+  async markReady(p: string, branch: string | undefined, commits: number): Promise<boolean> {
     const s = this.sessions.get(keyOf(p));
-    this.sessions.delete(keyOf(p));
     const info: ReadyInfo = { path: s?.path ?? p, branch: branch ?? s?.branch, at: Date.now(), commits };
+    if (!(await this.passGates(info))) {
+      if (!s) this.resume(info.path, info.branch);
+      return false;
+    }
+    this.sessions.delete(keyOf(p));
     await this.setReady(info);
     this.finished.fire({ path: info.path, branch: info.branch, ready: true });
     this.onReady(info);
+    return true;
+  }
+
+  private async passGates(info: ReadyInfo): Promise<boolean> {
+    for (const g of this.gates) {
+      try {
+        if (!(await g(info))) return false;
+      } catch (e) {
+        this.ctl.log(`AgentYard: ${(e as Error).message}`);
+      }
+    }
+    return true;
+  }
+
+  /** Volta a acompanhar uma worktree cujo agente recebeu trabalho de volta (sem sessão registrada). */
+  private resume(p: string, branch?: string) {
+    const term = this.agentTerms.list(p).pop()?.terminal;
+    if (!term) return;
+    const head = readHead(p);
+    this.sessions.set(keyOf(p), { key: keyOf(p), path: p, branch, terminal: term, headAtStart: undefined, lastHead: head, lastIndex: indexMtime(p), lastActivity: Date.now(), execEnded: false, closed: false });
+    this.ensureTimer();
   }
 
   /** Força a checagem de uma worktree (ou de todas as acompanhadas). */

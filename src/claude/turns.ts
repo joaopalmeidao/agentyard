@@ -46,6 +46,12 @@ export async function snapshot(cwd: string, message = 'AgentYard checkpoint'): P
   }
 }
 
+/** Os dois checkpoints/commits têm os mesmos arquivos? */
+export async function sameTree(cwd: string, a: string, b: string): Promise<boolean> {
+  const [x, y] = (await git(cwd, ['rev-parse', `${a}^{tree}`, `${b}^{tree}`])).trim().split(/\s+/);
+  return !!x && x === y;
+}
+
 /** Nome seguro para um pedaço de ref. */
 export function refPart(s: string): string {
   return s.replace(/[^A-Za-z0-9._-]/g, '-').replace(/\.+/g, '.').replace(/^[.-]+|[.-]+$/g, '') || 'x';

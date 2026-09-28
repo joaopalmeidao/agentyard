@@ -1,6 +1,59 @@
 # Changelog
 
 ## Não lançado
+- **Modelos de tarefa: como se saem**: cada vez que um modelo vai para um agente, o AgentYard guarda
+  quanto ele levou até ficar pronto, os turnos, as intervenções (permissões e bloqueios da guarda), os
+  tokens e as rodadas da revisão automática. O relatório compara os modelos, para você reescrever os
+  que dão mais trabalho (na view Fila de tarefas e na de Agentes abertos).
+- **✦ Aprender com as sessões desta worktree (CLAUDE.md)…** (menu Agente da worktree): um Claude sem
+  terminal lê o que você precisou dizer ao agente depois da tarefa (correções, regras, preferências), as
+  intervenções e a revisão automática, e propõe o que acrescentar ao `CLAUDE.md` para os próximos
+  agentes não precisarem das mesmas correções. Você vê as lições e o texto antes, pode editar, e ele
+  entra no `CLAUDE.md` da worktree para ir junto com a branch.
+- **✦ Dividir uma tarefa entre agentes**: um Claude sem terminal lê o código e divide a tarefa em partes
+  com dependências; você confere o plano e desmarca o que não quiser. Cada parte ganha a sua worktree, o
+  seu agente e os arquivos dela reservados no mural: as independentes começam juntas (até
+  `batch.maxParallel`), e uma parte que depende de outras começa quando elas ficam prontas, empilhada
+  sobre a primeira e com as outras mescladas. Cada agente sabe o que os outros estão fazendo. No fim,
+  **Pôr todas na fila de merge** manda as branches na ordem das dependências. **Tarefas divididas entre
+  agentes…** mostra o andamento e permite tentar de novo uma parte que não terminou
+  (`orchestrator.model`).
+- **⚖ Julgar as tentativas**: no painel *Comparar tentativas*, roda os testes de cada tentativa e pede a
+  um Claude sem terminal que compare os diffs e as ordene. Cada coluna ganha a colocação (🥇🥈🥉) e o
+  motivo, e o topo traz a recomendação (qual manter e o que trazer das outras). Os testes das
+  tentativas passam a usar os mesmos comandos do portão do Stop, das checagens ou o `testCommand`.
+- **Fila que respeita o limite de uso**: quando o uso estimado do Claude na janela de 5 h ou na semana
+  chega a `tasks.pauseAtUsage` (90%) do orçamento (`claude.sessionBudgetTokens`,
+  `claude.weeklyBudgetTokens`), a fila de tarefas e os agendamentos esperam a janela virar e saem
+  sozinhos depois; a fila mostra "pausada até…" e o aviso tem **Rodar mesmo assim**. Sem orçamento
+  configurado, nada muda.
+- **Mural dos agentes**: um agente avisa os outros de uma mudança que os afeta com a ferramenta MCP
+  `post_note` (`read_notes` lê), e você fala com todos de uma vez por **Nota para todos os agentes…**
+  (📣 na view Agentes abertos). As notas novas entram no contexto do próximo prompt de cada Claude do
+  repositório, em qualquer janela (`claude.board`). **Mural dos agentes** mostra as notas e as reservas.
+- **Reserva de arquivos**: antes de uma mudança grande, o agente reserva arquivos ou pastas (glob) com
+  `claim_files`; se outro Claude tentar editá-los, o pedido vem para você com o motivo
+  (`claude.claims: ask`) ou é recusado (`block`). As reservas saem quando a worktree fica pronta,
+  vencem (`claude.claims.hours`) ou com `release_files` / **Soltar as reservas de arquivos**.
+- **Agente travado**: quando o Claude repete o mesmo comando ou a mesma edição várias vezes seguidas
+  (`claude.stuck.repeats`, 5), a próxima é recusada com um pedido para ele repensar, e você recebe um
+  aviso; um turno trabalhando há `claude.stuck.minutes` (20) sem mudar nenhum arquivo também avisa,
+  com **Mostrar terminal** e **Interromper** (manda Esc para o Claude).
+- **Revisão automática dos agentes** (`agents.autoReview: ready`): quando o agente termina, outro Claude
+  (sem terminal) revisa o diff contra a base (ou contra o pai, numa branch empilhada) antes de a
+  worktree ficar "pronta para revisar". Achou problemas: eles voltam para o Claude da worktree, que os
+  lê pela ferramenta MCP `auto_review`, corrige e termina de novo, até `agents.autoReview.maxRounds`
+  rodadas. A notificação de pronto diz o parecer ("revisão automática: OK") e se as checagens passaram.
+  Modelo e o que mais olhar em `agents.autoReview.model` e `agents.autoReview.focus`; **✦ Revisão
+  automática agora** e **Ver a última revisão automática** no menu Agente da worktree.
+- **Checagens antes de o Claude parar** (portão no Stop) para todo Claude aberto pelo AgentYard, não só
+  nos projetos longos: quando o turno mexeu em arquivos, as checagens rodam na worktree e, se falharem,
+  o fim do log volta para o Claude, que continua corrigindo (até `claude.stopGate.maxRetries` vezes
+  seguidas; depois ele para e você recebe um aviso). Enquanto as checagens rodam, a worktree não vira
+  "pronta para revisar", e o `mark_ready` no meio do turno espera o fim delas. Comandos em
+  `claude.stopGate.commands` (vazio: `checks.beforeMerge` e depois `autoSync.testCommand`); modo em
+  `claude.stopGate` (`changes`, `always`, `off`) ou em **Checagens antes de o Claude parar…** na view
+  Agentes abertos.
 - **Painel no celular**: a página do acesso remoto ganhou **Painel**, o painel principal do AgentYard
   adaptado à tela do celular. As ações funcionam como no VS Code, e as confirmações, listas e campos de
   texto que elas abrem aparecem no celular. Os pedidos com botões que surgem sozinhos (como a permissão

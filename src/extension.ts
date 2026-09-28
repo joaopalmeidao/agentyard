@@ -41,6 +41,7 @@ import { registerClaudeVoice } from './claude/voice';
 import { registerSendToClaude, worktreeOfFile } from './claude/sendContext';
 import { registerClaudeIntegration } from './claude/register';
 import { registerRemoteAccess } from './remote/register';
+import { registerAutopilot } from './autopilot/register';
 import { pickRelevant, registerTerminalUx } from './claude/terminalUx';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
@@ -86,6 +87,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(projects, vscode.window.createTreeView('worktreeGraph.projects', { treeDataProvider: new ProjectsTreeProvider(projects) }));
   const decorations = new WorktreeDecorations(ctl);
   const claude = new ClaudeService(ctl, agentTerms);
+  ctl.taskDeferred = () => claude.usagePause();
   const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
   registerAgentAttention(ctx, ctl, agentTerms);
@@ -332,6 +334,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     };
   const claudeIntegration = registerClaudeIntegration(ctx, ctl, guard, { agentTerms, agentsTree, agentFlow, coord, openTranscript: id => claude.transcriptById(id) });
   registerRemoteAccess(ctx, ctl, guard, handler);
+  const autopilot = registerAutopilot(ctx, ctl, guard, { agentTerms, agentFlow, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration, coord, claude });
 
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
   reg('openGraph', () => GraphPanel.show(ctl, handler));
@@ -529,6 +532,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const env = registerEnv(ctx, ctl, guard);
   actions.worktreeCreatedHooks.push((dir, branch, quiet) => env.afterCreate(dir, branch, quiet));
   const templates = registerTemplates(ctx, ctl, guard, b => issues.linkOf(b)?.key);
+  autopilot.trackTemplates(templates);
   const readySummary = new ReadySummaryService(ctl, agentFlow);
   ctx.subscriptions.push(readySummary);
   const delivery = registerDelivery(ctx, ctl, guard, { activity, pipelines: () => pipelines.pipelines, issueOf: b => issues.linkOf(b) });
