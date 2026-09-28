@@ -43,8 +43,58 @@ function ownerOf(file: string, ctx: GuardContext): { path: string; name: string 
 }
 
 /** Comandos que só leem: podem citar outra worktree (ex.: `git -C ../x log`, `cat ../x/a.ts`). */
-const READ_ONLY = /^(ls|dir|cat|head|tail|less|more|grep|rg|find|wc|diff|stat|file|tree|pwd|echo|type|Get-Content|Get-ChildItem)$/i;
+const READ_ONLY = /^(ls|dir|cat|head|tail|less|more|grep|egrep|fgrep|rg|find|wc|diff|cmp|stat|file|tree|pwd|echo|type|du|sort|uniq|cut|jq|strings|xxd|od|hexdump|md5sum|sha1sum|sha256sum|realpath|readlink|basename|dirname|Get-Content|Get-ChildItem|Get-Item|Get-ItemProperty|Test-Path|Resolve-Path|Select-String|Get-FileHash|Format-Hex|Measure-Object|Compare-Object)$/i;
 const GIT_READ_ONLY = /^(log|show|diff|status|blame|grep|ls-files|ls-tree|rev-parse|rev-list|branch|describe|cat-file|shortlog|merge-base|for-each-ref)$/;
+
+/** Nome do executável sem pasta nem .exe (`C:\x\sqlite3.exe` → `sqlite3`). */
+const binName = (bin: string) => path.basename(bin).replace(/\.exe$/i, '');
+
+const SQLITE_VALUE_OPTS = /^--?(cmd|separator|newline|nullvalue|vfs|maxsize|mmap|lookaside|pagecache|heap|init)$/i;
+const SQL_WRITE = /\b(insert|update|delete|replace|upsert|drop|create|alter|attach|detach|vacuum|reindex|analyze|begin|commit|rollback|savepoint)\b/i;
+const SQL_READ = /^(select|with|explain|values|pragma\s+[\w.]+\s*(\(\s*[\w.]*\s*\))?$|\.(tables|schema|fullschema|indexes|indices|headers|header|mode|dump|databases|dbinfo|show|width|separator|nullvalue|help|print|echo|stats|timer|changes)\b)/i;
+
+/** SQL que só lê (SELECT, PRAGMA de consulta, .tables, .schema…); qualquer escrita, `.read`, `.output` etc. não. */
+function readOnlySql(sql: string): boolean {
+  const stmts = sql.split(/;|\n(?=\s*\.)/).map(s => s.trim()).filter(Boolean);
+  return stmts.length > 0 && stmts.every(s => SQL_READ.test(s) && !SQL_WRITE.test(s.replace(/'[^']*'/g, "''")));
+}
+
+/**
+ * `sqlite3` que só lê o banco: aberto com `-readonly` (ou `file:…?mode=ro`/`immutable=1`) ou com
+ * todos os comandos na linha sendo consultas. Sem SQL na linha (interativo, stdin) não dá para saber.
+ */
+function readOnlySqlite(args: string[]): boolean {
+  let db: string | undefined;
+  const sql: string[] = [];
+  let init = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (/^--?readonly$/i.test(a)) return true;
+    if (db === undefined && a.startsWith('-')) {
+      if (SQLITE_VALUE_OPTS.test(a)) {
+        if (/init$/i.test(a)) init = true;
+        if (/cmd$/i.test(a)) sql.push(args[i + 1] ?? '');
+        i++;
+      }
+      continue;
+    }
+    if (db === undefined) db = a;
+    else sql.push(a);
+  }
+  if (db && /^file:.*[?&](mode=ro|immutable=1)\b/i.test(db)) return true;
+  return !init && sql.length > 0 && sql.every(readOnlySql);
+}
+
+/** Destino de uma cópia (`cp a b`, `cp -t dir a`, `Copy-Item a -Destination b`): só ele é escrito. */
+function copyTarget(bin: string, args: string[]): string | undefined {
+  const flag = /^(copy-item|copy|cpi)$/i.test(bin) ? /^-dest(ination)?$/i : /^(-t|--target-directory)$/;
+  const i = args.findIndex(a => flag.test(a));
+  if (i >= 0) return args[i + 1];
+  const eq = args.find(a => a.startsWith('--target-directory='));
+  if (eq) return eq.slice(19);
+  const pos = args.filter(a => !a.startsWith('-'));
+  return pos.length >= 2 ? pos[pos.length - 1] : undefined;
+}
 
 /** Separa uma linha de shell em comandos (&&, ||, ;, |) e cada um em palavras, respeitando aspas. */
 export function shellCommands(line: string): string[][] {
@@ -185,10 +235,21 @@ export function guardToolUse(input: GuardInput, ctx: GuardContext): string | und
         }
         continue;
       }
-      if (READ_ONLY.test(bin)) continue;
-      // escrever em outra worktree pela linha de comando (cp, mv, rm, sed -i, npm…) também não
+      const name = binName(bin);
+      if (READ_ONLY.test(name)) continue;
+      if (/^sqlite3?$/i.test(name) && readOnlySqlite(args)) continue;
+      const blocked = (o: { name: string }) =>
+        `${t('Blocked by AgentYard: the command touches the worktree {0}, which belongs to another agent. Work only in {1}.', o.name, ctx.worktree)} ${t('Reading is allowed: use Read, cat/grep, `sqlite3 -readonly` or copy the file into your worktree or scratchpad.')}`;
+      // copiar de outra worktree é ler: só o destino conta
+      if (/^(cp|copy|copy-item|cpi)$/i.test(name)) {
+        const dest = copyTarget(name, args);
+        const o = dest !== undefined ? ownerOf(path.resolve(dir, dest), ctx) : ownerOf(dir, ctx);
+        if (o) return blocked(o);
+        continue;
+      }
+      // escrever em outra worktree pela linha de comando (mv, rm, sed -i, npm…) também não
       const o = ownerOf(dir, ctx) ?? args.map(a => (/[\\/]/.test(a) && !a.startsWith('-') ? ownerOf(path.resolve(dir, a), ctx) : undefined)).find(Boolean);
-      if (o) return t('Blocked by AgentYard: the command touches the worktree {0}, which belongs to another agent. Work only in {1}.', o.name, ctx.worktree);
+      if (o) return blocked(o);
     }
   }
   return undefined;

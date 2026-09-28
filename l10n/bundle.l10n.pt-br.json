@@ -1931,6 +1931,7 @@
   "Blocked by AgentYard: {0}.": "Bloqueado pelo AgentYard: {0}.",
   "Blocked by AgentYard: the command runs git inside the worktree {0}, which belongs to another agent. Work only in {1}.": "Bloqueado pelo AgentYard: o comando roda git dentro da worktree {0}, que é de outro agente. Trabalhe só em {1}.",
   "Blocked by AgentYard: the command touches the worktree {0}, which belongs to another agent. Work only in {1}.": "Bloqueado pelo AgentYard: o comando mexe na worktree {0}, que é de outro agente. Trabalhe só em {1}.",
+  "Reading is allowed: use Read, cat/grep, `sqlite3 -readonly` or copy the file into your worktree or scratchpad.": "Ler pode: use Read, cat/grep, `sqlite3 -readonly` ou copie o arquivo para a sua worktree ou o scratchpad.",
   "approve the plan": "aprovar o plano",
   "Worktree guard blocked {0} in {1}: {2}": "A guarda da worktree bloqueou {0} em {1}: {2}",
   "View plan": "Ver plano",

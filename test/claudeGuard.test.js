@@ -88,6 +88,26 @@ check('comandos em outra worktree', () => {
   assert.strictEqual(bash('curl https://example.com/a/b'), undefined);
 });
 
+check('ler banco e copiar arquivos de outra worktree pode', () => {
+  const db = path.join(main, 'backend', 'dev.db');
+  assert.strictEqual(bash(`sqlite3 -readonly ${db} "delete from x"`), undefined);
+  assert.strictEqual(bash(`sqlite3 "file:${db}?mode=ro" ".tables"`), undefined);
+  assert.strictEqual(bash(`sqlite3 -header ${db} "select * from clientes where id = 2; pragma table_info(clientes)"`), undefined);
+  assert.strictEqual(bash(`sqlite3 ${db} .schema`), undefined);
+  assert.strictEqual(bash(`C:/tools/sqlite3.exe ${db} "select 'delete' from x"`), undefined);
+  assert.match(bash(`sqlite3 ${db} "update clientes set nome = 'x'"`), /master/);
+  assert.match(bash(`sqlite3 ${db} "select 1; drop table x"`), /master/);
+  assert.match(bash(`sqlite3 ${db}`), /master/, 'sem SQL na linha não dá para saber');
+  assert.match(bash(`sqlite3 ${db} "pragma journal_mode = wal"`), /master/);
+  assert.match(bash(`sqlite3 ${db} ".read x.sql"`), /Reading is allowed|Ler pode/);
+  assert.strictEqual(bash(`cp ${db} ./tmp/dev.db`), undefined);
+  assert.strictEqual(bash(`Copy-Item ${db} -Destination ${path.join(wt, 'dev.db')}`), undefined);
+  assert.match(bash(`cp ${db} ${path.join(other, 'dev.db')}`), /ai\/precos/);
+  assert.match(bash(`cd ${other} && cp a.ts b.ts`), /ai\/precos/);
+  assert.strictEqual(bash(`Select-String -Path ${path.join(other, 'a.ts')} -Pattern x`), undefined);
+  assert.match(bash(`node ${path.join(other, 'x.js')}`), /ai\/precos/);
+});
+
 check('outras ferramentas passam', () => {
   assert.strictEqual(guardToolUse({ tool_name: 'Read', tool_input: { file_path: path.join(other, 'a.ts') } }, ctx), undefined);
   assert.strictEqual(guardToolUse({ tool_name: 'ExitPlanMode', tool_input: { plan: 'x' } }, ctx), undefined);
