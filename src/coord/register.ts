@@ -6,6 +6,7 @@ import type { AgentTerminals } from '../agents';
 import type { Controller } from '../controller';
 import { resolverName } from '../conflicts';
 import { gitUri } from '../diff';
+import { pickMergeTarget } from '../flow';
 import { branchMatches } from '../git';
 import { guardChecks } from '../guards';
 import { t } from '../i18n';
@@ -245,19 +246,13 @@ export class Coord implements vscode.Disposable {
     return picks?.map(p => p.label) ?? [];
   }
 
-  /** Para qual branch a fila leva `sources`: a base vem primeiro, depois as outras branches locais. */
+  /** Para qual branch a fila leva `sources`: segue o fluxo configurado (próximo estágio primeiro), depois a base e as outras locais. */
   async pickTarget(sources: string[]): Promise<string | undefined> {
-    const repo = this.ctl.repo;
-    const { base } = await this.ctl.base();
-    if (!repo) return base;
-    const others = (await repo.refs())
-      .filter(r => r.kind === 'head' && r.name !== base && !sources.includes(r.name))
-      .map(r => ({ label: r.name, description: r.subject }));
-    const pick = await vscode.window.showQuickPick([{ label: base, description: t('base') }, ...others], {
+    if (!this.ctl.repo) return (await this.ctl.base()).base;
+    return pickMergeTarget(this.ctl, sources, {
       title: t('Merge queue: destination'),
       placeHolder: sources.length ? t('Which branch should {0} go into?', sources.join(', ')) : t('Which branch should the queue merge into?'),
     });
-    return pick?.label;
   }
 
   /** O agente que cuidava de um item terminou: volta para a fila (ou sai) e a fila segue. */

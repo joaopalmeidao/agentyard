@@ -171,6 +171,16 @@ const FLOW = [
     assert.deepStrictEqual(p.classify([2, 0]), { reached: 0, ahead: [1] });
   });
 
+  await check('destinos de merge seguem o fluxo', () => {
+    const heads = ['main', 'dev', 'qa', 'feat/a', 'feat/b'];
+    const flow = ['dev', 'qa', 'main'];
+    assert.deepStrictEqual(p.orderTargets(flow, 'main', ['feat/a'], heads), ['dev', 'qa', 'main', 'feat/b']);
+    assert.deepStrictEqual(p.orderTargets(flow, 'main', ['dev'], heads), ['qa', 'main', 'feat/a', 'feat/b']);
+    assert.deepStrictEqual(p.orderTargets(flow, 'main', ['qa'], heads), ['main', 'dev', 'feat/a', 'feat/b']);
+    assert.deepStrictEqual(p.orderTargets(['develop', 'dev', 'main'], 'main', [], heads), ['dev', 'main', 'qa', 'feat/a', 'feat/b'], 'estágio sem branch local fica de fora');
+    assert.deepStrictEqual(p.orderTargets([], 'main', ['feat/a'], heads), ['main', 'dev', 'qa', 'feat/b'], 'sem fluxo: base primeiro');
+  });
+
   fs.rmSync(dir, { recursive: true, force: true });
   if (failures) {
     console.log(`${failures} falha(s)`);

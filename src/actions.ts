@@ -8,6 +8,7 @@ import { agentsLabel } from './agents';
 import { Controller } from './controller';
 import { resolveButton, runResolve } from './conflicts';
 import { gitUri } from './diff';
+import { pickMergeTarget } from './flow';
 import { guardMerge } from './guards';
 import { migrationGate } from './migrations/register';
 import { Repo, Worktree } from './git';
@@ -201,12 +202,9 @@ export async function mergeIntoBase(ctl: Controller, arg: BranchArg) {
 export async function mergeInto(ctl: Controller, arg: BranchArg) {
   const source = await pickBranch(ctl, arg, t('Merge which branch?'));
   if (!source) return;
-  const repo = repoOf(ctl);
-  const items = (await repo.refs())
-    .filter(r => r.kind === 'head' && r.name !== source)
-    .map(r => ({ label: r.name, description: r.subject }));
-  const target = await vscode.window.showQuickPick(items, { placeHolder: t('Merge {0} into…', source) });
-  if (target) await mergeBranches(ctl, source, target.label);
+  repoOf(ctl);
+  const target = await pickMergeTarget(ctl, [source], { placeHolder: t('Merge {0} into…', source) });
+  if (target) await mergeBranches(ctl, source, target);
 }
 
 /** Escolhe a branch de origem de uma nova worktree; a base vem primeiro (Enter = base). */

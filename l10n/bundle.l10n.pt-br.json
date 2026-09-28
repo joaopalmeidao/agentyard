@@ -2274,6 +2274,8 @@
   "Merge queue: destination": "Fila de merge: destino",
   "Which branch should {0} go into?": "Para qual branch {0} deve ir?",
   "Which branch should the queue merge into?": "Para qual branch a fila deve fazer o merge?",
+  "suggested": "sugerida",
+  "flow: {0}": "fluxo: {0}",
   "Queue {0} and authorize {1} to resolve conflicts on its own when its turn comes": "Põe {0} na fila e autoriza o {1} a resolver os conflitos sozinho quando chegar a vez",
   "Queue and let {0} resolve": "Pôr na fila e deixar o {0} resolver",
   "✦ Queue (Claude resolves conflicts)": "✦ Fila (Claude resolve conflitos)",

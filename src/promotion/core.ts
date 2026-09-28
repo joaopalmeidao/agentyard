@@ -137,6 +137,19 @@ export function isStageName(name: string, stages: string[], remote = 'origin'): 
   return stages.includes(n);
 }
 
+/**
+ * Destinos de merge em ordem de sugestão: o próximo estágio do fluxo (para uma feature, o 1º;
+ * para um estágio, o seguinte), depois os outros estágios, a base e as demais branches locais.
+ */
+export function orderTargets(flow: string[], base: string, sources: string[], heads: string[]): string[] {
+  const local = new Set(heads);
+  const stages = flow.filter(s => local.has(s));
+  const at = sources.length === 1 ? flow.indexOf(sources[0]) : -1;
+  const next = at >= 0 ? flow.slice(at + 1).find(s => local.has(s)) : stages[0];
+  const out = [...new Set([next, ...stages, base, ...heads].filter((b): b is string => !!b && local.has(b)))];
+  return out.filter(b => !sources.includes(b));
+}
+
 /** Commits alcançáveis a partir de `starts` sem sair de `set`. */
 export function reachWithin(set: Map<string, { parents: string[] }>, starts: string[], skip?: Set<string>): Set<string> {
   const seen = new Set<string>();

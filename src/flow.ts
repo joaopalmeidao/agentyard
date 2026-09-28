@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { Controller } from './controller';
 import { Repo } from './git';
 import { t } from './i18n';
-import { branchNames } from './promotion/core';
+import { branchNames, orderTargets } from './promotion/core';
 
 export interface FlowStage {
   branch: string;
@@ -57,6 +57,25 @@ export async function computeFlow(repo: Repo, stages: FlowStage[], refs: { name:
     steps.push({ from, to, pending, hotfix, fromExists: fe, toExists: te, fromDate: local.get(from.branch)?.date ?? 0, toDate: local.get(to.branch)?.date ?? 0 });
   }
   return steps;
+}
+
+/**
+ * Escolhe o destino de um merge de `sources` seguindo o fluxo configurado: o próximo estágio vem
+ * primeiro (Enter = sugestão), depois os outros estágios, a base e as demais branches locais.
+ */
+export async function pickMergeTarget(ctl: Controller, sources: string[], opts: { title?: string; placeHolder: string }): Promise<string | undefined> {
+  const repo = ctl.repo;
+  if (!repo) return undefined;
+  const { base } = await ctl.base();
+  const heads = (await repo.refs()).filter(r => r.kind === 'head');
+  const stages = flowStages(ctl);
+  const order = orderTargets(stages.map(s => s.branch), base, sources, heads.map(r => r.name));
+  const items = order.map((b, i) => {
+    const stage = stages.find(s => s.branch === b);
+    const tags = [i === 0 ? t('suggested') : '', stage ? t('flow: {0}', stage.label) : '', b === base ? t('base') : ''].filter(Boolean);
+    return { label: `${stage ? '$(debug-step-over)' : b === base ? '$(home)' : '$(git-branch)'} ${b}`, description: tags.join(' · '), detail: heads.find(r => r.name === b)?.subject, b };
+  });
+  return (await vscode.window.showQuickPick(items, { title: opts.title, placeHolder: opts.placeHolder }))?.b;
 }
 
 /** Assistente: escolher as branches do fluxo, em ordem. */
