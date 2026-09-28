@@ -1,6 +1,12 @@
 # Changelog
 
 ## Não lançado
+- **Acesso remoto pelo celular**: **Acesso remoto: copiar link** liga uma página só leitura com os
+  agentes de todas as janelas (quem espera você primeiro, o pedido, há quanto tempo e o custo). Ela
+  escuta em `127.0.0.1` e você expõe com o túnel que preferir (ex.: `tailscale serve --bg 7420`,
+  `worktreeGraph.remote.publicUrl`). O token fica no `#` do link, e **Acesso remoto: gerar novo link**
+  invalida o antigo. Com `remote.ntfyTopic`, os avisos de quando o VS Code está sem foco também chegam
+  ao celular pelo ntfy.
 - **Ponte com o Claude Code**: todo Claude aberto pelo AgentYard ganha hooks e o servidor MCP
   `agentyard` pela linha de comando (`--settings` e `--mcp-config`), rodando no próprio executável do
   VS Code — sem Node.js e sem mexer no seu `settings.json`. Ferramentas: `status`, `list_worktrees`,

@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
+import { pushNotify } from '../remote/push';
 
 /** Comando que mostra uma notificação do sistema; o texto vai por variável de ambiente ou argumento, nunca no script. */
 export function osNotifyCommand(platform: NodeJS.Platform, title: string, body: string): { file: string; args: string[]; env?: Record<string, string> } | undefined {
@@ -27,9 +28,11 @@ export function osNotifyCommand(platform: NodeJS.Platform, title: string, body: 
 
 /**
  * Notificação do sistema operacional, para quando o VS Code está sem foco (a notificação do VS Code
- * só aparece dentro da janela). `worktreeGraph.claude.osNotify` desliga.
+ * só aparece dentro da janela). `worktreeGraph.claude.osNotify` desliga. Com `remote.ntfyTopic`, vai
+ * também para o celular.
  */
 export function osNotify(ctl: Controller, title: string, body: string) {
+  pushNotify(ctl, title, body);
   if (!ctl.cfg().get<boolean>('claude.osNotify', true)) return;
   const c = osNotifyCommand(process.platform, title, body.slice(0, 300));
   if (!c) return;

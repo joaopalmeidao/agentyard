@@ -440,5 +440,12 @@
   "command.longProjects.forget.title": "Zerar o progresso registrado…",
   "config.longProjects.gateRetries.description": "Projetos longos: quantas vezes seguidas o portão manda o agente voltar ao trabalho (checklist, diário, commit, verificação) antes de desistir e pausar o projeto.",
   "config.longProjects.milestoneMinutes.description": "Projetos longos: avisar quando um marco passar deste tempo em minutos (0 = nunca).",
-  "config.longProjects.maxSessionsPerMilestone.description": "Projetos longos: sessões abertas para o mesmo marco antes de ele ser considerado travado e o projeto pausar (0 = sem limite)."
+  "config.longProjects.maxSessionsPerMilestone.description": "Projetos longos: sessões abertas para o mesmo marco antes de ele ser considerado travado e o projeto pausar (0 = sem limite).",
+  "command.remote.copyLink.title": "Acesso remoto: copiar link",
+  "command.remote.resetToken.title": "Acesso remoto: gerar novo link",
+  "config.remote.enabled.markdownDescription": "Serve uma página só leitura com os agentes de todas as janelas do VS Code (estado, há quanto tempo, custo, o que estão esperando), para acompanhar pelo celular. Pegue o link com **AgentYard: Acesso remoto: copiar link**. A página só escuta em `#worktreeGraph.remote.host#`; para abrir de fora, exponha a porta com um túnel como o Tailscale (`tailscale serve --bg 7420`) ou a view Portas do VS Code.",
+  "config.remote.port.description": "Porta da página de acesso remoto. Só uma janela do VS Code serve a página; ela mostra os agentes de todas.",
+  "config.remote.host.markdownDescription": "Endereço em que a página de acesso remoto escuta. Mantenha `127.0.0.1` e exponha com um túnel; outro endereço (ex.: `0.0.0.0`) abre a porta para a rede, protegida só pelo token do link.",
+  "config.remote.publicUrl.markdownDescription": "Endereço em que você abre a página de fora (ex.: `https://meu-pc.tailnet.ts.net`). Usado no link copiado e como destino ao tocar numa notificação push.",
+  "config.remote.ntfyTopic.markdownDescription": "URL de um tópico do [ntfy](https://ntfy.sh) (ex.: `https://ntfy.sh/agentyard-<algo aleatório>`) para receber também no celular as notificações mostradas quando o VS Code está sem foco (um Claude precisa de você, um plano, pipeline que falhou). O texto passa pelo servidor do ntfy e quem souber o nome do tópico consegue ler: use um nome difícil de adivinhar ou um servidor seu."
 }
