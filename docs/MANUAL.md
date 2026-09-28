@@ -741,6 +741,25 @@ Quando o VS Code está sem foco, os avisos também saem como notificação do si
 Code numa tela, com estado, há quanto tempo, custo e o próximo passo (responder, revisar, sua vez).
 **Ir** traz o terminal (ou a janela) para frente.
 
+### Acesso remoto (celular)
+
+Para acompanhar os agentes longe do computador, ligue `worktreeGraph.remote.enabled` ou rode
+**Acesso remoto: copiar link** (também no menu `…` da view Agentes abertos). O AgentYard serve uma
+página só leitura, feita para o celular, com os agentes de todas as janelas: quem está esperando
+você aparece primeiro, com o pedido, há quanto tempo e o custo.
+
+- A página escuta só em `127.0.0.1:7420` (`remote.host`, `remote.port`). Para abrir de fora, exponha
+  a porta com um túnel, por exemplo `tailscale serve --bg 7420` (fica visível só na sua rede
+  Tailscale), a view **Portas** do VS Code ou o `cloudflared`, e preencha `remote.publicUrl` com o
+  endereço do túnel.
+- O link leva um token depois do `#`, que não é enviado ao servidor nem ao túnel. Abra o link uma vez
+  no celular e ele guarda o acesso. **Acesso remoto: gerar novo link** invalida o link antigo em
+  todos os aparelhos.
+- **Notificação push**: com `remote.ntfyTopic` (ex.: `https://ntfy.sh/agentyard-<algo aleatório>`),
+  os avisos que saem quando o VS Code está sem foco também chegam ao app do [ntfy](https://ntfy.sh)
+  no celular, e tocar no aviso abre a página. Quem souber o nome do tópico consegue ler as
+  mensagens: use um nome difícil de adivinhar ou um servidor ntfy seu.
+
 ## 16. Ambiente por worktree (portas, .env, dependências)
 
 Vários agentes rodando o app ao mesmo tempo precisam de portas diferentes:
