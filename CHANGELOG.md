@@ -1,6 +1,14 @@
 # Changelog
 
 ## Não lançado
+- **Checagens antes de o Claude parar** (portão no Stop) para todo Claude aberto pelo AgentYard, não só
+  nos projetos longos: quando o turno mexeu em arquivos, as checagens rodam na worktree e, se falharem,
+  o fim do log volta para o Claude, que continua corrigindo (até `claude.stopGate.maxRetries` vezes
+  seguidas; depois ele para e você recebe um aviso). Enquanto as checagens rodam, a worktree não vira
+  "pronta para revisar", e o `mark_ready` no meio do turno espera o fim delas. Comandos em
+  `claude.stopGate.commands` (vazio: `checks.beforeMerge` e depois `autoSync.testCommand`); modo em
+  `claude.stopGate` (`changes`, `always`, `off`) ou em **Checagens antes de o Claude parar…** na view
+  Agentes abertos.
 - **Acesso remoto pelo celular**: **Acesso remoto: copiar link** liga uma página só leitura com os
   agentes de todas as janelas (quem espera você primeiro, o pedido, há quanto tempo e o custo). Ela
   escuta em `127.0.0.1` e você expõe com o túnel que preferir (ex.: `tailscale serve --bg 7420`,

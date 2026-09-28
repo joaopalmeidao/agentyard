@@ -447,5 +447,12 @@
   "config.remote.port.description": "Port of the remote access page. Only one VS Code window serves it; the page shows the agents of all of them.",
   "config.remote.host.markdownDescription": "Address the remote access page listens on. Keep `127.0.0.1` and expose it with a tunnel; another address (e.g. `0.0.0.0`) opens the port to the network, protected only by the link token.",
   "config.remote.publicUrl.markdownDescription": "Address where you open the page from outside (e.g. `https://my-pc.tailnet.ts.net`). Used in the copied link and as the destination when you tap a push notification.",
-  "config.remote.ntfyTopic.markdownDescription": "URL of an [ntfy](https://ntfy.sh) topic (e.g. `https://ntfy.sh/agentyard-<something random>`) to also receive on your phone the notifications shown when VS Code is not focused (a Claude needs you, a plan, a failed pipeline). The text goes to the ntfy server and anyone who knows the topic name can read it: use a hard-to-guess name or your own server."
+  "config.remote.ntfyTopic.markdownDescription": "URL of an [ntfy](https://ntfy.sh) topic (e.g. `https://ntfy.sh/agentyard-<something random>`) to also receive on your phone the notifications shown when VS Code is not focused (a Claude needs you, a plan, a failed pipeline). The text goes to the ntfy server and anyone who knows the topic name can read it: use a hard-to-guess name or your own server.",
+  "config.claude.stopGate.enumDescriptions.0": "Runs the checks when the turn changed files.",
+  "config.claude.stopGate.enumDescriptions.1": "Runs the checks at the end of every turn.",
+  "config.claude.stopGate.enumDescriptions.2": "No checks when Claude stops.",
+  "config.claude.stopGate.description": "Checks before Claude stops: when a turn ends, AgentYard runs the checks in the worktree and, if they fail, sends the log back so Claude keeps fixing. Commands: claude.stopGate.commands, or checks.beforeMerge, or autoSync.testCommand. Without a command, nothing runs.",
+  "config.claude.stopGate.commands.description": "Commands that must pass before Claude stops (run in the worktree, in order). Empty: uses checks.beforeMerge, then autoSync.testCommand.",
+  "config.claude.stopGate.maxRetries.description": "How many times in a row the checks send Claude back before AgentYard gives up and lets it stop (with a warning).",
+  "command.claude.configureStopGate.title": "Checks before Claude stops…"
 }

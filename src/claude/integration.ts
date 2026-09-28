@@ -298,7 +298,8 @@ export class ClaudeIntegration implements vscode.Disposable {
       this.starting.delete(key);
       const log = this.logs()[key];
       const turn = log?.turns[log.turns.length - 1];
-      if (!log || !turn || turn.end) return;
+      // o portão do Stop mandou o Claude continuar: o fim do turno passa a ser este
+      if (!log || !turn || (turn.end && e.stop_hook_active !== true)) return;
       const end = await turns.snapshot(w.path);
       const headEnd = await this.head(w.path);
       const files = await turns.changesBetween(w.path, turn.start, end);
@@ -317,6 +318,25 @@ export class ClaudeIntegration implements vscode.Disposable {
       await this.saveLog(log);
     })().catch(err => this.ctl.log(t('Checkpoint at the end of the turn failed in {0}: {1}', w.branch ?? w.name, (err as Error).message)));
     return undefined;
+  }
+
+  /**
+   * O turno em andamento mudou algum arquivo desde que começou? Sem checkpoint do começo (checkpoints
+   * desligados, sessão sem a ponte), responde que sim.
+   */
+  async turnChanged(e: BridgeHookEvent): Promise<boolean> {
+    const key = this.logKey(e);
+    const w = e.worktree;
+    if (!key || !w) return true;
+    await this.starting.get(key);
+    const log = this.logs()[key];
+    const turn = log?.turns[log.turns.length - 1];
+    if (!turn) return true;
+    try {
+      return !(await turns.sameTree(w.path, turn.start, await turns.snapshot(w.path)));
+    } catch {
+      return true;
+    }
   }
 
   private async pruneOld() {

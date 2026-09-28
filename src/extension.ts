@@ -41,6 +41,7 @@ import { registerClaudeVoice } from './claude/voice';
 import { registerSendToClaude, worktreeOfFile } from './claude/sendContext';
 import { registerClaudeIntegration } from './claude/register';
 import { registerRemoteAccess } from './remote/register';
+import { registerAutopilot } from './autopilot/register';
 import { pickRelevant, registerTerminalUx } from './claude/terminalUx';
 import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, TranscriptProvider } from './claude/view';
 import { WorktreeTreeProvider } from './treeView';
@@ -332,6 +333,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     };
   const claudeIntegration = registerClaudeIntegration(ctx, ctl, guard, { agentTerms, agentsTree, agentFlow, coord, openTranscript: id => claude.transcriptById(id) });
   registerRemoteAccess(ctx, ctl, guard);
+  registerAutopilot(ctx, ctl, guard, { agentTerms, agentFlow, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration });
 
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
   reg('openGraph', () => GraphPanel.show(ctl, handler));

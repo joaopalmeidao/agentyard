@@ -334,7 +334,9 @@ export class ClaudeBridge implements vscode.Disposable {
       if (w.statusKnown && w.changes > 0) return { text: `There are still ${w.changes} uncommitted file(s) in ${w.branch ?? w.name}. Commit before marking it ready.`, isError: true };
       const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
       if (summary) this.ctl.log(t('Claude marked {0} as ready: {1}', w.branch ?? w.name, summary));
-      await flow().watch.markReady(w.path, w.branch, w.ahead);
+      if (!(await flow().watch.markReady(w.path, w.branch, w.ahead))) {
+        return `Not marked yet: AgentYard still has to check ${w.branch ?? w.name} (the checks when you stop, or the automatic review). Finish your turn; if something comes back, fix it.`;
+      }
       return `${w.branch ?? w.name} marked as ready for review.`;
     });
     this.addTool('notify', async (args, { cwd, open }) => {
