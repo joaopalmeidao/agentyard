@@ -3,7 +3,8 @@ import * as vscode from 'vscode';
 import { createWorktree, pickBranch } from './actions';
 import type { Controller } from './controller';
 import { gitUri } from './diff';
-import { t } from './i18n';
+import { locale, t } from './i18n';
+import { LOG_FORMAT, parseLog } from './summary/core';
 
 /** Ações sobre um commit do histórico (botão direito ou duplo clique numa linha do grafo). */
 
@@ -37,6 +38,82 @@ export async function showCommit(ctl: Controller, sha: string) {
     const left = !parent || it.status === 'A' ? gitUri(repo.root, '__empty__', it.file) : gitUri(repo.root, parent, it.file);
     const right = it.status === 'D' ? gitUri(repo.root, '__empty__', it.file) : gitUri(repo.root, sha, it.file);
     vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(it.file)} (${sha.slice(0, 7)})`, { preview: true, preserveFocus: true });
+  });
+  qp.onDidHide(() => qp.dispose());
+  qp.show();
+}
+
+/** Branch local ou remota para listar os commits: worktrees primeiro, depois as mais recentes. */
+async function pickAnyBranch(ctl: Controller): Promise<string | undefined> {
+  const repo = ctl.repo!;
+  const wts = (await repo.worktreesFast()).filter(w => w.branch && !w.prunable);
+  const withWt = new Set(wts.map(w => w.branch));
+  const refs = (await repo.refs()).filter(r => (r.kind === 'head' && !withWt.has(r.name)) || (r.kind === 'remote' && !r.name.endsWith('/HEAD'))).sort((x, y) => y.date - x.date);
+  const pick = await vscode.window.showQuickPick(
+    [
+      ...wts.map(w => ({ label: `$(folder) ${w.branch}`, description: w.path, branch: w.branch! })),
+      ...refs.map(r => ({ label: `$(${r.kind === 'remote' ? 'cloud' : 'git-branch'}) ${r.name}`, description: r.subject, branch: r.name })),
+    ],
+    { placeHolder: t('Which branch do you want to see the commits of?'), matchOnDescription: true },
+  );
+  return pick?.branch;
+}
+
+const BRANCH_LOG_MAX = 500;
+
+/**
+ * Commits de uma branch numa lista (mais novos primeiro). Começa só com os que a base não tem; o botão
+ * alterna para o histórico completo. Enter mostra os arquivos do commit.
+ */
+export async function showBranchCommits(ctl: Controller, a?: string | { branch?: string }) {
+  const repo = ctl.repo!;
+  const branch = (typeof a === 'string' ? a : a?.branch) || (await pickAnyBranch(ctl));
+  if (!branch) return;
+  const { base, baseRef } = await ctl.base();
+  const isBase = branch === base || branch === baseRef;
+  const ref = (await repo.run(['rev-parse', '--verify', '-q', `refs/heads/${branch}`])).code === 0 ? `refs/heads/${branch}` : branch;
+  const load = async (full: boolean) =>
+    parseLog(await repo.exec(['log', LOG_FORMAT, `-n${BRANCH_LOG_MAX}`, ...(full ? [ref] : [`${baseRef}..${ref}`]), '--']));
+
+  let full = isBase;
+  let list = await load(full);
+  if (!full && !list.length) {
+    full = true;
+    list = await load(full);
+  }
+  type Item = vscode.QuickPickItem & { sha: string };
+  const qp = vscode.window.createQuickPick<Item>();
+  const onlyAhead: vscode.QuickInputButton = { iconPath: new vscode.ThemeIcon('git-compare'), tooltip: t('Only the commits {0} does not have', baseRef) };
+  const everything: vscode.QuickInputButton = { iconPath: new vscode.ThemeIcon('history'), tooltip: t('Full history of the branch') };
+  qp.matchOnDescription = true;
+  qp.matchOnDetail = true;
+  const fill = () => {
+    qp.title = full ? t('Commits of {0} (full history)', branch) : t('Commits of {0} not in {1}', branch, baseRef);
+    qp.placeholder = !list.length
+      ? t('No commits.')
+      : list.length >= BRANCH_LOG_MAX
+        ? t('Latest {0} commits; Enter shows the files', BRANCH_LOG_MAX)
+        : t('{0} commit(s); Enter shows the files', list.length);
+    qp.buttons = isBase ? [] : [full ? onlyAhead : everything];
+    qp.items = list.map(c => ({
+      label: c.subject || t('(no message)'),
+      description: `${c.sha.slice(0, 7)} · ${c.author} · ${new Date(c.date * 1000).toLocaleString(locale(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+      sha: c.sha,
+    }));
+  };
+  fill();
+  qp.onDidTriggerButton(async () => {
+    full = !full;
+    qp.busy = true;
+    list = await load(full);
+    qp.busy = false;
+    fill();
+  });
+  qp.onDidAccept(() => {
+    const it = qp.selectedItems[0];
+    if (!it) return;
+    qp.hide();
+    void showCommit(ctl, it.sha);
   });
   qp.onDidHide(() => qp.dispose());
   qp.show();

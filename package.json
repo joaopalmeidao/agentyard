@@ -177,6 +177,12 @@
         "category": "AgentYard"
       },
       {
+        "command": "worktreeGraph.branchCommits",
+        "title": "%command.branchCommits.title%",
+        "category": "AgentYard",
+        "icon": "$(git-commit)"
+      },
+      {
         "command": "worktreeGraph.openGraph",
         "title": "%command.openGraph.title%",
         "category": "AgentYard",
@@ -2093,6 +2099,11 @@
           "group": "0_summary@3"
         },
         {
+          "command": "worktreeGraph.branchCommits",
+          "when": "view == worktreeGraph.worktrees && viewItem == branch",
+          "group": "0_summary@0"
+        },
+        {
           "command": "worktreeGraph.launchAgentNew",
           "when": "view == worktreeGraph.agents && viewItem == agentGroup",
           "group": "inline@0"
@@ -3344,6 +3355,11 @@
           "command": "worktreeGraph.copyBranchContext",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "1_summary@1"
+        },
+        {
+          "command": "worktreeGraph.branchCommits",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "1_summary@0"
         },
         {
           "command": "worktreeGraph.compareWith",

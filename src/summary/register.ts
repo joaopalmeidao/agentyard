@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
-import { showCommit } from '../commits';
+import { showBranchCommits, showCommit } from '../commits';
 import { askPresets, askPrompt, BranchFacts, LOG_FORMAT, parseLog, summaryMarkdown } from './core';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
@@ -92,4 +92,5 @@ export function registerSummary(ctx: vscode.ExtensionContext, ctl: Controller, g
     const s = typeof sha === 'string' ? sha : sha?.sha;
     return s && showCommit(ctl, s);
   });
+  reg('branchCommits', (a: Arg) => showBranchCommits(ctl, typeof a === 'string' ? a : a?.branch ? { branch: a.branch } : undefined));
 }

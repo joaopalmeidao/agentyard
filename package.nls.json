@@ -23,6 +23,7 @@
   "command.askAgentAboutBranch.title": "✦ Ask the Agent About the Branch",
   "command.copyBranchContext.title": "Copy Branch Summary (to Paste into Claude)",
   "command.showCommitSha.title": "View Commit Files",
+  "command.branchCommits.title": "View Branch Commits…",
   "command.openGraph.title": "Open Graph",
   "command.refresh.title": "Refresh",
   "command.createWorktree.title": "New Worktree",

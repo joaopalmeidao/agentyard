@@ -273,6 +273,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
         if (a.branches !== undefined) await ctx.workspaceState.update('graphBranches', a.branches ? a.branches.split('\n').filter(Boolean) : []);
         if (a.showRemotes !== undefined) await ctx.workspaceState.update('graphShowRemotes', a.showRemotes === 'true');
         return ctl.refresh();
+      case 'historyOfBranch':
+        // menu da branch: o histórico passa a mostrar só ela (volta pelo seletor "Branches:")
+        await ctx.workspaceState.update('graphFilter', 'all');
+        await ctx.workspaceState.update('graphBranches', [a.branch]);
+        if (a.branch.includes('/') && !(await ctl.repo?.refs())?.some(r => r.kind === 'head' && r.name === a.branch)) await ctx.workspaceState.update('graphShowRemotes', true);
+        return ctl.refresh();
       case 'openCiBranchesSettings':
         await vscode.commands.executeCommand('workbench.action.openSettings', 'worktreeGraph.ciBranches');
         return;
@@ -555,7 +561,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const guards = registerGuards(ctx, ctl);
   registerMigrations(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion, bridge: claudeIntegration.bridge, claudeIntegration: claudeIntegration.integration, stack };
+  return { ctl, tree, treeView, agentTerms, actions, panelAction: handler, sync, GraphPanel, ready, decorations, projects, issues, claude, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion, bridge: claudeIntegration.bridge, claudeIntegration: claudeIntegration.integration, stack };
 }
 
 export function deactivate() {}

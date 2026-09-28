@@ -2268,7 +2268,6 @@
   "Add to merge queue": "Pôr na fila de merge",
   "authorized": "autorizado",
   "Nobody is watching this terminal: do not stop to ask; when something is ambiguous, pick what best keeps both changes and explain the choice in the commit message.": "Ninguém está acompanhando este terminal: não pare para perguntar; quando algo for ambíguo, escolha o que melhor preserva as duas mudanças e explique a escolha na mensagem do commit.",
-  "If anything is ambiguous, ask before deciding.": "Se algo for ambíguo, pergunte antes de decidir.",
   "Add to merge queue → {0} (Claude authorized to resolve conflicts)": "Pôr na fila de merge → {0} (Claude autorizado a resolver conflitos)",
   "Add to merge queue → {0} (Claude resolves conflicts)": "Pôr na fila de merge → {0} (Claude resolve os conflitos)",
   "Queue {0} and authorize {1} to resolve conflicts on its own when its turn comes": "Põe {0} na fila e autoriza o {1} a resolver os conflitos sozinho quando chegar a vez",
@@ -2412,5 +2411,15 @@
   "Actions from the phone are turned off (worktreeGraph.remoteAccess.actions).": "As ações pelo celular estão desligadas (worktreeGraph.remoteAccess.actions).",
   "Open link": "Abrir link",
   "This opens only in VS Code on the computer; it was opened there.": "Isto só abre no VS Code do computador; foi aberto lá.",
-  "This link cannot be opened on the phone: {0}": "Este link não abre no celular: {0}"
+  "This link cannot be opened on the phone: {0}": "Este link não abre no celular: {0}",
+  "Which branch do you want to see the commits of?": "De qual branch você quer ver os commits?",
+  "Only the commits {0} does not have": "Só os commits que {0} não tem",
+  "Full history of the branch": "Histórico completo da branch",
+  "Commits of {0} (full history)": "Commits de {0} (histórico completo)",
+  "Commits of {0} not in {1}": "Commits de {0} que não estão em {1}",
+  "Latest {0} commits; Enter shows the files": "Últimos {0} commits; Enter mostra os arquivos",
+  "{0} commit(s); Enter shows the files": "{0} commit(s); Enter mostra os arquivos",
+  "(no message)": "(sem mensagem)",
+  "View commits…": "Ver commits…",
+  "Show only this branch in the history": "Mostrar só esta branch no histórico"
 }

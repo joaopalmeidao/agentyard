@@ -1175,6 +1175,8 @@
       if (!isBase) items.push(item('mergeQueueAddAuthorized', `✦ ${t('Add to merge queue → {0} (Claude resolves conflicts)', state.base)}`, { branch: b }));
       if (wt && wt.overlap) items.push(item('showOverlaps', `⚠ ${t('View overlap ({0} file(s))', wt.overlap.files)}`, { path: wt.path }));
       if (wt && wt.changes) items.push(item('showUncommitted', `● ${t('View uncommitted changes ({0})', wt.changes)}`, { path: wt.path }));
+      items.push(item('branchCommits', t('View commits…'), { branch: b }));
+      items.push(item('historyOfBranch', t('Show only this branch in the history'), { branch: b }));
       items.push('<hr>');
 
       const agent = [];
@@ -1243,6 +1245,9 @@
     } else if (remote && remote.dataset.menuRemote) {
       const r = remote.dataset.menuRemote;
       items.push(`<div class="menu-title">${esc(r)}</div>`);
+      items.push(item('branchCommits', t('View commits…'), { branch: r }));
+      items.push(item('historyOfBranch', t('Show only this branch in the history'), { branch: r }));
+      items.push('<hr>');
       items.push(item('mergeInto', t('Merge into…'), { branch: r }));
       items.push(item('createWorktree', t('New branch + worktree from here'), { startPoint: r }));
       items.push(item('newWorktreeWithTask', `✦ ${t('New worktree from here, with task…')}`, { startPoint: r }, 'agent'));
