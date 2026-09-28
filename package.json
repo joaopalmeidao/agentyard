@@ -936,6 +936,12 @@
         "category": "AgentYard"
       },
       {
+        "command": "worktreeGraph.switchBranch",
+        "title": "%command.switchBranch.title%",
+        "category": "AgentYard",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "worktreeGraph.showUncommittedPatch",
         "title": "%command.showUncommittedPatch.title%",
         "category": "AgentYard",
@@ -2115,6 +2121,11 @@
           "command": "worktreeGraph.compareWith",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "1_open@6"
+        },
+        {
+          "command": "worktreeGraph.switchBranch",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_changes@0.5"
         },
         {
           "command": "worktreeGraph.stashCreate",

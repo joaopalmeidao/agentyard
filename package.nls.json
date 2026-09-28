@@ -149,6 +149,7 @@
   "command.stashShow.title": "View Stash Diff",
   "command.stashDrop.title": "Drop Stash",
   "command.moveChanges.title": "Move Changes to Another Worktree…",
+  "command.switchBranch.title": "Switch Worktree Branch…",
   "command.showUncommittedPatch.title": "View Patch of Uncommitted Changes",
   "command.discardChanges.title": "Discard Uncommitted Changes…",
   "command.cherryPick.title": "Cherry-Pick a Commit into…",

@@ -733,6 +733,21 @@ exports.run = async () => {
     assert.ok(root.some(n => n.kind === 'stashes'), 'grupo Stashes na árvore');
   });
 
+  await check('trocar de branch: a worktree passa para outra branch e volta', async () => {
+    const { execSync } = require('child_process');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const head = p => execSync('git branch --show-current', { cwd: p, encoding: 'utf8' }).trim();
+    execSync('git branch tmp/troca', { cwd: wt.path });
+    assert.strictEqual(await api.gitOps.switchBranch(wt.path, 'tmp/troca', { confirm: false }), true);
+    assert.strictEqual(head(wt.path), 'tmp/troca');
+    await ctl.refresh();
+    assert.ok(ctl.state.worktrees.some(w => w.path === wt.path && w.branch === 'tmp/troca'), 'estado mostra a branch nova');
+    assert.strictEqual(await api.gitOps.switchBranch(wt.path, 'ai/precos-promo', { confirm: false }), true);
+    assert.strictEqual(head(wt.path), 'ai/precos-promo');
+    execSync('git branch -D tmp/troca', { cwd: wt.path });
+    await ctl.refresh();
+  });
+
   await check('reorganizar commits: fixup junta dois commits e "Desfazer" volta', async () => {
     const { execSync } = require('child_process');
     const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');

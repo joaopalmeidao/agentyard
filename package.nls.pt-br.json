@@ -149,6 +149,7 @@
   "command.stashShow.title": "Ver diff do stash",
   "command.stashDrop.title": "Apagar stash",
   "command.moveChanges.title": "Mover alterações para outra worktree…",
+  "command.switchBranch.title": "Trocar a branch da worktree…",
   "command.showUncommittedPatch.title": "Ver patch das alterações não commitadas",
   "command.discardChanges.title": "Descartar alterações não commitadas…",
   "command.cherryPick.title": "Cherry-pick de um commit em…",
