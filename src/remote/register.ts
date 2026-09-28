@@ -18,6 +18,11 @@ function cfg() {
   return vscode.workspace.getConfiguration('worktreeGraph');
 }
 
+/** Acesso pelo celular (host, publicUrl e ntfy); desligado, a página só abre no navegador desta máquina. */
+function phone(): boolean {
+  return cfg().get<boolean>('remoteAccess.phone', false);
+}
+
 const ACCESS_KEYS = ['enabled', 'port', 'host', 'actions', 'publicUrl', 'ntfyTopic'];
 
 /**
@@ -49,7 +54,7 @@ async function migrateOldSettings() {
 
 /** Endereço onde a página abre de fora (remoteAccess.publicUrl) ou, sem ele, nesta máquina. */
 function baseUrl(): string {
-  const pub = cfg().get<string>('remoteAccess.publicUrl', '').trim();
+  const pub = phone() ? cfg().get<string>('remoteAccess.publicUrl', '').trim() : '';
   return pub || `http://localhost:${cfg().get<number>('remoteAccess.port', 7420)}`;
 }
 
@@ -165,7 +170,8 @@ class RemoteAccess implements vscode.Disposable {
   /** Liga, desliga ou reinicia conforme a configuração. */
   apply() {
     const on = cfg().get<boolean>('remoteAccess.enabled', false);
-    const host = cfg().get<string>('remoteAccess.host', '127.0.0.1').trim() || '127.0.0.1';
+    // sem o acesso pelo celular, só nesta máquina
+    const host = (phone() && cfg().get<string>('remoteAccess.host', '127.0.0.1').trim()) || '127.0.0.1';
     const port = cfg().get<number>('remoteAccess.port', 7420);
     const want = on ? `${host}:${port}` : '';
     if (want === this.serving && (this.server || this.retry)) return;
@@ -228,9 +234,15 @@ export function registerRemoteAccess(ctx: vscode.ExtensionContext, ctl: Controll
   reg('remote.copyLink', async () => {
     if (!cfg().get<boolean>('remoteAccess.enabled', false)) {
       const enable = t('Turn on');
+      const port = cfg().get<number>('remoteAccess.port', 7420);
       const pick = await vscode.window.showInformationMessage(
         t('Turn on remote access?'),
-        { modal: true, detail: t('AgentYard serves on this machine (port {0}) a page with your agents and the main panel, where you can act as in VS Code. To open it on your phone, expose that port with a tunnel of your choice, such as Tailscale.',cfg().get<number>('remoteAccess.port', 7420)) },
+        {
+          modal: true,
+          detail: phone()
+            ? t('AgentYard serves on this machine (port {0}) a page with your agents and the main panel, where you can act as in VS Code. To open it on your phone, expose that port with a tunnel of your choice, such as Tailscale.', port)
+            : t('AgentYard serves on this machine (port {0}) a page with your agents and the main panel, to open in the browser, where you can act as in VS Code.', port),
+        },
         enable,
       );
       if (pick !== enable) return;
@@ -242,9 +254,11 @@ export function registerRemoteAccess(ctx: vscode.ExtensionContext, ctl: Controll
     const settings = t('Settings');
     const hasPublic = !!cfg().get<string>('remoteAccess.publicUrl', '').trim();
     const pick = await vscode.window.showInformationMessage(
-      hasPublic
-        ? t('Remote access link copied. Open it on your phone once; it keeps the access.')
-        : t('Remote access link copied (this machine only). To open it on your phone, expose port {0} (e.g. "tailscale serve --bg {0}") and set worktreeGraph.remoteAccess.publicUrl.', cfg().get<number>('remoteAccess.port', 7420)),
+      !phone()
+        ? t('Remote access link copied. Open it in the browser on this machine.')
+        : hasPublic
+          ? t('Remote access link copied. Open it on your phone once; it keeps the access.')
+          : t('Remote access link copied (this machine only). To open it on your phone, expose port {0} (e.g. "tailscale serve --bg {0}") and set worktreeGraph.remoteAccess.publicUrl.', cfg().get<number>('remoteAccess.port', 7420)),
       open,
       settings,
     );

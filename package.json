@@ -3933,6 +3933,11 @@
           "maximum": 65535,
           "description": "%config.remoteAccess.port.description%"
         },
+        "worktreeGraph.remoteAccess.phone": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.remoteAccess.phone.markdownDescription%"
+        },
         "worktreeGraph.remoteAccess.host": {
           "type": "string",
           "default": "127.0.0.1",

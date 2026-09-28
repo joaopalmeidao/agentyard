@@ -2285,6 +2285,8 @@
   "Turn on": "Ligar",
   "Turn on remote access?": "Ligar o acesso remoto?",
   "AgentYard serves on this machine (port {0}) a page with your agents and the main panel, where you can act as in VS Code. To open it on your phone, expose that port with a tunnel of your choice, such as Tailscale.": "O AgentYard serve nesta máquina (porta {0}) uma página com seus agentes e o painel principal, onde você age como no VS Code. Para abrir no celular, exponha essa porta com um túnel de sua escolha, como o Tailscale.",
+  "AgentYard serves on this machine (port {0}) a page with your agents and the main panel, to open in the browser, where you can act as in VS Code.": "O AgentYard serve nesta máquina (porta {0}) uma página com seus agentes e o painel principal, para abrir no navegador, onde você age como no VS Code.",
+  "Remote access link copied. Open it in the browser on this machine.": "Link do acesso remoto copiado. Abra no navegador desta máquina.",
   "Remote access link copied. Open it on your phone once; it keeps the access.": "Link do acesso remoto copiado. Abra uma vez no celular; ele guarda o acesso.",
   "Remote access link copied (this machine only). To open it on your phone, expose port {0} (e.g. \"tailscale serve --bg {0}\") and set worktreeGraph.remoteAccess.publicUrl.": "Link do acesso remoto copiado (só nesta máquina). Para abrir no celular, exponha a porta {0} (ex.: \"tailscale serve --bg {0}\") e preencha worktreeGraph.remoteAccess.publicUrl.",
   "Generate new link": "Gerar novo link",
