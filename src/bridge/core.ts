@@ -241,6 +241,12 @@ export const TOOLS: ToolDef[] = [
     readOnly: true,
   },
   {
+    name: 'auto_review',
+    description: "Problems found by AgentYard's automatic review of this branch (another Claude reviews the diff against the base when you finish). Fix the real ones, commit and finish.",
+    inputSchema: { type: 'object', properties: {} },
+    readOnly: true,
+  },
+  {
     name: 'turn_diff',
     description: 'O que mudou na worktree no último turno do agente (ou num turno anterior), como patch, pelos checkpoints do AgentYard.',
     inputSchema: { type: 'object', properties: { turn: { type: 'number', description: 'Número do turno (1 = o primeiro). Vazio = o último.' } } },

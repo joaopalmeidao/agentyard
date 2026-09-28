@@ -2307,5 +2307,18 @@
   "Checks before Claude stops: {0}. Takes effect in Claude sessions opened by AgentYard.": "Checagens antes de o Claude parar: {0}. Vale para as sessões do Claude abertas pelo AgentYard.",
   "no command": "nenhum comando",
   "checks passed": "checagens passaram",
-  "checks failing ({0})": "checagens falhando ({0})"
+  "checks failing ({0})": "checagens falhando ({0})",
+  "Review which worktree?": "Revisar qual worktree?",
+  "Automatic review of which worktree?": "Revisão automática de qual worktree?",
+  "automatic review: OK": "revisão automática: OK",
+  "automatic review: {0} open problem(s)": "revisão automática: {0} problema(s) em aberto",
+  "Automatic review of {0} failed: {1}": "A revisão automática de {0} falhou: {1}",
+  "Automatic review of {0} (round {1}): {2} problem(s); sent back to Claude.": "Revisão automática de {0} (rodada {1}): {2} problema(s); devolvido ao Claude.",
+  "$(sync~spin) Automatic review of {0}…": "$(sync~spin) Revisão automática de {0}…",
+  "No automatic review of this worktree yet.": "Nenhuma revisão automática desta worktree ainda.",
+  "Automatic review": "Revisão automática",
+  "Round": "Rodada",
+  "Verdict": "Parecer",
+  "Review when the agent finishes": "Revisar quando o agente terminar",
+  "Another Claude reviews the diff before the worktree becomes \"ready for review\"; problems go back to the agent.": "Outro Claude revisa o diff antes de a worktree ficar \"pronta para revisar\"; os problemas voltam para o agente."
 }

@@ -60,6 +60,8 @@ export class AgentWatch implements vscode.Disposable {
   readonly holds: ((p: string) => boolean)[] = [];
   /** Portões antes de marcar "pronto" (ex.: o revisor automático), na ordem. */
   readonly gates: ReadyGate[] = [];
+  /** Texto a mais na notificação de pronto (ex.: "checagens passaram", "revisão automática: OK"). */
+  readonly describers: ((p: string) => string | undefined)[] = [];
 
   constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals, private readonly onReady: (r: ReadyInfo) => void) {
     this.disposables.push(

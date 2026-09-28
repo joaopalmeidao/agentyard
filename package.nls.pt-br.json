@@ -454,5 +454,14 @@
   "config.claude.stopGate.description": "Checagens antes de o Claude parar: no fim do turno, o AgentYard roda as checagens na worktree e, se falharem, devolve o log para o Claude continuar corrigindo. Comandos: claude.stopGate.commands, ou checks.beforeMerge, ou autoSync.testCommand. Sem comando, nada roda.",
   "config.claude.stopGate.commands.description": "Comandos que precisam passar antes de o Claude parar (rodam na worktree, em ordem). Vazio: usa checks.beforeMerge e depois autoSync.testCommand.",
   "config.claude.stopGate.maxRetries.description": "Quantas vezes seguidas as checagens mandam o Claude de volta antes de o AgentYard desistir e deixar parar (com um aviso).",
-  "command.claude.configureStopGate.title": "Checagens antes de o Claude parar…"
+  "command.claude.configureStopGate.title": "Checagens antes de o Claude parar…",
+  "config.agents.autoReview.enumDescriptions.0": "Quando o agente termina, outro Claude (claude -p) revisa o diff contra a base; os problemas voltam para o agente antes de a worktree ficar pronta para revisar.",
+  "config.agents.autoReview.enumDescriptions.1": "Sem revisão automática.",
+  "config.agents.autoReview.description": "Revisão automática do trabalho do agente antes de ficar \"pronto para revisar\" (gasta tokens do Claude).",
+  "config.agents.autoReview.maxRounds.description": "Quantas vezes a revisão automática pode devolver o trabalho ao agente antes de deixar ficar pronto.",
+  "config.agents.autoReview.model.description": "Modelo do revisor automático (ex.: opus, sonnet). Vazio: o modelo padrão do Claude Code.",
+  "config.agents.autoReview.focus.description": "O que mais o revisor automático deve olhar neste projeto (ex.: \"SQL injection, traduções no l10n\").",
+  "command.agents.configureAutoReview.title": "Revisão automática dos agentes…",
+  "command.agents.autoReviewNow.title": "✦ Revisão automática agora",
+  "command.agents.showAutoReview.title": "Ver a última revisão automática"
 }

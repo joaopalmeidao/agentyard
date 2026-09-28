@@ -1,6 +1,13 @@
 # Changelog
 
 ## Não lançado
+- **Revisão automática dos agentes** (`agents.autoReview: ready`): quando o agente termina, outro Claude
+  (sem terminal) revisa o diff contra a base (ou contra o pai, numa branch empilhada) antes de a
+  worktree ficar "pronta para revisar". Achou problemas: eles voltam para o Claude da worktree, que os
+  lê pela ferramenta MCP `auto_review`, corrige e termina de novo, até `agents.autoReview.maxRounds`
+  rodadas. A notificação de pronto diz o parecer ("revisão automática: OK") e se as checagens passaram.
+  Modelo e o que mais olhar em `agents.autoReview.model` e `agents.autoReview.focus`; **✦ Revisão
+  automática agora** e **Ver a última revisão automática** no menu Agente da worktree.
 - **Checagens antes de o Claude parar** (portão no Stop) para todo Claude aberto pelo AgentYard, não só
   nos projetos longos: quando o turno mexeu em arquivos, as checagens rodam na worktree e, se falharem,
   o fim do log volta para o Claude, que continua corrigindo (até `claude.stopGate.maxRetries` vezes

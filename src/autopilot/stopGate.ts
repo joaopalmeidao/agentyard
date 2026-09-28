@@ -48,6 +48,7 @@ export class StopGate implements vscode.Disposable {
     // o portão segura o "pronto": o Claude parou, mas ainda pode voltar a trabalhar
     flow.watch.holds.push(p => this.running.has(keyOf(p)));
     // mark_ready no meio do turno: espera o fim do turno (e o portão) para marcar
+    flow.watch.describers.push(p => this.describe(p));
     flow.watch.gates.push(async info => !(this.enabled() && this.agentTerms.claudeIn(info.path).some(o => o.bridged && o.state === 'working')));
   }
 

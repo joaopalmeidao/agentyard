@@ -1542,6 +1542,22 @@
         "title": "%command.claude.configureStopGate.title%",
         "category": "AgentYard",
         "icon": "$(shield)"
+      },
+      {
+        "command": "worktreeGraph.agents.configureAutoReview",
+        "title": "%command.agents.configureAutoReview.title%",
+        "category": "AgentYard",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "worktreeGraph.agents.autoReviewNow",
+        "title": "%command.agents.autoReviewNow.title%",
+        "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.agents.showAutoReview",
+        "title": "%command.agents.showAutoReview.title%",
+        "category": "AgentYard"
       }
     ],
     "submenus": [
@@ -1947,6 +1963,11 @@
           "command": "worktreeGraph.claude.configureStopGate",
           "when": "view == worktreeGraph.agents",
           "group": "7_autopilot@1"
+        },
+        {
+          "command": "worktreeGraph.agents.configureAutoReview",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@2"
         }
       ],
       "view/item/context": [
@@ -3190,6 +3211,16 @@
           "command": "worktreeGraph.sendPrFeedback",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "3_review@3"
+        },
+        {
+          "command": "worktreeGraph.agents.autoReviewNow",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_review@4"
+        },
+        {
+          "command": "worktreeGraph.agents.showAutoReview",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "3_review@5"
         }
       ],
       "worktreeGraph.wt.open": [
@@ -4345,6 +4376,35 @@
           "default": 3,
           "minimum": 1,
           "description": "%config.claude.stopGate.maxRetries.description%"
+        },
+        "worktreeGraph.agents.autoReview": {
+          "type": "string",
+          "default": "off",
+          "enum": [
+            "ready",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.agents.autoReview.enumDescriptions.0%",
+            "%config.agents.autoReview.enumDescriptions.1%"
+          ],
+          "description": "%config.agents.autoReview.description%"
+        },
+        "worktreeGraph.agents.autoReview.maxRounds": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "description": "%config.agents.autoReview.maxRounds.description%"
+        },
+        "worktreeGraph.agents.autoReview.model": {
+          "type": "string",
+          "default": "",
+          "description": "%config.agents.autoReview.model.description%"
+        },
+        "worktreeGraph.agents.autoReview.focus": {
+          "type": "string",
+          "default": "",
+          "description": "%config.agents.autoReview.focus.description%"
         }
       }
     }

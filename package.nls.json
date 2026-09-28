@@ -454,5 +454,14 @@
   "config.claude.stopGate.description": "Checks before Claude stops: when a turn ends, AgentYard runs the checks in the worktree and, if they fail, sends the log back so Claude keeps fixing. Commands: claude.stopGate.commands, or checks.beforeMerge, or autoSync.testCommand. Without a command, nothing runs.",
   "config.claude.stopGate.commands.description": "Commands that must pass before Claude stops (run in the worktree, in order). Empty: uses checks.beforeMerge, then autoSync.testCommand.",
   "config.claude.stopGate.maxRetries.description": "How many times in a row the checks send Claude back before AgentYard gives up and lets it stop (with a warning).",
-  "command.claude.configureStopGate.title": "Checks before Claude stops…"
+  "command.claude.configureStopGate.title": "Checks before Claude stops…",
+  "config.agents.autoReview.enumDescriptions.0": "When the agent finishes, another Claude (claude -p) reviews the diff against the base; problems go back to the agent before the worktree becomes ready for review.",
+  "config.agents.autoReview.enumDescriptions.1": "No automatic review.",
+  "config.agents.autoReview.description": "Automatic review of the agent's work before it becomes \"ready for review\" (uses Claude tokens).",
+  "config.agents.autoReview.maxRounds.description": "How many times the automatic review can send the work back to the agent before letting it become ready.",
+  "config.agents.autoReview.model.description": "Model of the automatic reviewer (e.g. opus, sonnet). Empty: Claude Code's default model.",
+  "config.agents.autoReview.focus.description": "What else the automatic reviewer should pay attention to in this project (e.g. \"SQL injection, translations in l10n\").",
+  "command.agents.configureAutoReview.title": "Automatic review of the agents…",
+  "command.agents.autoReviewNow.title": "✦ Automatic review now",
+  "command.agents.showAutoReview.title": "Show the last automatic review"
 }
