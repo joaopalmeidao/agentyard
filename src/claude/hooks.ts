@@ -137,14 +137,15 @@ export function isClaudeCommand(cmd: string): boolean {
 }
 
 /**
- * Põe `--settings "<arquivo>"` (e `--mcp-config "<arquivo>"`, se houver) logo depois do `claude`;
+ * Põe `--settings "<arquivo>"` (e `--mcp-config="<arquivo>"`, se houver) logo depois do `claude`;
  * outros comandos ficam como estão.
  */
 export function instrumentCommand(cmd: string, settingsFile: string, mcpConfig?: string): string {
   if (!isClaudeCommand(cmd)) return cmd;
   const flags: string[] = [];
   if (!/(^|\s)--settings(\s|=|$)/.test(cmd)) flags.push(`--settings "${settingsFile}"`);
-  if (mcpConfig && !/(^|\s)--mcp-config(\s|=|$)/.test(cmd)) flags.push(`--mcp-config "${mcpConfig}"`);
+  // Com `=`: `--mcp-config` é variádico e, separado por espaço, engoliria o prompt que vem depois como outro arquivo.
+  if (mcpConfig && !/(^|\s)--mcp-config(\s|=|$)/.test(cmd)) flags.push(`--mcp-config="${mcpConfig}"`);
   if (!flags.length) return cmd;
   const m = cmd.match(/^(\s*\S+)([\s\S]*)$/);
   return m ? `${m[1]} ${flags.join(' ')}${m[2]}` : cmd;
