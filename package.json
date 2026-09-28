@@ -610,6 +610,42 @@
         "category": "AgentYard"
       },
       {
+        "command": "worktreeGraph.redmine.navigate",
+        "title": "%command.redmine.navigate.title%",
+        "category": "AgentYard",
+        "icon": "$(compass)"
+      },
+      {
+        "command": "worktreeGraph.redmine.switchProject",
+        "title": "%command.redmine.switchProject.title%",
+        "category": "AgentYard",
+        "icon": "$(project)"
+      },
+      {
+        "command": "worktreeGraph.redmine.filter",
+        "title": "%command.redmine.filter.title%",
+        "category": "AgentYard",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "worktreeGraph.redmine.goToIssue",
+        "title": "%command.redmine.goToIssue.title%",
+        "category": "AgentYard",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "worktreeGraph.redmine.openProject",
+        "title": "%command.redmine.openProject.title%",
+        "category": "AgentYard",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "worktreeGraph.redmine.loadMore",
+        "title": "%command.redmine.loadMore.title%",
+        "category": "AgentYard",
+        "icon": "$(ellipsis)"
+      },
+      {
         "command": "worktreeGraph.claude.refreshSessions",
         "title": "%command.claude.refreshSessions.title%",
         "category": "AgentYard",
@@ -1767,6 +1803,11 @@
           "group": "1_connect"
         },
         {
+          "command": "worktreeGraph.redmine.navigate",
+          "when": "view == worktreeGraph.issues && config.worktreeGraph.redmine.url",
+          "group": "0_redmine"
+        },
+        {
           "command": "worktreeGraph.disconnectRedmine",
           "when": "view == worktreeGraph.issues",
           "group": "1_connect"
@@ -2897,6 +2938,41 @@
           "command": "worktreeGraph.longProjects.openPlan",
           "when": "view == worktreeGraph.longProjects && viewItem =~ /^lmilestone-/",
           "group": "2_files@1"
+        },
+        {
+          "command": "worktreeGraph.redmine.switchProject",
+          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.redmine.filter",
+          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.redmine.switchProject",
+          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "group": "1_nav@1"
+        },
+        {
+          "command": "worktreeGraph.redmine.filter",
+          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "group": "1_nav@2"
+        },
+        {
+          "command": "worktreeGraph.redmine.goToIssue",
+          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "group": "1_nav@3"
+        },
+        {
+          "command": "worktreeGraph.redmine.openProject",
+          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "group": "2_link@1"
+        },
+        {
+          "command": "worktreeGraph.disconnectRedmine",
+          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "group": "3_connect@1"
         }
       ],
       "commandPalette": [
@@ -3175,6 +3251,26 @@
         {
           "command": "worktreeGraph.longProjects.markDone",
           "when": "false"
+        },
+        {
+          "command": "worktreeGraph.redmine.loadMore",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.redmine.switchProject",
+          "when": "config.worktreeGraph.redmine.url"
+        },
+        {
+          "command": "worktreeGraph.redmine.filter",
+          "when": "config.worktreeGraph.redmine.url"
+        },
+        {
+          "command": "worktreeGraph.redmine.goToIssue",
+          "when": "config.worktreeGraph.redmine.url"
+        },
+        {
+          "command": "worktreeGraph.redmine.openProject",
+          "when": "config.worktreeGraph.redmine.url"
         }
       ],
       "editor/context": [

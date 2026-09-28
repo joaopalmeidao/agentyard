@@ -122,11 +122,30 @@ export class RedmineClient {
   }
 
   async listIssues(scope: IssueScope, projectId?: string): Promise<Issue[]> {
-    const q = new URLSearchParams({ status_id: 'open', limit: '50', sort: 'updated_on:desc' });
-    if (scope === 'mine') q.set('assigned_to_id', 'me');
+    return (await this.searchIssues(scope, projectId)).issues;
+  }
+
+  /**
+   * Issues com filtro e paginação. Com consulta salva (`queryId`), os filtros dela valem no lugar de
+   * status, tipo e responsável; o projeto continua valendo.
+   */
+  async searchIssues(scope: IssueScope, projectId?: string, f: RedmineFilter = {}, limit = 50, offset = 0): Promise<{ issues: Issue[]; total: number }> {
+    const q = new URLSearchParams({ limit: String(limit), offset: String(offset), sort: 'updated_on:desc' });
+    if (f.queryId) q.set('query_id', f.queryId);
+    else {
+      q.set('status_id', f.status || 'open');
+      if (f.trackerId) q.set('tracker_id', f.trackerId);
+      if (scope === 'mine') q.set('assigned_to_id', 'me');
+    }
     if (projectId) q.set('project_id', projectId);
     const r = await this.req<any>(`/issues.json?${q}`);
-    return (r.issues ?? []).map((i: any) => mapRedmineIssue(i, this.base));
+    const issues = (r.issues ?? []).map((i: any) => mapRedmineIssue(i, this.base));
+    return { issues, total: typeof r.total_count === 'number' ? r.total_count : issues.length };
+  }
+
+  async issue(id: number | string): Promise<Issue> {
+    const r = await this.req<any>(`/issues/${encodeURIComponent(String(id))}.json`);
+    return mapRedmineIssue(r.issue, this.base);
   }
 
   async createIssue(n: NewIssue & { projectId: string }): Promise<Issue> {
@@ -138,10 +157,79 @@ export class RedmineClient {
     return mapRedmineIssue(r.issue, this.base);
   }
 
-  async projects(): Promise<{ id: number; identifier: string; name: string }[]> {
-    const r = await this.req<any>('/projects.json?limit=100');
-    return (r.projects ?? []).map((p: any) => ({ id: p.id, identifier: p.identifier, name: p.name }));
+  /** Todos os projetos visíveis (o Redmine devolve no máximo 100 por página). */
+  async projects(): Promise<RedmineProject[]> {
+    const out: RedmineProject[] = [];
+    for (let offset = 0; offset < 5000; offset += 100) {
+      const r = await this.req<any>(`/projects.json?limit=100&offset=${offset}`);
+      const page = r.projects ?? [];
+      out.push(...page.map((p: any) => ({ id: p.id, identifier: p.identifier, name: p.name, parentId: p.parent?.id })));
+      if (page.length < 100 || out.length >= (r.total_count ?? 0)) break;
+    }
+    return out;
   }
+
+  async statuses(): Promise<{ id: number; name: string; closed: boolean }[]> {
+    const r = await this.req<any>('/issue_statuses.json');
+    return (r.issue_statuses ?? []).map((s: any) => ({ id: s.id, name: s.name, closed: !!s.is_closed }));
+  }
+
+  async trackers(): Promise<{ id: number; name: string }[]> {
+    const r = await this.req<any>('/trackers.json');
+    return (r.trackers ?? []).map((s: any) => ({ id: s.id, name: s.name }));
+  }
+
+  /** Consultas salvas (públicas e as da pessoa). `projectId` numérico = só as globais ou daquele projeto. */
+  async queries(projectId?: number): Promise<{ id: number; name: string; projectId?: number }[]> {
+    const out: { id: number; name: string; projectId?: number }[] = [];
+    for (let offset = 0; offset < 1000; offset += 100) {
+      const r = await this.req<any>(`/queries.json?limit=100&offset=${offset}`);
+      const page = r.queries ?? [];
+      out.push(...page.map((s: any) => ({ id: s.id, name: s.name, projectId: s.project_id ?? undefined })));
+      if (page.length < 100 || out.length >= (r.total_count ?? 0)) break;
+    }
+    return projectId === undefined ? out : out.filter(q => q.projectId === undefined || q.projectId === projectId);
+  }
+}
+
+export interface RedmineProject {
+  id: number;
+  identifier: string;
+  name: string;
+  parentId?: number;
+}
+
+/** Filtro da lista do Redmine. `status`: "open", "closed", "*" ou o id de um status. */
+export interface RedmineFilter {
+  status?: string;
+  statusName?: string;
+  trackerId?: string;
+  trackerName?: string;
+  queryId?: string;
+  queryName?: string;
+}
+
+/** Projetos na ordem da árvore (pai antes dos filhos, irmãos por nome), com a profundidade. */
+export function projectTree(projects: RedmineProject[]): (RedmineProject & { depth: number })[] {
+  const ids = new Set(projects.map(p => p.id));
+  const kids = new Map<number | undefined, RedmineProject[]>();
+  for (const p of projects) {
+    // pai invisível para a pessoa: o projeto sobe para a raiz
+    const parent = p.parentId !== undefined && ids.has(p.parentId) ? p.parentId : undefined;
+    kids.set(parent, [...(kids.get(parent) ?? []), p]);
+  }
+  const out: (RedmineProject & { depth: number })[] = [];
+  const seen = new Set<number>();
+  const walk = (parent: number | undefined, depth: number) => {
+    for (const p of (kids.get(parent) ?? []).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      out.push({ ...p, depth });
+      walk(p.id, depth + 1);
+    }
+  };
+  walk(undefined, 0);
+  return out;
 }
 
 /** Nome de branch para uma issue: "issue/12-corrigir-login", "redmine/123-...". */

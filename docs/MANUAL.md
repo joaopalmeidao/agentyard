@@ -567,6 +567,16 @@ A view **Issues** mostra as suas ou todas (botão na barra da view).
 - **Criar issue com a seleção**: botão direito numa seleção do editor; leva arquivo, linhas e
   código. A notificação oferece **✦ Começar com Claude**.
 
+No Redmine, o grupo mostra o projeto e o filtro em uso. Botões e botão direito no grupo (ou
+**Redmine: navegar…** na paleta):
+
+- **Trocar projeto…**: lista em árvore, com subprojetos e busca. Vale por repositório; a setting
+  `worktreeGraph.redmine.projectId`, se preenchida, tem precedência.
+- **Filtrar issues…**: status (abertas, fechadas, qualquer um ou um específico), tipo (tracker) ou uma
+  consulta salva do Redmine (os filtros dela substituem status, tipo e responsável).
+- **Ir para a issue…** pelo número, de qualquer projeto; **Abrir projeto no navegador**.
+- **Carregar mais** no fim da lista, quando há mais de 50.
+
 Provedores: GitHub, GitLab, Bitbucket, Azure DevOps (work items), Jira e Redmine — ver seção 20.
 
 ## 11. Histórico (grafo de commits)
