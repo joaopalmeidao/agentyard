@@ -124,6 +124,64 @@ const get = (port, url, headers = {}, method = 'GET') =>
   });
 
   server.close();
+
+  // hub: respostas falsas, sem rede (res mínimo com write/end/on)
+  const { Hub } = require('../out/remote/hub');
+  const fakeRes = () => {
+    const r = { lines: [], closed: null, writeHead() {}, write(s) { r.lines.push(...String(s).split('\n').filter(Boolean).map(JSON.parse)); }, end() {}, on(ev, fn) { if (ev === 'close') r.closed = fn; } };
+    return r;
+  };
+
+  await check('hub: diálogo vai só para a aba certa e a resposta volta', async () => {
+    const hub = new Hub();
+    const a = fakeRes();
+    const b = fakeRes();
+    hub.connect('aaaa', a);
+    hub.connect('bbbb', b);
+    const req = hub.request('aaaa', { kind: 'pick', items: [{ label: 'x' }] });
+    assert.ok(a.lines.some(m => m.type === 'dialog' && m.id === req.id));
+    assert.ok(!b.lines.some(m => m.type === 'dialog'));
+    assert.strictEqual(await hub.answer('bbbb', req.id, 0), false, 'outra aba não responde');
+    assert.strictEqual(await hub.answer('aaaa', req.id, 0), true);
+    assert.strictEqual(await req.promise, 0);
+    assert.ok(a.lines.some(m => m.type === 'dialogClose' && m.id === req.id));
+    hub.dispose();
+  });
+
+  await check('hub: validação mantém o diálogo aberto com o erro', async () => {
+    const hub = new Hub();
+    const a = fakeRes();
+    hub.connect('aaaa', a);
+    const req = hub.request('aaaa', { kind: 'input' }, v => (v === '' ? 'vazio' : undefined));
+    assert.strictEqual(await hub.answer('aaaa', req.id, ''), false);
+    assert.ok(a.lines.some(m => m.type === 'dialogError' && m.message === 'vazio'));
+    await hub.answer('aaaa', req.id, 'ok');
+    assert.strictEqual(await req.promise, 'ok');
+    hub.dispose();
+  });
+
+  await check('hub: sem aba conectada responde undefined; reconexão reenvia o diálogo; espelho vai para todas', async () => {
+    const hub = new Hub();
+    assert.strictEqual(await hub.request('nada', { kind: 'message' }).promise, undefined);
+    assert.strictEqual(await hub.request(undefined, { kind: 'message' }).promise, undefined);
+    const a = fakeRes();
+    hub.connect('aaaa', a);
+    const req = hub.request('aaaa', { kind: 'message', items: ['Ok'] });
+    const a2 = fakeRes();
+    hub.connect('aaaa', a2);
+    assert.ok(a2.lines.some(m => m.type === 'dialog' && m.id === req.id), 'reenviado na reconexão');
+    await hub.answer('aaaa', req.id, 0);
+    assert.strictEqual(await req.promise, 0);
+    const b = fakeRes();
+    hub.connect('bbbb', b);
+    const mirror = hub.request(undefined, { kind: 'message', items: ['Sim'] });
+    assert.ok(a2.lines.some(m => m.id === mirror.id) && b.lines.some(m => m.id === mirror.id));
+    mirror.cancel();
+    assert.strictEqual(await mirror.promise, undefined);
+    assert.ok(b.lines.some(m => m.type === 'dialogClose' && m.id === mirror.id));
+    hub.dispose();
+  });
+
   fs.rmSync(root, { recursive: true, force: true });
   if (failures) {
     console.log(`\n${failures} falha(s)`);

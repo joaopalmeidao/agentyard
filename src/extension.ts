@@ -331,7 +331,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       }
     };
   const claudeIntegration = registerClaudeIntegration(ctx, ctl, guard, { agentTerms, agentsTree, agentFlow, coord, openTranscript: id => claude.transcriptById(id) });
-  registerRemoteAccess(ctx, ctl, guard);
+  registerRemoteAccess(ctx, ctl, guard, handler);
 
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
   reg('openGraph', () => GraphPanel.show(ctl, handler));

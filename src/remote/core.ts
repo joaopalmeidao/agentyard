@@ -97,6 +97,8 @@ export interface RemoteServerOptions {
   token: () => string;
   state: () => RemoteState;
   page: () => string;
+  /** Rotas a mais (o painel): devolve true quando atendeu. `authed` já conferiu o token. */
+  routes?: (req: http.IncomingMessage, res: http.ServerResponse, url: string, authed: boolean) => boolean | Promise<boolean>;
 }
 
 const SECURITY_HEADERS = {
@@ -106,16 +108,31 @@ const SECURITY_HEADERS = {
   'x-frame-options': 'DENY',
 };
 
-/** Servidor da página: GET / (a página) e GET /api/state (com o token). Só leitura. */
+/** Lê o corpo JSON de um POST (até 1 MB). */
+export async function readJson(req: http.IncomingMessage): Promise<any> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of req) {
+    size += (c as Buffer).length;
+    if (size > 1_000_000) throw new Error('Too large.');
+    chunks.push(c as Buffer);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+}
+
+export function sendText(res: http.ServerResponse, status: number, type: string, body: string | Buffer, extra: Record<string, string> = {}) {
+  res.writeHead(status, { 'content-type': type, ...SECURITY_HEADERS, ...extra });
+  res.end(body);
+}
+
+/** Servidor da página: GET / (a página), GET /api/state (com o token) e as rotas a mais. */
 export function createRemoteServer(o: RemoteServerOptions): http.Server {
-  return http.createServer((req, res) => {
-    const send = (status: number, type: string, body: string, extra: Record<string, string> = {}) => {
-      res.writeHead(status, { 'content-type': type, ...SECURITY_HEADERS, ...extra });
-      res.end(body);
-    };
+  return http.createServer(async (req, res) => {
+    const send = (status: number, type: string, body: string, extra: Record<string, string> = {}) => sendText(res, status, type, body, extra);
     const url = (req.url ?? '/').split('?')[0];
-    if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'Method not allowed.', { allow: 'GET' });
     try {
+      if (o.routes && (await o.routes(req, res, url, authorized(req.headers.authorization, o.token())))) return;
+      if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'Method not allowed.', { allow: 'GET' });
       if (url === '/' || url === '/index.html') {
         return send(200, 'text/html; charset=utf-8', o.page(), {
           'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'",
@@ -127,7 +144,8 @@ export function createRemoteServer(o: RemoteServerOptions): http.Server {
       }
       return send(404, 'text/plain', 'Not found.');
     } catch (e) {
-      return send(500, 'text/plain', (e as Error).message);
+      if (!res.headersSent) send(500, 'text/plain', (e as Error).message);
+      else res.end();
     }
   });
 }
@@ -170,6 +188,8 @@ export interface PageTexts {
   running: string;
   ended: string;
   waitingCount: string;
+  /** Link para o painel principal (sem ele, a página não mostra o link). */
+  panel?: string;
 }
 
 export function remotePage(x: PageTexts, lang = 'en'): string {
@@ -188,7 +208,8 @@ export function remotePage(x: PageTexts, lang = 'en'): string {
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;max-width:720px;margin-inline:auto}
 header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}
 h1{font-size:1.25rem;margin:0}
-#upd{color:var(--muted);font-size:.8rem}
+#upd{color:var(--muted);font-size:.8rem;flex:1;text-align:right}
+#panel{color:var(--blue);text-decoration:none;font-weight:600}
 #sum{margin:0 0 12px;font-weight:600;color:var(--warn)}
 h2{font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 6px}
 .a{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
@@ -202,7 +223,7 @@ h2{font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mu
 .msg{padding:24px 0;color:var(--muted);text-align:center}
 .err{color:var(--warn)}
 </style></head><body>
-<header><h1>${esc(x.title)}</h1><span id="upd"></span></header>
+<header><h1>${esc(x.title)}</h1><span id="upd"></span>${x.panel ? `<a id="panel" href="panel">${esc(x.panel)}</a>` : ''}</header>
 <div id="sum"></div><div id="list"><div class="msg">…</div></div>
 <script>
 const T = ${json};
