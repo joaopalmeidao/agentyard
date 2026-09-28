@@ -1,6 +1,6 @@
 # Changelog
 
-## Não lançado
+## 0.16.0
 - **Tarefas por voz**: toda caixa que pede a tarefa do agente (nova worktree com tarefa, fila de tarefas,
   abrir o Claude/agente com tarefa, dividir entre agentes, várias abordagens, tarefa em lote) ganha um
   botão de microfone: você fala num rascunho (ditado local da extensão VS Code Speech), clica em **Usar

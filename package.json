@@ -2,7 +2,7 @@
   "name": "worktree-graph",
   "displayName": "AgentYard",
   "description": "%extension.description%",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "publisher": "joaopalmeidao",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
