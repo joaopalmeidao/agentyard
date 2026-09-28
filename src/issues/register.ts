@@ -67,5 +67,11 @@ export function registerIssues(ctx: vscode.ExtensionContext, ctl: Controller, gu
     return svc.create(`${t('In {0} (lines {1}–{2}):', `\`${rel}\``, a, b)}\n\n\`\`\`${doc.languageId}\n${code}\n\`\`\``);
   });
   reg('disconnectRedmine', () => svc.disconnectRedmine());
+  reg('redmine.navigate', () => svc.navigateRedmine());
+  reg('redmine.switchProject', () => svc.switchRedmineProject());
+  reg('redmine.filter', () => svc.filterRedmine());
+  reg('redmine.goToIssue', () => svc.goToRedmineIssue());
+  reg('redmine.openProject', () => svc.openRedmineProject());
+  reg('redmine.loadMore', () => svc.loadMoreRedmine());
   return svc;
 }

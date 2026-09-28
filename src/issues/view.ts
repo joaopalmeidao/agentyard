@@ -24,11 +24,13 @@ export class IssueGroupItem extends vscode.TreeItem {
   constructor(readonly group: IssueGroup) {
     super(group.title, group.issues.length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `issues:${group.title}`;
-    this.description = group.needsConnect ? t('not connected') : group.error ? t('error') : String(group.issues.length);
+    const count = group.total !== undefined && group.total > group.issues.length ? `${group.issues.length}/${group.total}` : String(group.issues.length);
+    const state = group.needsConnect ? t('not connected') : group.error ? t('error') : count;
+    this.description = group.detail && !group.needsConnect ? `${group.detail} · ${state}` : state;
     const icons: Record<string, string> = { redmine: 'tasklist', jira: 'issues', gitlab: 'source-control', bitbucket: 'repo', azure: 'azure-devops', github: 'github' };
     this.iconPath = new vscode.ThemeIcon(icons[group.provider] ?? 'issues');
-    this.tooltip = group.error ?? group.title;
-    this.contextValue = `issueGroup-${group.provider}`;
+    this.tooltip = group.error ?? [group.title, group.detail].filter(Boolean).join('\n');
+    this.contextValue = `issueGroup-${group.provider}${group.needsConnect ? '-disconnected' : ''}`;
   }
 }
 
@@ -87,9 +89,14 @@ export class IssueTreeProvider implements vscode.TreeDataProvider<Node> {
         return [new ActionItem(t('Connect to {0}…', hostLabel(g.provider as HostKind)), 'worktreeGraph.connectHosting', 'plug')];
       }
       if (g.error) return [new ActionItem(t('Error: {0}', g.error), 'worktreeGraph.issues.refresh', 'error')];
-      if (!g.issues.length)
+      if (!g.issues.length) {
+        if (g.filtered) return [new ActionItem(t('No issues with this filter'), 'worktreeGraph.redmine.filter', 'filter')];
         return [new ActionItem(this.svc.scope === 'mine' ? t('No open issues assigned to you') : t('No open issues'), 'worktreeGraph.issues.refresh', 'check')];
-      return g.issues.map(i => new IssueItem(i, this.svc.branchOf(i)));
+      }
+      const items: Node[] = g.issues.map(i => new IssueItem(i, this.svc.branchOf(i)));
+      if (g.total !== undefined && g.total > g.issues.length)
+        items.push(new ActionItem(t('Load more ({0} of {1})…', g.issues.length, g.total), 'worktreeGraph.redmine.loadMore', 'ellipsis'));
+      return items;
     }
     return [];
   }

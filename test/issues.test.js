@@ -3,7 +3,7 @@
 const assert = require('assert');
 const http = require('http');
 const { parseRemote, GitHubClient, GitLabClient, suggestBody } = require('../out/hosting/core');
-const { RedmineClient, issueBranch, issueTrailer, renderPrompt, DEFAULT_ISSUE_PROMPT } = require('../out/issues/core');
+const { RedmineClient, issueBranch, issueTrailer, renderPrompt, DEFAULT_ISSUE_PROMPT, projectTree } = require('../out/issues/core');
 
 let failures = 0;
 const check = async (name, fn) => {
@@ -43,7 +43,18 @@ const check = async (name, fn) => {
           { id: 4512, subject: 'Relatório de prazos está lento', description: 'Demora 30 s', project: { name: 'Jurídico' }, tracker: { name: 'Bug' }, status: { name: 'Nova' }, priority: { name: 'Alta' }, assigned_to: { name: 'João' }, updated_on: '2026-09-22T10:00:00Z' },
         ],
       });
-    if (u.startsWith('/rm/projects.json')) return send(200, { projects: [{ id: 1, identifier: 'juridico', name: 'Jurídico' }] });
+    if (u.startsWith('/rm/issues/4512.json'))
+      return send(200, { issue: { id: 4512, subject: 'Relatório de prazos está lento', project: { name: 'Jurídico' }, updated_on: '2026-09-22T10:00:00Z' } });
+    if (u.startsWith('/rm/issues/')) return send(404, { errors: ['não encontrada'] });
+    if (u.startsWith('/rm/projects.json')) {
+      // 130 projetos: duas páginas
+      const offset = Number(new URL(u, 'http://x').searchParams.get('offset') || 0);
+      const all = [{ id: 1, identifier: 'juridico', name: 'Jurídico' }, ...Array.from({ length: 129 }, (_, i) => ({ id: i + 2, identifier: `p${i + 2}`, name: `P ${i + 2}`, parent: { id: 1 } }))];
+      return send(200, { projects: all.slice(offset, offset + 100), total_count: all.length });
+    }
+    if (u === '/rm/issue_statuses.json') return send(200, { issue_statuses: [{ id: 1, name: 'Nova' }, { id: 5, name: 'Fechada', is_closed: true }] });
+    if (u === '/rm/trackers.json') return send(200, { trackers: [{ id: 1, name: 'Bug' }] });
+    if (u.startsWith('/rm/queries.json')) return send(200, { queries: [{ id: 3, name: 'Global' }, { id: 4, name: 'Do jurídico', project_id: 1 }, { id: 9, name: 'De outro', project_id: 7 }], total_count: 3 });
     send(404, { message: 'not found' });
   });
   await new Promise(r => server.listen(0, r));
@@ -80,6 +91,36 @@ const check = async (name, fn) => {
     const q = seen.at(-1).url;
     assert.ok(q.includes('assigned_to_id=me') && q.includes('status_id=open') && q.includes('project_id=juridico'), q);
     assert.deepStrictEqual([list[0].key, list[0].url, list[0].labels], ['RM#4512', `${base}/rm/issues/4512`, ['Bug', 'Nova', 'Alta']]);
+  });
+  await check('Redmine: filtro de status e tipo, paginação e total', async () => {
+    await rm.searchIssues('all', 'juridico', { status: 'closed', trackerId: '1' }, 100, 50);
+    const q = new URL(seen.at(-1).url, 'http://x').searchParams;
+    assert.deepStrictEqual([q.get('status_id'), q.get('tracker_id'), q.get('limit'), q.get('offset'), q.get('assigned_to_id')], ['closed', '1', '100', '50', null]);
+  });
+  await check('Redmine: consulta salva substitui status e responsável, mas mantém o projeto', async () => {
+    const r = await rm.searchIssues('mine', 'juridico', { queryId: '4', status: 'closed' });
+    const q = new URL(seen.at(-1).url, 'http://x').searchParams;
+    assert.deepStrictEqual([q.get('query_id'), q.get('status_id'), q.get('assigned_to_id'), q.get('project_id')], ['4', null, null, 'juridico']);
+    assert.strictEqual(r.total, 1);
+  });
+  await check('Redmine: ir para a issue pelo número', async () => {
+    const i = await rm.issue(4512);
+    assert.deepStrictEqual([i.key, i.project], ['RM#4512', 'Jurídico']);
+    await assert.rejects(rm.issue(1), /404/);
+  });
+  await check('Redmine: todos os projetos (paginado) em árvore', async () => {
+    const ps = await rm.projects();
+    assert.strictEqual(ps.length, 130);
+    const tree = projectTree(ps);
+    assert.deepStrictEqual([tree[0].identifier, tree[0].depth, tree[1].depth], ['juridico', 0, 1]);
+    // pai que a pessoa não vê: o projeto sobe para a raiz
+    assert.deepStrictEqual(projectTree([{ id: 5, identifier: 'x', name: 'X', parentId: 99 }]).map(p => p.depth), [0]);
+  });
+  await check('Redmine: status, tipos e consultas salvas do projeto', async () => {
+    assert.deepStrictEqual((await rm.statuses()).map(s => s.closed), [false, true]);
+    assert.deepStrictEqual((await rm.trackers()).map(s => s.name), ['Bug']);
+    assert.deepStrictEqual((await rm.queries(1)).map(s => s.id), [3, 4]);
+    assert.strictEqual((await rm.queries()).length, 3);
   });
   await check('Redmine: chave errada vira erro legível', async () => {
     await assert.rejects(new RedmineClient(`${base}/rm`, 'errada').whoami(), /401/);

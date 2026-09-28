@@ -5,6 +5,13 @@
   branch no painel): escolha qualquer branch, local ou remota, e veja a lista de commits dela. Começa
   só com o que a base não tem; um botão alterna para o histórico completo. Enter mostra os arquivos do
   commit.
+- **Navegar no Redmine** (botões no grupo do Redmine na view Issues, botão direito nele, ou
+  **Redmine: navegar…** na paleta e no menu da view): **trocar projeto** a qualquer momento (lista em
+  árvore com subprojetos e busca por nome ou identificador; todos os projetos, não só os 100
+  primeiros), **filtrar** por status (abertas, fechadas, qualquer um ou um status específico), por tipo
+  (tracker) ou por uma **consulta salva** do Redmine, **ir para a issue** pelo número (de qualquer
+  projeto) e **abrir o projeto no navegador**. O grupo mostra o projeto e o filtro em uso, e
+  **Carregar mais** busca além das 50 primeiras.
 - **Mostrar só esta branch no histórico** (menu da branch no painel): o grafo passa a mostrar só os
   commits dela (volta pelo seletor **Branches:**).
 
