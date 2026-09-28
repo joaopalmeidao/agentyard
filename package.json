@@ -36,6 +36,20 @@
     "workspaceContains:.git"
   ],
   "contributes": {
+    "keybindings": [
+      {
+        "command": "worktreeGraph.claude.voice",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m",
+        "when": "!terminalDictationInProgress"
+      },
+      {
+        "command": "worktreeGraph.claude.voiceStop",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m",
+        "when": "terminalDictationInProgress"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -246,6 +260,18 @@
         "title": "%command.claude.sendSelection.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.claude.voice",
+        "title": "%command.claude.voice.title%",
+        "category": "AgentYard",
+        "icon": "$(mic)"
+      },
+      {
+        "command": "worktreeGraph.claude.voiceStop",
+        "title": "%command.claude.voiceStop.title%",
+        "category": "AgentYard",
+        "icon": "$(mic-filled)"
       },
       {
         "command": "worktreeGraph.agents.moveToEditor",
@@ -1701,6 +1727,11 @@
           "group": "1_open@0"
         },
         {
+          "command": "worktreeGraph.claude.voice",
+          "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal/",
+          "group": "inline@-1"
+        },
+        {
           "command": "worktreeGraph.agents.show",
           "when": "view == worktreeGraph.agents && viewItem =~ /^agentTerminal/",
           "group": "1_open@0"
@@ -2533,6 +2564,10 @@
       ],
       "commandPalette": [
         {
+          "command": "worktreeGraph.claude.voiceStop",
+          "when": "terminalDictationInProgress"
+        },
+        {
           "command": "worktreeGraph.agents.transcript",
           "when": "false"
         },
@@ -3159,6 +3194,11 @@
           "type": "boolean",
           "default": true,
           "description": "%config.claude.showUsageInStatusBar.description%"
+        },
+        "worktreeGraph.claude.voiceSubmit": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.claude.voiceSubmit.markdownDescription%"
         },
         "worktreeGraph.claude.trackState": {
           "type": "boolean",
