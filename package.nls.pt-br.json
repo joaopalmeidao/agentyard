@@ -463,5 +463,7 @@
   "config.agents.autoReview.focus.description": "O que mais o revisor automático deve olhar neste projeto (ex.: \"SQL injection, traduções no l10n\").",
   "command.agents.configureAutoReview.title": "Revisão automática dos agentes…",
   "command.agents.autoReviewNow.title": "✦ Revisão automática agora",
-  "command.agents.showAutoReview.title": "Ver a última revisão automática"
+  "command.agents.showAutoReview.title": "Ver a última revisão automática",
+  "config.claude.stuck.repeats.description": "Agente travado: quando o Claude repete o mesmo comando ou a mesma edição tantas vezes seguidas num turno, o AgentYard recusa a próxima pedindo que ele repense, e avisa você. 0 desliga.",
+  "config.claude.stuck.minutes.description": "Agente travado: avisa quando um turno do Claude está rodando há tantos minutos sem mudar nenhum arquivo da worktree. 0 desliga."
 }

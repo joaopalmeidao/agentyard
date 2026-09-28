@@ -463,5 +463,7 @@
   "config.agents.autoReview.focus.description": "What else the automatic reviewer should pay attention to in this project (e.g. \"SQL injection, translations in l10n\").",
   "command.agents.configureAutoReview.title": "Automatic review of the agents…",
   "command.agents.autoReviewNow.title": "✦ Automatic review now",
-  "command.agents.showAutoReview.title": "Show the last automatic review"
+  "command.agents.showAutoReview.title": "Show the last automatic review",
+  "config.claude.stuck.repeats.description": "Stuck agent: when Claude repeats the same command or edit this many times in a row in a turn, AgentYard refuses the next one asking it to rethink, and warns you. 0 turns it off.",
+  "config.claude.stuck.minutes.description": "Stuck agent: warns when a Claude turn has been running this many minutes without changing any file in the worktree. 0 turns it off."
 }

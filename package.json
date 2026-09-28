@@ -4405,6 +4405,18 @@
           "type": "string",
           "default": "",
           "description": "%config.agents.autoReview.focus.description%"
+        },
+        "worktreeGraph.claude.stuck.repeats": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "%config.claude.stuck.repeats.description%"
+        },
+        "worktreeGraph.claude.stuck.minutes": {
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "description": "%config.claude.stuck.minutes.description%"
         }
       }
     }

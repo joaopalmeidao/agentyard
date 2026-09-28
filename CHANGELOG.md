@@ -1,6 +1,10 @@
 # Changelog
 
 ## Não lançado
+- **Agente travado**: quando o Claude repete o mesmo comando ou a mesma edição várias vezes seguidas
+  (`claude.stuck.repeats`, 5), a próxima é recusada com um pedido para ele repensar, e você recebe um
+  aviso; um turno trabalhando há `claude.stuck.minutes` (20) sem mudar nenhum arquivo também avisa,
+  com **Mostrar terminal** e **Interromper** (manda Esc para o Claude).
 - **Revisão automática dos agentes** (`agents.autoReview: ready`): quando o agente termina, outro Claude
   (sem terminal) revisa o diff contra a base (ou contra o pai, numa branch empilhada) antes de a
   worktree ficar "pronta para revisar". Achou problemas: eles voltam para o Claude da worktree, que os

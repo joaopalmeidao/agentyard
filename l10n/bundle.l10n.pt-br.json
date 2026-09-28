@@ -2320,5 +2320,10 @@
   "Round": "Rodada",
   "Verdict": "Parecer",
   "Review when the agent finishes": "Revisar quando o agente terminar",
-  "Another Claude reviews the diff before the worktree becomes \"ready for review\"; problems go back to the agent.": "Outro Claude revisa o diff antes de a worktree ficar \"pronta para revisar\"; os problemas voltam para o agente."
+  "Another Claude reviews the diff before the worktree becomes \"ready for review\"; problems go back to the agent.": "Outro Claude revisa o diff antes de a worktree ficar \"pronta para revisar\"; os problemas voltam para o agente.",
+  "Claude in {0} repeated the same action {1} times in a row; asked it to rethink.": "O Claude em {0} repetiu a mesma ação {1} vezes seguidas; pedi que ele repense.",
+  "Claude in {0} seems stuck: it repeated the same action {1} times in a row. AgentYard asked it to rethink.": "O Claude em {0} parece travado: repetiu a mesma ação {1} vezes seguidas. O AgentYard pediu que ele repense.",
+  "Claude in {0} has been working for {1} min without changing any file.": "O Claude em {0} está trabalhando há {1} min sem mudar nenhum arquivo.",
+  "Claude in {0} has been working for {1} min without changing any file. It may be stuck.": "O Claude em {0} está trabalhando há {1} min sem mudar nenhum arquivo. Pode estar travado.",
+  "Interrupt": "Interromper"
 }

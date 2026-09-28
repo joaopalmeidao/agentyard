@@ -9,6 +9,7 @@ import { t } from '../i18n';
 import type { WorktreeView } from '../model';
 import { AutoReviewer } from './reviewer';
 import { StopGate } from './stopGate';
+import { StuckWatch } from './stuck';
 
 interface Deps {
   agentTerms: AgentTerminals;
@@ -60,6 +61,8 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
     const w = await worktreeOf(ctl, arg, t('Automatic review of which worktree?'));
     if (w) await reviewer.show(w.path);
   });
+
+  ctx.subscriptions.push(new StuckWatch(ctl, d.bridge, d.integration, d.agentTerms));
 
   return { gate, reviewer };
 }
