@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import * as vscode from 'vscode';
+import { t } from '../i18n';
 import type { Hub } from './hub';
 
 /**
@@ -119,9 +120,78 @@ export function installRemoteDialogs(hub: Hub): vscode.Disposable {
     },
   );
 
+  // ---------- o que a ação abre: link da web abre na aba do celular; editor, diff, terminal e painéis
+  // só existem no VS Code do computador (abrem lá) e a aba recebe um aviso, uma vez por ação
+  const warned = new WeakSet<object>();
+  const desktopOnly = () => {
+    const store = origin.getStore();
+    const client = remoteClient();
+    if (!store || !client || warned.has(store)) return;
+    warned.add(store);
+    hub.send(client, { type: 'toast', level: 'warning', message: t('This opens only in VS Code on the computer; it was opened there.') });
+  };
+
+  const env = vscode.env as unknown as Record<string, (...a: any[]) => any>;
+  const origOpen = env.openExternal;
+  env.openExternal = function (this: unknown, uri: vscode.Uri, ...rest: unknown[]) {
+    const client = remoteClient();
+    if (!client) return origOpen.call(this, uri, ...rest);
+    const url = uri.toString(true);
+    if (/^(https?|mailto):/i.test(url) && !isLocalUrl(url)) {
+      hub.send(client, { type: 'open', url });
+      return Promise.resolve(true);
+    }
+    hub.send(client, { type: 'toast', level: 'warning', message: t('This link cannot be opened on the phone: {0}', url) });
+    return Promise.resolve(false);
+  };
+
+  for (const name of ['showTextDocument', 'createTerminal', 'createWebviewPanel', 'showNotebookDocument']) {
+    patch(name, orig =>
+      function (this: unknown, ...a: unknown[]) {
+        desktopOnly();
+        return orig.apply(this, a);
+      },
+    );
+  }
+
+  const cmds = vscode.commands as unknown as Record<string, (...a: any[]) => any>;
+  const origExec = cmds.executeCommand;
+  cmds.executeCommand = function (this: unknown, id: string, ...a: unknown[]) {
+    if (opensUi(id)) desktopOnly();
+    return origExec.call(this, id, ...a);
+  };
+
   return {
     dispose: () => {
       for (const [name, fn] of Object.entries(saved)) w[name] = fn;
+      env.openExternal = origOpen;
+      cmds.executeCommand = origExec;
     },
   };
+}
+
+/** Endereço desta máquina (localhost, 127.x): no celular não aponta para cá. */
+function isLocalUrl(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.replace(/^\[|\]$/g, '');
+    return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127\./.test(h) || h === '0.0.0.0';
+  } catch {
+    return false;
+  }
+}
+
+/** Comandos que abrem editor, diff, view ou painel no VS Code (não existem no celular). */
+const UI_COMMANDS = new Set([
+  'vscode.open',
+  'vscode.diff',
+  'vscode.changes',
+  'vscode.openWith',
+  'vscode.openFolder',
+  'revealInExplorer',
+  'revealFileInOS',
+  'markdown.showPreview',
+  'markdown.showPreviewToSide',
+]);
+function opensUi(id: string): boolean {
+  return UI_COMMANDS.has(id) || /^workbench\.(view|action\.(open|show|terminal|chat|focus|quickOpen))/.test(id) || /\.(focus|reveal|show)$/.test(id);
 }

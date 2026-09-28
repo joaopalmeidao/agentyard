@@ -2402,5 +2402,8 @@
   "Filter": "Filtrar",
   "OK": "OK",
   "Cancel": "Cancelar",
-  "Actions from the phone are turned off (worktreeGraph.remote.actions).": "As ações pelo celular estão desligadas (worktreeGraph.remote.actions)."
+  "Actions from the phone are turned off (worktreeGraph.remote.actions).": "As ações pelo celular estão desligadas (worktreeGraph.remote.actions).",
+  "Open link": "Abrir link",
+  "This opens only in VS Code on the computer; it was opened there.": "Isto só abre no VS Code do computador; foi aberto lá.",
+  "This link cannot be opened on the phone: {0}": "Este link não abre no celular: {0}"
 }
