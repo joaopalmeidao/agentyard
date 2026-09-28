@@ -353,6 +353,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('showUncommitted', item => actions.showUncommitted(ctl, item));
   reg('newWorktreeWithTask', item => actions.newWorktreeWithTask(ctl, item));
   reg('newWorktreeWithTaskFrom', item => actions.newWorktreeWithTask(ctl, item));
+  reg('newWorktreeWithTaskByVoice', () => actions.newWorktreeWithTask(ctl, { voice: true }));
   reg('openTerminal', item => actions.openTerminal(ctl, item));
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
   // botão da barra de status: o primeiro agente configurado, na worktree desta janela

@@ -201,6 +201,12 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "worktreeGraph.newWorktreeWithTaskByVoice",
+        "title": "%command.newWorktreeWithTaskByVoice.title%",
+        "category": "AgentYard",
+        "icon": "$(mic)"
+      },
+      {
         "command": "worktreeGraph.newWorktreeWithTaskFrom",
         "title": "%command.newWorktreeWithTaskFrom.title%",
         "category": "AgentYard",
@@ -1653,6 +1659,11 @@
           "command": "worktreeGraph.newWorktreeWithTask",
           "when": "view == worktreeGraph.worktrees",
           "group": "navigation@2"
+        },
+        {
+          "command": "worktreeGraph.newWorktreeWithTaskByVoice",
+          "when": "view == worktreeGraph.worktrees",
+          "group": "0_create@2"
         },
         {
           "command": "worktreeGraph.openFileInWorktree",

@@ -11,6 +11,7 @@ import { guardChecks } from '../guards';
 import { t } from '../i18n';
 import type { WorktreeView } from '../model';
 import { pushBranch } from '../push';
+import { askTask } from '../taskInput';
 import {
   agentFinished,
   batchPlan,
@@ -444,7 +445,7 @@ export class Coord implements vscode.Disposable {
     targets = targets.filter(w => !blocked.has(key(w.path)));
     const prompt =
       opts?.prompt ??
-      (await vscode.window.showInputBox({ title: t('Task for {0} worktree(s)', targets.length), prompt: t('What each agent should do; {0} becomes the branch name', '${branch}'), ignoreFocusOut: true }));
+      (await askTask({ title: t('Task for {0} worktree(s)', targets.length), prompt: t('What each agent should do; {0} becomes the branch name', '${branch}') }));
     if (!prompt?.trim()) return;
     const mode =
       opts?.mode ??

@@ -13,6 +13,7 @@ import { migrationGate } from './migrations/register';
 import { Repo, Worktree } from './git';
 import { t } from './i18n';
 import { applySparse, hasSubmodules, initSubmodules } from './sparse';
+import { askTask } from './taskInput';
 
 type BranchArg = string | { branch?: string } | undefined;
 
@@ -519,7 +520,7 @@ export async function showUncommitted(ctl: Controller, arg: BranchArg | { path?:
  * Nova worktree a partir de uma branch escolhida (a base por padrão) e já com uma tarefa para o agente.
  * `arg` com branch (item da árvore, card do grafo) ou `startPoint` pula a escolha da origem.
  */
-export async function newWorktreeWithTask(ctl: Controller, arg?: string | { branch?: string; startPoint?: string; prompt?: string; name?: string; agent?: string }) {
+export async function newWorktreeWithTask(ctl: Controller, arg?: string | { branch?: string; startPoint?: string; prompt?: string; name?: string; agent?: string; voice?: boolean }) {
   const repo = repoOf(ctl);
   const o = typeof arg === 'string' ? { branch: arg } : (arg ?? {});
   let from = o.startPoint ?? o.branch;
@@ -529,10 +530,10 @@ export async function newWorktreeWithTask(ctl: Controller, arg?: string | { bran
   }
   const prompt =
     o.prompt ??
-    (await vscode.window.showInputBox({
+    (await askTask({
       title: t('New worktree with task (2/3) — from {0}', from),
       prompt: t('What should the agent do in the new worktree?'),
-      ignoreFocusOut: true,
+      voice: o.voice,
     }));
   if (!prompt?.trim()) return;
   const names = new Set((await repo.refs()).filter(r => r.kind === 'head').map(r => r.name));

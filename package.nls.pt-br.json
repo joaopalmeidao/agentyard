@@ -27,6 +27,7 @@
   "command.refresh.title": "Atualizar",
   "command.createWorktree.title": "Nova worktree",
   "command.newWorktreeWithTask.title": "Nova worktree com tarefa para o agente…",
+  "command.newWorktreeWithTaskByVoice.title": "Nova worktree com tarefa por voz…",
   "command.newWorktreeWithTaskFrom.title": "Nova worktree a partir desta, com tarefa para o agente…",
   "command.showUncommitted.title": "Ver alterações não commitadas",
   "command.openWorktree.title": "Abrir worktree em nova janela",

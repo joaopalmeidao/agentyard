@@ -87,6 +87,8 @@ class RemoteAccess implements vscode.Disposable {
         ok: t('OK'),
         filter: t('Filter'),
         openLink: t('Open link'),
+        dictate: t('Dictate'),
+        listening: t('Listening…'),
       },
       { bundle: bundle(), locale: locale() },
     );

@@ -9,6 +9,7 @@ import type { Controller } from '../controller';
 import type { Coord } from '../coord/register';
 import { t } from '../i18n';
 import { setParent } from '../stack/core';
+import { askTask } from '../taskInput';
 import type { AgentBoard } from './boardService';
 import { blockedBy, extractJson, finished, normalizePlan, Orchestration, planPrompt, startable, startPoint, Subtask, subtaskPrompt, topoOrder } from './plan';
 
@@ -64,10 +65,9 @@ export class Orchestrator implements vscode.Disposable {
     if (!repo) return;
     const text =
       task ??
-      (await vscode.window.showInputBox({
+      (await askTask({
         title: t('Split a task among agents'),
         prompt: t('The whole task. Claude reads the code, splits it into parts with dependencies and each part gets its own worktree and agent.'),
-        ignoreFocusOut: true,
       }));
     if (!text?.trim()) return;
     const { base } = await this.ctl.base();

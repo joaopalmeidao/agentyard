@@ -24,7 +24,7 @@ const vscode = {
   commands: { executeCommand: async id => (ran.push(id), 'ran') },
 };
 require.cache.vscode = { id: 'vscode', filename: 'vscode', loaded: true, exports: vscode };
-const { installRemoteDialogs, runAsRemote } = require('../out/remote/dialogs');
+const { installRemoteDialogs, isRemoteAction, runAsRemote } = require('../out/remote/dialogs');
 
 const uri = s => ({ toString: () => s });
 const sent = [];
@@ -73,8 +73,15 @@ const check = async (name, fn) => {
     assert.deepStrictEqual(ran, ['vscode.diff']);
   });
 
+  await check('isRemoteAction: só dentro de uma ação de aba conectada (a caixa de tarefa com microfone vira a do celular)', () => {
+    assert.strictEqual(isRemoteAction(), false);
+    assert.strictEqual(runAsRemote('tab', () => isRemoteAction()), true);
+    assert.strictEqual(runAsRemote('outra', () => isRemoteAction()), false);
+  });
+
   await check('dispose devolve o vscode.env original', () => {
     d.dispose();
+    assert.strictEqual(runAsRemote('tab', () => isRemoteAction()), false);
     assert.strictEqual(vscode.env, frozenEnv);
   });
 

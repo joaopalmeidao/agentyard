@@ -1,6 +1,12 @@
 # Changelog
 
 ## Não lançado
+- **Tarefas por voz**: toda caixa que pede a tarefa do agente (nova worktree com tarefa, fila de tarefas,
+  abrir o Claude/agente com tarefa, dividir entre agentes, várias abordagens, tarefa em lote) ganha um
+  botão de microfone: você fala num rascunho (ditado local da extensão VS Code Speech), clica em **Usar
+  este texto** e revisa antes de enviar. **Nova worktree com tarefa por voz…** (menu da view Worktrees e
+  paleta) já começa ditando. No celular, os campos de texto do painel remoto ganham o botão **Ditar**
+  (reconhecimento de voz do navegador).
 - **Correção: push falhava com o acesso remoto configurado** (`fatal: ']' does not appear to be a git
   repository`). As settings do acesso remoto (`worktreeGraph.remote.enabled`, `.host`, `.publicUrl`…)
   colidiam com `worktreeGraph.remote`, o remote git, que passava a ser lido como objeto. Elas agora são

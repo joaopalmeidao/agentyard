@@ -12,6 +12,7 @@ import { ClaudeIntegration } from './integration';
 import { metricsReport, TaskRow } from './metrics';
 import { MissionControl } from './missionControl';
 import { registerAgentReview } from './reviewComments';
+import { askTask } from '../taskInput';
 
 interface Deps {
   agentTerms: AgentTerminals;
@@ -122,10 +123,9 @@ export function registerClaudeIntegration(ctx: vscode.ExtensionContext, ctl: Con
       { title: t('Claude Code in {0} (2/3): permission mode', where) },
     );
     if (!mode) return;
-    const task = await vscode.window.showInputBox({
+    const task = await askTask({
       title: t('Claude Code in {0} (3/3): task', where),
       prompt: t('Initial task for the agent (empty = open without a task)'),
-      ignoreFocusOut: true,
     });
     if (task === undefined) return;
     await ctx.globalState.update(LAST_KEY, { model: modelId || undefined, permissionMode: mode.label });

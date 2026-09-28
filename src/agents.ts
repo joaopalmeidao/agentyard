@@ -6,6 +6,7 @@ import { Controller } from './controller';
 import { AGENT_FILE_SUFFIXES, AgentState, EventTail, HookEvent, insertArgs, instrumentCommand, isClaudeCommand, nextState, pruneEvents, withIdeFlag, withoutPermissionArgs, writeHookSettings } from './claude/hooks';
 import { describeToolRequest } from './claude/guard';
 import { t } from './i18n';
+import { askTask } from './taskInput';
 
 export interface AgentConfig {
   name: string;
@@ -643,10 +644,9 @@ export class AgentTerminals implements vscode.Disposable {
 
     let command = agent.command;
     if (command.includes('{prompt}')) {
-      const prompt = await vscode.window.showInputBox({
+      const prompt = await askTask({
         title: t('{0} in {1}', agent.name, branch ?? path.basename(worktreePath)),
         prompt: t('Initial task for the agent (empty = open without a task)'),
-        ignoreFocusOut: true,
       });
       if (prompt === undefined) return;
       if (prompt.trim()) {

@@ -7,6 +7,7 @@ import { runHeadless } from '../claude/headless';
 import type { Controller } from '../controller';
 import { gitUri } from '../diff';
 import { locale, t } from '../i18n';
+import { askTask } from '../taskInput';
 
 /** Um grupo de tentativas da mesma tarefa, cada uma numa worktree `try/<slug>-a`, `-b`… */
 export interface AttemptGroup {
@@ -73,7 +74,7 @@ export class Attempts {
     const { base } = await this.ctl.base();
     let prompt = o.prompt;
     if (!prompt) {
-      prompt = await vscode.window.showInputBox({ title: t('Try several approaches'), prompt: t('The task all the agents will get'), ignoreFocusOut: true });
+      prompt = await askTask({ title: t('Try several approaches'), prompt: t('The task all the agents will get') });
       if (!prompt?.trim()) return undefined;
     }
     const title = o.title ?? prompt.split(/\r?\n/)[0].slice(0, 60);

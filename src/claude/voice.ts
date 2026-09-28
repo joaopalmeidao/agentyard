@@ -3,10 +3,9 @@ import { AgentTerminals, OpenAgent } from '../agents';
 import { openAgentOf } from '../agentsView';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
+import { SPEECH_EXTENSION } from '../taskInput';
 import { pickClaude, worktreeOfFile } from './sendContext';
 
-/** Extensão que dá ao VS Code o reconhecimento de voz (roda local, sem mandar o áudio para fora). */
-export const SPEECH_EXTENSION = 'ms-vscode.vscode-speech';
 const START = 'workbench.action.terminal.startVoice';
 const STOP = 'workbench.action.terminal.stopVoice';
 /** Depois de parar o ditado, o VS Code ainda escreve o fim da frase no terminal; o Enter vem depois. */

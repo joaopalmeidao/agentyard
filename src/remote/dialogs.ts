@@ -14,6 +14,13 @@ import type { Hub } from './hub';
  */
 
 const origin = new AsyncLocalStorage<{ client: string }>();
+let installed: Hub | undefined;
+
+/** A ação em curso veio de uma aba do celular ainda conectada (os diálogos dela vão para lá). */
+export function isRemoteAction(): boolean {
+  const c = origin.getStore()?.client;
+  return !!c && !!installed?.has(c);
+}
 
 /** Roda uma ação vinda de uma aba do celular: os diálogos dela vão para essa aba. */
 export function runAsRemote<T>(client: string, fn: () => T): T {
@@ -36,6 +43,7 @@ const itemLabel = (i: string | vscode.MessageItem) => (typeof i === 'string' ? i
 export function installRemoteDialogs(hub: Hub): vscode.Disposable {
   const w = vscode.window as unknown as Record<string, (...a: any[]) => any>;
   const saved: Record<string, (...a: any[]) => any> = {};
+  installed = hub;
   const patch = (name: string, make: (orig: (...a: any[]) => any) => (...a: any[]) => any) => {
     const orig = w[name];
     saved[name] = orig;
@@ -159,6 +167,7 @@ export function installRemoteDialogs(hub: Hub): vscode.Disposable {
 
   return {
     dispose: () => {
+      if (installed === hub) installed = undefined;
       for (const [name, fn] of Object.entries(saved)) w[name] = fn;
       undoOpen();
       undoExec();

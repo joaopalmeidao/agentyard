@@ -4,6 +4,7 @@ import type { AgentTerminals } from '../agents';
 import type { UsagePause } from '../autopilot/core';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
+import { askTask } from '../taskInput';
 import { keyOf } from './head';
 import type { AgentWatch } from './watch';
 
@@ -78,10 +79,9 @@ export class TaskQueue implements vscode.Disposable {
   async add(p: string, branch: string | undefined, text?: string): Promise<Task | undefined> {
     const typed =
       text ??
-      (await vscode.window.showInputBox({
+      (await askTask({
         title: t('New task for {0}', branch ?? path.basename(p)),
         prompt: t('What the agent should do. It goes into the queue and runs when the previous one is ready.'),
-        ignoreFocusOut: true,
       }));
     if (!typed?.trim()) return undefined;
     const all = this.all();

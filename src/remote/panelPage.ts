@@ -15,6 +15,9 @@ export interface PanelTexts {
   ok: string;
   filter: string;
   openLink: string;
+  /** Botão de microfone dos campos de texto (reconhecimento de voz do navegador, quando ele tem). */
+  dictate: string;
+  listening: string;
 }
 
 const DARK = `--vscode-editor-background:#1f1f1f;--vscode-foreground:#cccccc;--vscode-descriptionForeground:#9d9d9d;--vscode-widget-border:#313131;
@@ -160,11 +163,35 @@ html,body{background:var(--vscode-editor-background);color:var(--vscode-foregrou
   const answer = (id, value) => send({ type: 'answer', id, value });
   function close(id) {
     if (!open || (id && open.id !== id)) return;
+    if (rec) rec.abort();
     open = null;
     dlg.classList.remove('open');
     dlg.innerHTML = '';
   }
+  // ditado: o texto reconhecido entra no fim do campo; o mesmo botão para
+  const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null;
+  function dictate(inp, btn) {
+    if (rec) { rec.stop(); return; }
+    const r = new Speech();
+    r.lang = document.documentElement.lang || navigator.language;
+    r.interimResults = true;
+    r.continuous = true;
+    const before = inp.value ? inp.value.replace(/\\s*$/, ' ') : '';
+    r.onresult = e => {
+      let s = '';
+      for (let i = 0; i < e.results.length; i++) s += e.results[i][0].transcript;
+      inp.value = before + s.trim();
+    };
+    r.onend = () => { rec = null; btn.textContent = T.dictate; btn.classList.remove('primary'); };
+    r.onerror = e => { const x = dlg.querySelector('.ay-err'); if (x) x.textContent = e.error || ''; };
+    rec = r;
+    btn.textContent = T.listening;
+    btn.classList.add('primary');
+    try { r.start(); } catch { r.onend(); }
+  }
   function show(d) {
+    if (rec) rec.abort();
     open = d;
     const head = (d.title ? '<h3>' + esc(plain(d.title)) + '</h3>' : '');
     if (d.kind === 'message') {
@@ -174,8 +201,10 @@ html,body{background:var(--vscode-editor-background);color:var(--vscode-foregrou
     } else if (d.kind === 'input') {
       dlg.innerHTML = '<div class="ay-sheet">' + head + (d.prompt ? '<div class="ay-detail">' + esc(plain(d.prompt)) + '</div>' : '') +
         '<input type="' + (d.password ? 'password' : 'text') + '" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="ay-err"></div>' +
-        '<div class="ay-btns"><button data-c>' + esc(T.cancel) + '</button><button class="primary" data-ok>' + esc(T.ok) + '</button></div></div>';
+        '<div class="ay-btns">' + (Speech && !d.password ? '<button data-mic>' + esc(T.dictate) + '</button>' : '') + '<button data-c>' + esc(T.cancel) + '</button><button class="primary" data-ok>' + esc(T.ok) + '</button></div></div>';
       const inp = dlg.querySelector('input');
+      const mic = dlg.querySelector('[data-mic]');
+      if (mic) mic.onclick = () => dictate(inp, mic);
       inp.value = d.value || '';
       inp.placeholder = d.placeHolder || '';
       const ok = () => answer(d.id, inp.value);
