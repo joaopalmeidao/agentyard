@@ -3812,6 +3812,11 @@
           "default": "127.0.0.1",
           "markdownDescription": "%config.remote.host.markdownDescription%"
         },
+        "worktreeGraph.remote.actions": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.remote.actions.description%"
+        },
         "worktreeGraph.remote.publicUrl": {
           "type": "string",
           "default": "",

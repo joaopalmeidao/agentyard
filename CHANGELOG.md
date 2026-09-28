@@ -1,7 +1,12 @@
 # Changelog
 
 ## Não lançado
-- **Acesso remoto pelo celular**: **Acesso remoto: copiar link** liga uma página só leitura com os
+- **Painel no celular**: a página do acesso remoto ganhou **Painel**, o painel principal do AgentYard
+  adaptado à tela do celular. As ações funcionam como no VS Code, e as confirmações, listas e campos de
+  texto que elas abrem aparecem no celular. Os pedidos com botões que surgem sozinhos (como a permissão
+  de um Claude) aparecem nos dois lugares, e vale a primeira resposta. `worktreeGraph.remote.actions`
+  desligado deixa o painel só para ver.
+- **Acesso remoto pelo celular**: **Acesso remoto: copiar link** liga uma página com os
   agentes de todas as janelas (quem espera você primeiro, o pedido, há quanto tempo e o custo). Ela
   escuta em `127.0.0.1` e você expõe com o túnel que preferir (ex.: `tailscale serve --bg 7420`,
   `worktreeGraph.remote.publicUrl`). O token fica no `#` do link, e **Acesso remoto: gerar novo link**

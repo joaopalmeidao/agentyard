@@ -745,8 +745,16 @@ Code numa tela, com estado, há quanto tempo, custo e o próximo passo (responde
 
 Para acompanhar os agentes longe do computador, ligue `worktreeGraph.remote.enabled` ou rode
 **Acesso remoto: copiar link** (também no menu `…` da view Agentes abertos). O AgentYard serve uma
-página só leitura, feita para o celular, com os agentes de todas as janelas: quem está esperando
-você aparece primeiro, com o pedido, há quanto tempo e o custo.
+página feita para o celular com os agentes de todas as janelas: quem está esperando você aparece
+primeiro, com o pedido, há quanto tempo e o custo.
+
+**Painel** (no topo da página) abre o painel principal da janela que está servindo, o mesmo do VS
+Code: cards, histórico, mesclar, sync, push, abrir agente, e assim por diante. As confirmações,
+listas de escolha e campos de texto das ações feitas pelo celular aparecem no celular, e os avisos
+viram mensagens embaixo da tela. Os pedidos com botões que o VS Code mostra sozinho, como a
+permissão de um Claude, aparecem nos dois lugares, e vale a primeira resposta. O que abre um editor
+ou terminal (diff, arquivo, terminal) continua abrindo no computador. Com `remote.actions` desligado,
+o painel no celular só mostra.
 
 - A página escuta só em `127.0.0.1:7420` (`remote.host`, `remote.port`). Para abrir de fora, exponha
   a porta com um túnel, por exemplo `tailscale serve --bg 7420` (fica visível só na sua rede
