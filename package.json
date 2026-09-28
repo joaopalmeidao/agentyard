@@ -1558,6 +1558,23 @@
         "command": "worktreeGraph.agents.showAutoReview",
         "title": "%command.agents.showAutoReview.title%",
         "category": "AgentYard"
+      },
+      {
+        "command": "worktreeGraph.board.show",
+        "title": "%command.board.show.title%",
+        "category": "AgentYard",
+        "icon": "$(note)"
+      },
+      {
+        "command": "worktreeGraph.board.post",
+        "title": "%command.board.post.title%",
+        "category": "AgentYard",
+        "icon": "$(megaphone)"
+      },
+      {
+        "command": "worktreeGraph.board.release",
+        "title": "%command.board.release.title%",
+        "category": "AgentYard"
       }
     ],
     "submenus": [
@@ -1968,6 +1985,16 @@
           "command": "worktreeGraph.agents.configureAutoReview",
           "when": "view == worktreeGraph.agents",
           "group": "7_autopilot@2"
+        },
+        {
+          "command": "worktreeGraph.board.post",
+          "when": "view == worktreeGraph.agents",
+          "group": "navigation@6"
+        },
+        {
+          "command": "worktreeGraph.board.show",
+          "when": "view == worktreeGraph.agents",
+          "group": "7_autopilot@3"
         }
       ],
       "view/item/context": [
@@ -3221,6 +3248,11 @@
           "command": "worktreeGraph.agents.showAutoReview",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "3_review@5"
+        },
+        {
+          "command": "worktreeGraph.board.release",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "2_status@2"
         }
       ],
       "worktreeGraph.wt.open": [
@@ -4417,6 +4449,33 @@
           "default": 20,
           "minimum": 0,
           "description": "%config.claude.stuck.minutes.description%"
+        },
+        "worktreeGraph.claude.board": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.claude.board.description%"
+        },
+        "worktreeGraph.claude.claims": {
+          "type": "string",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "block",
+            "off"
+          ],
+          "enumDescriptions": [
+            "%config.claude.claims.enumDescriptions.0%",
+            "%config.claude.claims.enumDescriptions.1%",
+            "%config.claude.claims.enumDescriptions.2%"
+          ],
+          "description": "%config.claude.claims.description%"
+        },
+        "worktreeGraph.claude.claims.hours": {
+          "type": "number",
+          "default": 4,
+          "minimum": 0.25,
+          "maximum": 24,
+          "description": "%config.claude.claims.hours.description%"
         }
       }
     }

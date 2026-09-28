@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const A = require('../out/autopilot/core');
+const B = require('../out/autopilot/board');
 
 let failures = 0;
 const check = async (name, fn) => {
@@ -98,6 +99,53 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.strictEqual(A.usageBlocks(50, 90), false);
     assert.strictEqual(A.usageBlocks(95, 0), false);
     assert.strictEqual(A.usageBlocks(undefined, 90), false);
+  });
+
+  await check('glob das reservas: pasta, *, ** e ?', () => {
+    assert.ok(B.matches('src/auth', 'src/auth/login.ts'));
+    assert.ok(B.matches('src/auth/**', 'src/auth/a/b.ts'));
+    assert.ok(B.matches('src/**/*.ts', 'src/x.ts'));
+    assert.ok(B.matches('src/*.ts', 'src\\x.ts'));
+    assert.ok(!B.matches('src/*.ts', 'src/a/x.ts'));
+    assert.ok(B.matches('./package.json', 'package.json'));
+    assert.ok(!B.matches('src/auth', 'src/authz.ts'));
+    assert.ok(B.matches('a?.ts', 'ab.ts'));
+  });
+
+  await check('reservas: outra worktree não reserva o que já é de alguém; soltar e vencer', () => {
+    const b = { notes: [], claims: [] };
+    const wa = path.join(root, 'wt-a');
+    const wb = path.join(root, 'wt-b');
+    const r1 = B.claim(b, { worktree: wa, branch: 'ai/a', patterns: ['src/auth/**', 'package.json'], note: 'login', now: 1000, hours: 1 });
+    assert.deepStrictEqual(r1.claimed, ['src/auth/**', 'package.json']);
+    const r2 = B.claim(b, { worktree: wb, branch: 'ai/b', patterns: ['src/auth/login.ts', 'src/api/x.ts'], now: 1000, hours: 1 });
+    assert.deepStrictEqual(r2.claimed, ['src/api/x.ts']);
+    assert.strictEqual(r2.taken[0].by.branch, 'ai/a');
+    assert.strictEqual(B.claimOn(b, wb, 'src/auth/login.ts', 2000).branch, 'ai/a');
+    assert.strictEqual(B.claimOn(b, wa, 'src/auth/login.ts', 2000), undefined, 'a própria reserva não bloqueia');
+    assert.strictEqual(B.claimOn(b, wb, 'src/auth/login.ts', 1000 + 3600_000 + 1), undefined, 'vencida');
+    // reservar de novo o mesmo padrão renova em vez de duplicar
+    B.claim(b, { worktree: wa, branch: 'ai/a', patterns: ['package.json'], now: 5000, hours: 2 });
+    assert.strictEqual(b.claims.filter(c => c.pattern === 'package.json').length, 1);
+    assert.strictEqual(B.release(b, wa, ['package.json']), 1);
+    assert.strictEqual(B.release(b, wa), 1);
+    assert.deepStrictEqual(b.claims.map(c => c.branch), ['ai/b']);
+    B.pruneClaims(b, 2000, wt => wt !== wb);
+    assert.strictEqual(b.claims.length, 0, 'worktree que sumiu');
+  });
+
+  await check('mural: notas dos outros desde a última vez, gravado no arquivo', () => {
+    const file = path.join(root, B.BOARD_FILE);
+    const wa = path.join(root, 'wt-a');
+    B.updateBoard(file, b => B.addNote(b, { at: 10, from: 'ai/a', worktree: wa, text: 'mudei a API' }));
+    B.updateBoard(file, b => B.addNote(b, { at: 20, from: 'o usuário', text: 'usem a v2' }));
+    const b = B.readBoard(file);
+    assert.deepStrictEqual(B.notesFor(b, wa, 0).map(n => n.text), ['usem a v2']);
+    assert.deepStrictEqual(B.notesFor(b, path.join(root, 'wt-b'), 0).map(n => n.text), ['mudei a API', 'usem a v2']);
+    assert.deepStrictEqual(B.notesFor(b, path.join(root, 'wt-b'), 10).map(n => n.text), ['usem a v2']);
+    assert.match(B.formatNotes(b.notes), /ai\/a: mudei a API/);
+    for (let i = 0; i < 250; i++) B.addNote(b, { at: 100 + i, from: 'x', text: String(i) });
+    assert.strictEqual(b.notes.length, 200);
   });
 
   fs.rmSync(root, { recursive: true, force: true });

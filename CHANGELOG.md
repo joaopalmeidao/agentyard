@@ -1,6 +1,14 @@
 # Changelog
 
 ## Não lançado
+- **Mural dos agentes**: um agente avisa os outros de uma mudança que os afeta com a ferramenta MCP
+  `post_note` (`read_notes` lê), e você fala com todos de uma vez por **Nota para todos os agentes…**
+  (📣 na view Agentes abertos). As notas novas entram no contexto do próximo prompt de cada Claude do
+  repositório, em qualquer janela (`claude.board`). **Mural dos agentes** mostra as notas e as reservas.
+- **Reserva de arquivos**: antes de uma mudança grande, o agente reserva arquivos ou pastas (glob) com
+  `claim_files`; se outro Claude tentar editá-los, o pedido vem para você com o motivo
+  (`claude.claims: ask`) ou é recusado (`block`). As reservas saem quando a worktree fica pronta,
+  vencem (`claude.claims.hours`) ou com `release_files` / **Soltar as reservas de arquivos**.
 - **Agente travado**: quando o Claude repete o mesmo comando ou a mesma edição várias vezes seguidas
   (`claude.stuck.repeats`, 5), a próxima é recusada com um pedido para ele repensar, e você recebe um
   aviso; um turno trabalhando há `claude.stuck.minutes` (20) sem mudar nenhum arquivo também avisa,

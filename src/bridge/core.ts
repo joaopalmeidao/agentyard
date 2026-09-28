@@ -241,6 +241,43 @@ export const TOOLS: ToolDef[] = [
     readOnly: true,
   },
   {
+    name: 'post_note',
+    description:
+      'Posts a note on the AgentYard board for the other agents working on this repository (they get it with their next prompt). Use it when you change something others depend on: an interface, a schema, a shared file, a decision.',
+    inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'The note: what changed and what the others should do about it.' } }, required: ['text'] },
+  },
+  {
+    name: 'read_notes',
+    description: 'Notes on the AgentYard board from the other agents and from the user.',
+    inputSchema: { type: 'object', properties: { all: { type: 'boolean', description: 'Include your own notes.' } } },
+    readOnly: true,
+  },
+  {
+    name: 'claim_files',
+    description:
+      'Reserves files or folders (globs allowed, relative to the worktree root) before a large change, so other agents are asked before editing them. Released when you finish (mark ready), expire, or with release_files.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        files: { type: 'array', items: { type: 'string' }, description: 'e.g. ["src/auth/**", "package.json"]' },
+        note: { type: 'string', description: 'Why (shown to the others).' },
+        hours: { type: 'number', description: 'How long (default 4, max 24).' },
+      },
+      required: ['files'],
+    },
+  },
+  {
+    name: 'release_files',
+    description: 'Releases your file reservations (all, or only the given patterns).',
+    inputSchema: { type: 'object', properties: { files: { type: 'array', items: { type: 'string' } } } },
+  },
+  {
+    name: 'list_claims',
+    description: 'Files and folders reserved by the agents of this repository.',
+    inputSchema: { type: 'object', properties: {} },
+    readOnly: true,
+  },
+  {
     name: 'auto_review',
     description: "Problems found by AgentYard's automatic review of this branch (another Claude reviews the diff against the base when you finish). Fix the real ones, commit and finish.",
     inputSchema: { type: 'object', properties: {} },

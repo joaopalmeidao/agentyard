@@ -7,6 +7,7 @@ import type { Controller } from '../controller';
 import { keyOf } from '../agentFlow/head';
 import { t } from '../i18n';
 import type { WorktreeView } from '../model';
+import { AgentBoard } from './boardService';
 import { AutoReviewer } from './reviewer';
 import { StopGate } from './stopGate';
 import { StuckWatch } from './stuck';
@@ -37,6 +38,7 @@ export async function worktreeOf(ctl: Controller, arg: WtArg, placeHolder: strin
 export interface Autopilot {
   gate: StopGate;
   reviewer: AutoReviewer;
+  board: AgentBoard;
 }
 
 /**
@@ -64,5 +66,14 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
 
   ctx.subscriptions.push(new StuckWatch(ctl, d.bridge, d.integration, d.agentTerms));
 
-  return { gate, reviewer };
+  const board = new AgentBoard(ctl, d.bridge, d.agentFlow);
+  ctx.subscriptions.push(board);
+  reg('board.show', () => board.show());
+  reg('board.post', () => board.post());
+  reg('board.release', async (arg?: WtArg) => {
+    const w = await worktreeOf(ctl, arg, t('Release the file reservations of which worktree?'));
+    if (w) await board.releaseFor(w.path);
+  });
+
+  return { gate, reviewer, board };
 }

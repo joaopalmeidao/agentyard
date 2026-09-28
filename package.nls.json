@@ -465,5 +465,14 @@
   "command.agents.autoReviewNow.title": "✦ Automatic review now",
   "command.agents.showAutoReview.title": "Show the last automatic review",
   "config.claude.stuck.repeats.description": "Stuck agent: when Claude repeats the same command or edit this many times in a row in a turn, AgentYard refuses the next one asking it to rethink, and warns you. 0 turns it off.",
-  "config.claude.stuck.minutes.description": "Stuck agent: warns when a Claude turn has been running this many minutes without changing any file in the worktree. 0 turns it off."
+  "config.claude.stuck.minutes.description": "Stuck agent: warns when a Claude turn has been running this many minutes without changing any file in the worktree. 0 turns it off.",
+  "config.claude.board.description": "Agent board: new notes from the other agents (post_note) and from you (Note to all agents) go into the context of each Claude's next prompt.",
+  "config.claude.claims.enumDescriptions.0": "Editing a file reserved by another worktree asks for your permission, with the reason.",
+  "config.claude.claims.enumDescriptions.1": "Editing a file reserved by another worktree is refused; Claude gets the reason.",
+  "config.claude.claims.enumDescriptions.2": "Reservations are only informative.",
+  "config.claude.claims.description": "File reservations (claim_files): what happens when a Claude tries to edit a file another worktree reserved.",
+  "config.claude.claims.hours.description": "How long a file reservation lasts when the agent does not say.",
+  "command.board.show.title": "Agent board (notes and reserved files)",
+  "command.board.post.title": "Note to all agents…",
+  "command.board.release.title": "Release file reservations"
 }
