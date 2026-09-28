@@ -414,6 +414,128 @@ export class GitOps implements vscode.Disposable {
     return ok;
   }
 
+  // ---------------------------------------------------------------- trocar de branch
+
+  /**
+   * Troca a branch de uma worktree (git switch). Sem `target`, oferece as branches locais, as remotas
+   * ainda sem branch local e a criação de uma nova. Alterações pendentes vão junto ou para um stash;
+   * com `confirm: false`, sem perguntas (elas vão junto).
+   */
+  async switchBranch(wtPath: string, target?: string, opts: { confirm?: boolean } = {}): Promise<boolean> {
+    const repo = this.repo;
+    const wts = (await repo.worktreesFast()).filter(w => !w.prunable);
+    const same = (p: string) => p.toLowerCase() === wtPath.toLowerCase();
+    const current = wts.find(w => same(w.path))?.branch;
+    const label = current ?? path.basename(wtPath);
+
+    const st = await repo.status(wtPath);
+    if (st.operation) {
+      vscode.window.showWarningMessage(t('{0} is in the middle of a {1}; finish or abort it first.', label, st.operation));
+      return false;
+    }
+
+    // args do git switch e o nome da branch que fica na worktree
+    let args: string[];
+    let dest: string;
+    if (target) {
+      args = [target];
+      dest = target;
+    } else {
+      const refs = await repo.refs();
+      const heads = refs.filter(r => r.kind === 'head');
+      const local = new Set(heads.map(r => r.name));
+      const openIn = new Map(wts.filter(w => w.branch && !same(w.path)).map(w => [w.branch!, w.path]));
+      type Item = vscode.QuickPickItem & { run?: string[]; dest?: string; create?: true; other?: string };
+      const items: Item[] = [{ label: `$(add) ${t('Create new branch from {0}…', label)}`, create: true, alwaysShow: true }];
+      items.push({ label: t('Local branches'), kind: vscode.QuickPickItemKind.Separator });
+      for (const r of heads.filter(r => r.name !== current).sort((x, y) => Number(openIn.has(x.name)) - Number(openIn.has(y.name)) || y.date - x.date)) {
+        const other = openIn.get(r.name);
+        items.push({
+          label: `$(${other ? 'folder' : 'git-branch'}) ${r.name}`,
+          description: other ? t('open in worktree {0}', other) : r.upstream ?? '',
+          detail: r.subject,
+          run: [r.name],
+          dest: r.name,
+          other,
+        });
+      }
+      const remotes = refs.filter(r => r.kind === 'remote' && !local.has(r.name.slice(r.name.indexOf('/') + 1)));
+      if (remotes.length) items.push({ label: t('Remote branches'), kind: vscode.QuickPickItemKind.Separator });
+      for (const r of remotes.sort((x, y) => y.date - x.date)) {
+        const name = r.name.slice(r.name.indexOf('/') + 1);
+        items.push({ label: `$(cloud) ${r.name}`, description: t('creates {0} tracking the remote', name), detail: r.subject, run: ['-c', name, '--track', r.name], dest: name });
+      }
+      const pick = await vscode.window.showQuickPick(items, { placeHolder: t('Switch {0} to which branch?', label), matchOnDescription: true, matchOnDetail: true });
+      if (!pick) return false;
+      if (pick.other) {
+        // o git não deixa a mesma branch em duas worktrees
+        const open = t('Open that worktree');
+        const go = await vscode.window.showInformationMessage(t('{0} is already checked out in the worktree {1}; git does not allow the same branch in two worktrees.', pick.dest!, pick.other), open);
+        if (go) await vscode.commands.executeCommand('worktreeGraph.openWorktree', { path: pick.other });
+        return false;
+      }
+      if (pick.create) {
+        const name = await vscode.window.showInputBox({
+          title: t('New branch from {0}', label),
+          prompt: t('Name of the new branch'),
+          ignoreFocusOut: true,
+          validateInput: async v => {
+            if (!v.trim()) return t('Enter a name.');
+            if (local.has(v.trim())) return t('The branch {0} already exists.', v.trim());
+            return (await repo.run(['check-ref-format', '--branch', v.trim()])).code === 0 ? undefined : t('Invalid branch name.');
+          },
+        });
+        if (!name) return false;
+        args = ['-c', name.trim()];
+        dest = name.trim();
+      } else {
+        args = pick.run!;
+        dest = pick.dest!;
+      }
+    }
+    if (dest === current) return false;
+
+    const { base } = await this.ctl.base();
+    const w = this.ctl.state?.worktrees.find(x => same(x.path));
+    const warn = [
+      current === base ? t('This worktree is on the base {0}.', base) : '',
+      w?.agents.length ? t('Agents open here ({0}) will keep working in the same folder, now on {1}.', w.agents.join(', '), dest) : '',
+    ].filter(Boolean);
+
+    let stashed: string | undefined;
+    const stashMsg = 'worktree-graph: ' + t('before switching from {0} to {1}', label, dest);
+    if (st.changes > 0 && opts.confirm !== false) {
+      const carry = t('Take changes along');
+      const stash = t('Stash and switch');
+      const how = await vscode.window.showWarningMessage(
+        t('{0} has {1} uncommitted change(s).', label, st.changes),
+        { modal: true, detail: [...warn, t('Taking them along only works if they do not collide with {0}; otherwise git refuses and nothing changes.', dest)].join('\n') },
+        carry,
+        stash,
+      );
+      if (!how) return false;
+      if (how === stash) {
+        stashed = await this.stashCreate(wtPath, stashMsg, { quiet: true });
+        if (!stashed) return false;
+      }
+    } else if (warn.length && opts.confirm !== false) {
+      const ok = await vscode.window.showWarningMessage(t('Switch {0} to {1}?', label, dest), { modal: true, detail: warn.join('\n') }, t('Switch'));
+      if (!ok) return false;
+    }
+
+    this.ctl.log(t('git {0}  (in {1})', ['switch', ...args].join(' '), wtPath));
+    const r = await repo.run(['switch', ...args], wtPath, 120_000);
+    this.ctl.scheduleRefresh(50);
+    if (r.code !== 0) {
+      if (stashed) await this.stashApply(stashed, wtPath, true, { quiet: true });
+      vscode.window.showErrorMessage(t('Could not switch to {0}: {1}', dest, (r.stderr || r.stdout).trim()));
+      return false;
+    }
+    if (stashed) vscode.window.showInformationMessage(t('{0} is now on {1}. Your changes are in the stash "{2}" (Worktrees view → Stashes).', label, dest, stashMsg));
+    else vscode.window.setStatusBarMessage(t('$(git-branch) Worktree now on {0}', dest), 4000);
+    return true;
+  }
+
   // ---------------------------------------------------------------- alterações não commitadas
 
   /** Arquivos alterados na worktree (inclusive não rastreados), com as linhas de cada um. */
@@ -866,6 +988,11 @@ export function registerGitOps(ctx: vscode.ExtensionContext, ctl: Controller, gu
     if (!from) return;
     const to = typeof a === 'object' && a?.target ? await ops.pathOf(a.target) : await ops.pickWorktree(t('Move the changes from {0} to…', from.branch ?? path.basename(from.path)), from.path);
     if (to) await ops.moveChanges(from.path, to.path);
+  });
+
+  reg('switchBranch', async (a: any) => {
+    const w = await ops.pathOf(a);
+    if (w) await ops.switchBranch(w.path, typeof a?.target === 'string' ? a.target : undefined);
   });
 
   // alterações não commitadas: arg é a worktree ({ path }) ou arquivos do grupo "Não commitadas" ({ path, file })
