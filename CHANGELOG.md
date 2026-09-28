@@ -7,6 +7,8 @@
   este texto** e revisa antes de enviar. **Nova worktree com tarefa por voz…** (menu da view Worktrees e
   paleta) já começa ditando. No celular, os campos de texto do painel remoto ganham o botão **Ditar**
   (reconhecimento de voz do navegador).
+
+## 0.15.0
 - **Correção: push falhava com o acesso remoto configurado** (`fatal: ']' does not appear to be a git
   repository`). As settings do acesso remoto (`worktreeGraph.remote.enabled`, `.host`, `.publicUrl`…)
   colidiam com `worktreeGraph.remote`, o remote git, que passava a ser lido como objeto. Elas agora são
