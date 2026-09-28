@@ -56,7 +56,7 @@ export function worktreeOfFile(ctl: Controller, file: string) {
 }
 
 /** Texto longo vai para um arquivo temporário, e o Claude recebe a menção dele. */
-function contextFile(name: string, text: string): string {
+export function contextFile(name: string, text: string): string {
   const dir = path.join(os.tmpdir(), 'worktree-graph-prompts');
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${Date.now().toString(36)}-${name}`);

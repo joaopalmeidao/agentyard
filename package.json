@@ -766,6 +766,54 @@
         "category": "AgentYard"
       },
       {
+        "command": "worktreeGraph.claudeConfig.reveal",
+        "title": "%command.claudeConfig.reveal.title%",
+        "category": "AgentYard",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.openFolder",
+        "title": "%command.claudeConfig.openFolder.title%",
+        "category": "AgentYard",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.toggleLearning",
+        "title": "%command.claudeConfig.toggleLearning.title%",
+        "category": "AgentYard",
+        "icon": "$(mortar-board)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.learn",
+        "title": "%command.claudeConfig.learn.title%",
+        "category": "AgentYard",
+        "icon": "$(mortar-board)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.curateMemory",
+        "title": "%command.claudeConfig.curateMemory.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.improveSkill",
+        "title": "%command.claudeConfig.improveSkill.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.moveMemoryToProject",
+        "title": "%command.claudeConfig.moveMemoryToProject.title%",
+        "category": "AgentYard",
+        "icon": "$(arrow-circle-up)"
+      },
+      {
+        "command": "worktreeGraph.claudeConfig.mergeWorktreeMemories",
+        "title": "%command.claudeConfig.mergeWorktreeMemories.title%",
+        "category": "AgentYard",
+        "icon": "$(arrow-circle-up)"
+      },
+      {
         "command": "worktreeGraph.pushBranch",
         "title": "%command.pushBranch.title%",
         "category": "AgentYard",
@@ -1823,9 +1871,24 @@
           "group": "navigation@2"
         },
         {
+          "command": "worktreeGraph.claudeConfig.openFolder",
+          "when": "view == worktreeGraph.claudeSessions",
+          "group": "navigation@3"
+        },
+        {
           "command": "worktreeGraph.claude.refreshSessions",
           "when": "view == worktreeGraph.claudeSessions",
           "group": "navigation@3"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.learn",
+          "when": "view == worktreeGraph.claudeConfig",
+          "group": "navigation@0"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.openFolder",
+          "when": "view == worktreeGraph.claudeConfig",
+          "group": "navigation@0"
         },
         {
           "command": "worktreeGraph.claudeConfig.newSkill",
@@ -2335,6 +2398,16 @@
           "group": "1@2"
         },
         {
+          "command": "worktreeGraph.claudeConfig.learn",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.learn",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "1@3"
+        },
+        {
           "command": "worktreeGraph.claude.copySessionId",
           "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
           "group": "2@1"
@@ -2348,6 +2421,81 @@
           "command": "worktreeGraph.claude.commands",
           "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
           "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.learn",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeLearn$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.curateMemory",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeLearn$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.openFolder",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeLearn$/",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.toggleLearning",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeLearn$/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.learn",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeLearn$/",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.curateMemory",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeLearn$/",
+          "group": "1_edit@3"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.reveal",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeScope-|claudeGroup-)/",
+          "group": "inline@9"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.reveal",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeScope-|claudeGroup-|claudeSettings$|claudeFile$|claudeMemory)/",
+          "group": "2_path@0"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.improveSkill",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSkill|claudeCommand)$/",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.improveSkill",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeSkill|claudeCommand)$/",
+          "group": "1_edit@0"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.curateMemory",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeGroup-memory(Wt)?$/",
+          "group": "1_edit@0"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.moveMemoryToProject",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeMemoryWt$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.moveMemoryToProject",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeMemoryWt$/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.mergeWorktreeMemories",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeGroup-(worktreeMemories|memoryWt)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.mergeWorktreeMemories",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeGroup-(worktreeMemories|memoryWt)$/",
+          "group": "1_edit@1"
         },
         {
           "command": "worktreeGraph.claudeConfig.newSkill",
@@ -2401,22 +2549,22 @@
         },
         {
           "command": "worktreeGraph.claudeConfig.newMemory",
-          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeGroup-memory)$/",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeGroup-memory(Wt)?$/",
           "group": "inline"
         },
         {
           "command": "worktreeGraph.claudeConfig.checkMemoryIndex",
-          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeGroup-memory)$/",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeGroup-memory(Wt)?$/",
           "group": "1_edit@1"
         },
         {
           "command": "worktreeGraph.claudeConfig.revealMemory",
-          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeGroup-memory)$/",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeGroup-memory(Wt)?$/",
           "group": "2_path@1"
         },
         {
           "command": "worktreeGraph.claudeConfig.deleteMemory",
-          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^(claudeMemory)$/",
+          "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeMemory(Wt)?$/",
           "group": "9_danger"
         },
         {
@@ -3106,6 +3254,18 @@
         },
         {
           "command": "worktreeGraph.claudeConfig.revealMemory",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.reveal",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.improveSkill",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.claudeConfig.moveMemoryToProject",
           "when": "false"
         },
         {

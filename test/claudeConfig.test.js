@@ -124,5 +124,42 @@ check('memória: criar atualiza o índice; excluir remove a linha; verificar ín
   assert.ok(!fs.existsSync(file));
 });
 
+const L = require('../out/claude/learn');
+
+check('aprender com o uso: bloco no CLAUDE.md entra uma vez e sai sem mexer no resto', () => {
+  const orig = '# Minhas regras\n\n- responder em pt-BR\n';
+  const on = L.withLearningBlock(orig);
+  assert.ok(L.hasLearningBlock(on) && on.startsWith(orig.trimEnd() + '\n\n'));
+  assert.strictEqual(L.withLearningBlock(on), on);
+  assert.strictEqual(L.withoutLearningBlock(on), orig);
+  assert.strictEqual(L.withoutLearningBlock(L.withLearningBlock('')), '');
+  const middle = L.withLearningBlock('a\n') + '\n# depois\n';
+  assert.strictEqual(L.withoutLearningBlock(middle), 'a\n\n# depois\n');
+  assert.strictEqual(L.withoutLearningBlock(orig), orig);
+});
+
+check('aprender com o uso: pedidos citam onde gravar', () => {
+  const x = { memoryDir: '/m/memory', userSkillsDir: '/c/skills', projectSkillsDir: '/r/.claude/skills' };
+  for (const p of [L.learnPrompt(x), L.curateMemoryPrompt(x)]) for (const d of Object.values(x)) assert.ok(p.includes(d), d);
+  assert.ok(!L.learnPrompt({ userSkillsDir: '/c/skills' }).includes('Memory folder'));
+  assert.ok(L.improveSkillPrompt('/c/skills/x/SKILL.md').includes('/c/skills/x/SKILL.md'));
+});
+
+check('memória de worktree vai para o projeto com índice e nomes repetidos', () => {
+  const wt = path.join(root, 'mem-wt');
+  const proj = path.join(root, 'mem-proj');
+  C.createMemory(wt, { type: 'project', title: 'Build lento', description: 'usar cache', body: 'x' });
+  C.createMemory(wt, { type: 'user', title: 'Quem sou', description: 'dev', body: 'y' });
+  C.createMemory(proj, { type: 'project', title: 'Build lento', description: 'antigo', body: 'z' });
+  const moved = L.moveMemory(wt, 'build-lento.md', proj);
+  assert.ok(moved.endsWith('build-lento-2.md'));
+  assert.deepStrictEqual(C.checkIndex(proj), { missingInIndex: [], dangling: [] });
+  assert.deepStrictEqual(C.checkIndex(wt), { missingInIndex: [], dangling: [] });
+  L.moveAllMemories(wt, proj);
+  assert.ok(!fs.existsSync(wt));
+  assert.deepStrictEqual(C.listMemories(proj).map(m => m.fileName).sort(), ['build-lento-2.md', 'build-lento.md', 'quem-sou.md']);
+  assert.ok(C.listMemories(proj).every(m => m.indexed));
+});
+
 fs.rmSync(root, { recursive: true, force: true });
 if (failures) process.exit(1);

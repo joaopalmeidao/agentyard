@@ -2,8 +2,12 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
+import type { AgentTerminals, OpenAgent } from '../agents';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
+import { contextFile, mentionOf, pickClaude } from './sendContext';
+import type { ClaudeService, SessionItem } from './view';
+import { curateMemoryPrompt, hasLearningBlock, improveSkillPrompt, learningBlock, LearnTargets, learnPrompt, moveAllMemories, moveMemory, withLearningBlock, withoutLearningBlock } from './learn';
 import {
   addIndexLine,
   addPermission,
@@ -49,13 +53,13 @@ export class ScopeNode extends vscode.TreeItem {
 
 export class GroupNode extends vscode.TreeItem {
   readonly kind = 'group';
-  constructor(readonly scope: Scope, readonly group: Group, label: string, count: number | string, readonly memDir?: string, readonly cwd?: string, warn?: string) {
+  constructor(readonly scope: Scope, readonly group: Group, label: string, count: number | string, readonly memDir?: string, readonly cwd?: string, warn?: string, worktree = false) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `claudeConfig:${scope}:${group}:${cwd ?? ''}`;
     this.description = `${count}${warn ? '  ⚠' : ''}`;
     this.tooltip = warn ?? (memDir ? memDir : undefined);
     this.iconPath = new vscode.ThemeIcon({ skills: 'lightbulb', commands: 'terminal', config: 'settings-gear', memory: 'book', worktreeMemories: 'git-branch' }[group]);
-    this.contextValue = `claudeGroup-${group}`;
+    this.contextValue = `claudeGroup-${group}${worktree ? 'Wt' : ''}`;
   }
 }
 
@@ -99,13 +103,13 @@ export class ConfigNode extends vscode.TreeItem {
 
 export class MemoryNode extends vscode.TreeItem {
   readonly kind = 'memory';
-  constructor(readonly entry: MemoryEntry, readonly memDir: string) {
+  constructor(readonly entry: MemoryEntry, readonly memDir: string, worktree = false) {
     super(entry.name, vscode.TreeItemCollapsibleState.None);
     this.description = [entry.type, entry.indexed ? '' : '⚠ ' + t('not in the index'), entry.error ? `⚠ ${entry.error}` : ''].filter(Boolean).join(' · ');
     this.tooltip = new vscode.MarkdownString(`**${entry.name}** (${entry.type})\n\n${entry.description}\n\n\`${entry.file}\``);
     this.iconPath = new vscode.ThemeIcon({ user: 'person', feedback: 'comment-discussion', project: 'project', reference: 'link' }[entry.type] ?? 'note');
     this.resourceUri = vscode.Uri.file(entry.file);
-    this.contextValue = 'claudeMemory';
+    this.contextValue = worktree ? 'claudeMemoryWt' : 'claudeMemory';
     this.command = { command: 'vscode.open', title: t('Open'), arguments: [vscode.Uri.file(entry.file)] };
     this.label = entry.name;
   }
@@ -121,7 +125,33 @@ class InfoNode extends vscode.TreeItem {
   }
 }
 
-type Node = ScopeNode | GroupNode | SkillNode | ConfigNode | MemoryNode | InfoNode;
+/** "Aprender com o uso": liga/desliga o bloco no CLAUDE.md do usuário e dá acesso às ações de aprendizado. */
+export class LearnNode extends vscode.TreeItem {
+  readonly kind = 'learn';
+  constructor(on: boolean) {
+    super(t('Learn from use'), vscode.TreeItemCollapsibleState.None);
+    this.id = 'claudeConfig:learn';
+    this.description = on ? t('on · Claude saves memories and skills by itself') : t('off · click to turn on');
+    this.tooltip = new vscode.MarkdownString(
+      [
+        on ? t('**On**: your CLAUDE.md asks Claude to save corrections as memories and repeated procedures as skills while it works.') : t('**Off**: Claude only saves what you ask for.'),
+        '',
+        on ? t('Click to turn it off.') : t('Click to turn it on.'),
+        t('The buttons on the right make Claude learn from the current session or tidy up the memory.'),
+      ].join('\n\n'),
+    );
+    this.iconPath = new vscode.ThemeIcon('mortar-board', on ? new vscode.ThemeColor('charts.green') : undefined);
+    this.contextValue = 'claudeLearn';
+    this.command = { command: 'worktreeGraph.claudeConfig.toggleLearning', title: t('Learn from use') };
+  }
+}
+
+type Node = LearnNode | ScopeNode | GroupNode | SkillNode | ConfigNode | MemoryNode | InfoNode;
+
+export interface ClaudeConfigDeps {
+  agentTerms?: AgentTerminals;
+  claude?: ClaudeService;
+}
 
 /** View "Claude: configuração": skills, comandos, configurações e memória, do usuário e do projeto ativo. */
 export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscode.Disposable {
@@ -131,7 +161,10 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
   private readonly disposables: vscode.Disposable[] = [this.emitter];
   private debounce?: NodeJS.Timeout;
 
-  constructor(private readonly ctl: Controller) {
+  constructor(
+    private readonly ctl: Controller,
+    private readonly deps: ClaudeConfigDeps = {},
+  ) {
     this.disposables.push(
       ctl.onDidChangeRepo(() => {
         this.watch();
@@ -182,7 +215,7 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
     const proj = this.projectDir();
     try {
       if (!n) {
-        const out: Node[] = [new ScopeNode('user', t('User'), dir.replace(os.homedir(), '~'))];
+        const out: Node[] = [new LearnNode(this.learningOn()), new ScopeNode('user', t('User'), dir.replace(os.homedir(), '~'))];
         if (proj) out.push(new ScopeNode('project', t('Project: {0}', path.basename(proj)), proj));
         return out;
       }
@@ -216,7 +249,7 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
         if (n.group === 'worktreeMemories') {
           return this.worktreeMemories().map(w => {
             const mem = this.memoryDir(w.path)!;
-            return new GroupNode('project', 'memory', w.name, listMemories(mem).length, mem, w.path);
+            return new GroupNode('project', 'memory', w.name, listMemories(mem).length, mem, w.path, undefined, true);
           });
         }
       }
@@ -227,6 +260,7 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
   }
 
   private memoryChildren(mem: string): Node[] {
+    const worktree = mem !== this.memoryDir();
     const out: Node[] = [];
     const chk = checkIndex(mem);
     if (chk.missingInIndex.length || chk.dangling.length) {
@@ -239,7 +273,7 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
         ),
       );
     }
-    out.push(...listMemories(mem).map(m => new MemoryNode(m, mem)));
+    out.push(...listMemories(mem).map(m => new MemoryNode(m, mem, worktree)));
     if (fs.existsSync(path.join(mem, 'MEMORY.md'))) {
       const idx = path.join(mem, 'MEMORY.md');
       out.push(new InfoNode(t('MEMORY.md (index)'), idx, { command: 'vscode.open', title: t('Open'), arguments: [vscode.Uri.file(idx)] }, 'list-unordered'));
@@ -462,6 +496,206 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
     this.refresh();
   }
 
+  // ------------------------------------------------------------ aprender com o uso
+
+  private userClaudeMd() {
+    return path.join(this.claudeDir(), 'CLAUDE.md');
+  }
+
+  learningOn(): boolean {
+    try {
+      return hasLearningBlock(fs.readFileSync(this.userClaudeMd(), 'utf8'));
+    } catch {
+      return false;
+    }
+  }
+
+  /** Liga/desliga o bloco "Aprender com o uso" no CLAUDE.md do usuário (vale para as próximas sessões). */
+  async toggleLearning() {
+    const file = this.userClaudeMd();
+    const cur = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    const on = hasLearningBlock(cur);
+    const go = on ? t('Turn off') : t('Turn on');
+    const ok = await vscode.window.showInformationMessage(
+      on ? t('Stop asking Claude to learn from use?') : t('Ask Claude to learn from use?'),
+      {
+        modal: true,
+        detail: on
+          ? t('The block is removed from {0}. Memories and skills already saved stay.', file)
+          : t('This block goes into {0} and applies to new sessions in every project:', file) + '\n\n' + learningBlock().split('\n').slice(1, -1).join('\n'),
+      },
+      go,
+    );
+    if (ok !== go) return;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, on ? withoutLearningBlock(cur) : withLearningBlock(cur));
+    this.refresh();
+    vscode.window.showInformationMessage(on ? t('Learning from use turned off.') : t('Learning from use turned on: new Claude sessions will save memories and skills as they work.'));
+  }
+
+  /** Onde o Claude grava o que aprende, para um Claude aberto em `cwd`. */
+  learnTargets(cwd: string): LearnTargets {
+    const key = (p: string) => path.normalize(p).toLowerCase();
+    const inProject = this.ctl.state?.worktrees.some(w => key(w.path) === key(cwd));
+    return {
+      memoryDir: inProject ? this.memoryDir() : memoryDirFor(this.claudeDir(), cwd),
+      userSkillsDir: path.join(this.claudeDir(), 'skills'),
+      projectSkillsDir: path.join(cwd, '.claude', 'skills'),
+    };
+  }
+
+  /** Claude do terminal ativo; senão pergunta (o da worktree atual primeiro). */
+  private async targetClaude(placeHolder: string): Promise<OpenAgent | undefined> {
+    const terms = this.deps.agentTerms;
+    if (!terms) throw new Error(t('Claude terminals are not available.'));
+    const active = vscode.window.activeTerminal && terms.byTerminal(vscode.window.activeTerminal);
+    if (active?.claude) return active;
+    return pickClaude(this.ctl, terms, this.ctl.state?.worktrees.find(w => w.isCurrent), placeHolder);
+  }
+
+  /** Manda um pedido longo (vai num arquivo, o Claude recebe a menção) e aperta Enter. */
+  private async ask(target: OpenAgent, name: string, prompt: string, lead: string) {
+    const file = contextFile(name, prompt);
+    await this.deps.agentTerms!.type(target, `${lead} ${mentionOf(file, target.path)}`, true);
+  }
+
+  /** "Aprender com esta sessão": a sessão do item (retomada se estiver fechada) ou um Claude aberto. */
+  async learn(item?: SessionItem) {
+    let target: OpenAgent | undefined;
+    if (item?.session) {
+      if (!this.deps.claude) throw new Error(t('Claude sessions are not available.'));
+      target = await this.deps.claude.resume(item.session);
+    } else {
+      target = await this.targetClaude(t('Which Claude should learn from its session?'));
+    }
+    if (!target) return;
+    await this.ask(target, 'learn.md', learnPrompt(this.learnTargets(target.path)), t('Learn from this session following'));
+  }
+
+  async curateMemory(arg?: GroupNode) {
+    const target = await this.targetClaude(t('Which Claude should tidy up the memory?'));
+    if (!target) return;
+    const targets = { ...this.learnTargets(target.path), ...(arg?.memDir ? { memoryDir: arg.memDir } : {}) };
+    await this.ask(target, 'memory.md', curateMemoryPrompt(targets), t('Tidy up the memory following'));
+  }
+
+  async improveSkill(n: SkillNode) {
+    if (n.entry.readOnly) throw new Error(t('Synced skill: managed by Claude.'));
+    const target = await this.targetClaude(t('Which Claude should improve {0}?', n.entry.name));
+    if (!target) return;
+    await this.ask(target, 'skill.md', improveSkillPrompt(n.entry.file), t('Improve the skill following'));
+  }
+
+  /** Memória que ficou na pasta de uma worktree vai para a do projeto (que sobrevive à worktree). */
+  async moveMemoryToProject(n: MemoryNode) {
+    const dst = this.memoryDir();
+    if (!dst) throw new Error(t('No active project.'));
+    const file = moveMemory(n.memDir, n.entry.fileName, dst);
+    this.refresh();
+    vscode.window.showInformationMessage(t('{0} moved to the project memory: {1}', n.entry.name, path.basename(file)));
+  }
+
+  async mergeWorktreeMemories(n?: GroupNode) {
+    const dst = this.memoryDir();
+    if (!dst) throw new Error(t('No active project.'));
+    const dirs = n?.memDir ? [n.memDir] : this.worktreeMemories().map(w => this.memoryDir(w.path)!);
+    const count = dirs.reduce((k, d) => k + listMemories(d).length, 0);
+    if (!count) {
+      vscode.window.showInformationMessage(t('No worktree memories to move.'));
+      return;
+    }
+    const go = t('Move');
+    const ok = await vscode.window.showInformationMessage(
+      t('Move {0} memory file(s) to the project memory?', count),
+      { modal: true, detail: t('They go to {0} and into its MEMORY.md, so they are not lost when the worktree is removed. Repeated names get a suffix.', dst) },
+      go,
+    );
+    if (ok !== go) return;
+    for (const d of dirs) moveAllMemories(d, dst);
+    this.refresh();
+  }
+
+  // ------------------------------------------------------------ pastas
+
+  /** Pasta (ou arquivo) de um nó da view. */
+  pathOf(n: Node): string | undefined {
+    const proj = this.projectDir();
+    const base = (scope: Scope) => (scope === 'user' ? this.claudeDir() : proj && path.join(proj, '.claude'));
+    if (n instanceof ScopeNode) return base(n.scope);
+    if (n instanceof GroupNode) {
+      if (n.group === 'memory') return n.memDir;
+      if (n.group === 'worktreeMemories') return path.join(this.claudeDir(), 'projects');
+      if (n.group === 'config') return n.scope === 'user' ? this.claudeDir() : proj;
+      const b = base(n.scope);
+      return b && path.join(b, n.group);
+    }
+    if (n instanceof SkillNode) return n.entry.dir ?? n.entry.file;
+    if (n instanceof MemoryNode) return n.entry.file;
+    if (n instanceof ConfigNode) return n.cfg.file;
+    return undefined;
+  }
+
+  /** Abre a pasta no gerenciador de arquivos (Explorer, Finder…); arquivo: a pasta dele, com ele selecionado. */
+  async openInOS(p: string) {
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) return vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(p));
+    let dir = p;
+    while (!fs.existsSync(dir) && path.dirname(dir) !== dir) dir = path.dirname(dir);
+    return vscode.env.openExternal(vscode.Uri.file(dir));
+  }
+
+  /** Escolhe entre as pastas do Claude (usuário, projeto, memória, sessões) e abre no sistema ou no VS Code. */
+  async openFolder() {
+    const dir = this.claudeDir();
+    const proj = this.projectDir();
+    type It = vscode.QuickPickItem & { p?: string };
+    const inWindow = { iconPath: new vscode.ThemeIcon('empty-window'), tooltip: t('Open in a new VS Code window') };
+    const addWs = { iconPath: new vscode.ThemeIcon('root-folder'), tooltip: t('Add to the workspace') };
+    const item = (label: string, p: string | undefined, detail?: string): It | undefined =>
+      p ? { label, description: p.replace(os.homedir(), '~') + (fs.existsSync(p) ? '' : '  ' + t('(does not exist yet)')), detail, p, buttons: [inWindow, addWs] } : undefined;
+    const sessionsDir = proj ? path.dirname(this.memoryDir(proj)!) : undefined;
+    const items = [
+      { label: t('User'), kind: vscode.QuickPickItemKind.Separator } as It,
+      item('$(folder) ' + t('Claude folder'), dir, t('settings.json, CLAUDE.md, skills, commands, sessions and memory')),
+      item('$(lightbulb) ' + t('User skills'), path.join(dir, 'skills')),
+      item('$(terminal) ' + t('User commands'), path.join(dir, 'commands')),
+      item('$(folder-library) ' + t('All projects (sessions and memory)'), path.join(dir, 'projects')),
+      ...(proj
+        ? [
+            { label: t('Project: {0}', path.basename(proj)), kind: vscode.QuickPickItemKind.Separator } as It,
+            item('$(repo) ' + t('.claude folder of the project'), path.join(proj, '.claude')),
+            item('$(lightbulb) ' + t('Project skills'), path.join(proj, '.claude', 'skills')),
+            item('$(book) ' + t('Project memory'), this.memoryDir(proj)),
+            item('$(comment-discussion) ' + t('Project sessions (.jsonl transcripts)'), sessionsDir),
+          ]
+        : []),
+    ].filter((x): x is It => !!x);
+    const qp = vscode.window.createQuickPick<It>();
+    qp.title = t('Claude files');
+    qp.placeholder = t('Pick a folder to open in the file manager (buttons: new window, add to workspace)');
+    qp.items = items;
+    const done = new Promise<void>(resolve => {
+      qp.onDidAccept(() => {
+        const p = qp.selectedItems[0]?.p;
+        qp.hide();
+        if (p) void this.openInOS(p);
+      });
+      qp.onDidTriggerItemButton(e => {
+        const p = e.item.p;
+        if (!p) return;
+        qp.hide();
+        fs.mkdirSync(p, { recursive: true });
+        if (e.button === inWindow) void vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(p), { forceNewWindow: true });
+        else vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders?.length ?? 0, 0, { uri: vscode.Uri.file(p), name: `claude: ${path.basename(p)}` });
+      });
+      qp.onDidHide(() => {
+        qp.dispose();
+        resolve();
+      });
+    });
+    qp.show();
+    await done;
+  }
+
   dispose() {
     this.watchers.forEach(w => w.dispose());
     this.disposables.forEach(d => d.dispose());
@@ -469,8 +703,8 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
 }
 
 /** Registra a view e os comandos; devolve o serviço (usado nos testes). */
-export function registerClaudeConfig(ctx: vscode.ExtensionContext, ctl: Controller): ClaudeConfigService {
-  const svc = new ClaudeConfigService(ctl);
+export function registerClaudeConfig(ctx: vscode.ExtensionContext, ctl: Controller, deps: ClaudeConfigDeps = {}): ClaudeConfigService {
+  const svc = new ClaudeConfigService(ctl, deps);
   const view = vscode.window.createTreeView('worktreeGraph.claudeConfig', { treeDataProvider: svc, showCollapseAll: true });
   ctx.subscriptions.push(svc, view, ctl.onDidChange(() => svc.refresh()));
   const reg = (id: string, fn: (...a: any[]) => unknown) =>
@@ -498,7 +732,18 @@ export function registerClaudeConfig(ctx: vscode.ExtensionContext, ctl: Controll
   reg('checkMemoryIndex', n => svc.checkMemoryIndex(n));
   reg('revealMemory', (n?: GroupNode) => {
     const mem = n?.memDir ?? svc.memoryDir();
-    if (mem) return vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(fs.existsSync(mem) ? mem : path.dirname(mem)));
+    if (mem) return svc.openInOS(mem);
   });
+  reg('reveal', (n?: Node) => {
+    const p = n ? svc.pathOf(n) : svc.claudeDir();
+    if (p) return svc.openInOS(p);
+  });
+  reg('openFolder', () => svc.openFolder());
+  reg('toggleLearning', () => svc.toggleLearning());
+  reg('learn', (item?: SessionItem) => svc.learn(item));
+  reg('curateMemory', (n?: GroupNode) => svc.curateMemory(n));
+  reg('improveSkill', (n: SkillNode) => svc.improveSkill(n));
+  reg('moveMemoryToProject', (n: MemoryNode) => svc.moveMemoryToProject(n));
+  reg('mergeWorktreeMemories', (n?: GroupNode) => svc.mergeWorktreeMemories(n));
   return svc;
 }

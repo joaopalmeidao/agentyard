@@ -406,8 +406,11 @@ exports.run = async () => {
   await check('Claude: configuração lista skill, comando, settings e memória sintéticos; nova memória entra no índice', async () => {
     const svc = api.claudeConfig;
     await vscode.commands.executeCommand('worktreeGraph.claudeConfig.focus');
-    const scopes = svc.getChildren();
+    const root = svc.getChildren();
+    assert.strictEqual(root[0].kind, 'learn', 'nó "Aprender com o uso" no topo');
+    const scopes = root.slice(1);
     assert.deepStrictEqual(scopes.map(n => n.scope), ['user', 'project']);
+    assert.strictEqual(svc.pathOf(scopes[0]), svc.claudeDir());
     const userGroups = svc.getChildren(scopes[0]);
     const skills = svc.getChildren(userGroups.find(g => g.group === 'skills'));
     assert.ok(skills.some(n => n.entry && n.entry.name === 'revisar-pr'), 'skill sintética');
