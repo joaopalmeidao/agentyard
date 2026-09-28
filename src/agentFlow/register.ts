@@ -48,6 +48,8 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     const analyze = t('Analyze merge');
     // Mesma fila de merge da view (destino: a base); o merge sai quando chegar a vez dela.
     const queue = t('Add to merge queue → {0}', (await ctl.base()).base);
+    // Na fila com o Claude já autorizado: se der conflito, ele resolve sozinho e a fila segue.
+    const queueAuthorized = t('✦ Queue (Claude resolves conflicts)');
     const publish = t('Publish {0}', L);
     const openTerminal = t('Open terminal');
     const pick = await vscode.window.showInformationMessage(
@@ -57,6 +59,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
           : t('{0}: the agent finished. Ready for review.', name)),
       review,
       queue,
+      queueAuthorized,
       analyze,
       publish,
       openTerminal,
@@ -65,6 +68,7 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     if (pick !== openTerminal) await watch.clearReady(r.path);
     if (pick === review && r.branch) await actions.diffWithBase(ctl, r.branch);
     if (pick === queue && r.branch) await vscode.commands.executeCommand('worktreeGraph.mergeQueue.add', r.branch);
+    if (pick === queueAuthorized && r.branch) await vscode.commands.executeCommand('worktreeGraph.mergeQueue.addAuthorized', r.branch);
     if (pick === analyze && r.branch) await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', r.branch);
     if (pick === publish && r.branch) await ctl.requests.publish(r.branch);
     if (pick === openTerminal) await actions.openTerminal(ctl, { path: r.path });

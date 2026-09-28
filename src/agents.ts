@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
-import { AGENT_FILE_SUFFIXES, AgentState, EventTail, HookEvent, insertArgs, instrumentCommand, isClaudeCommand, nextState, pruneEvents, withIdeFlag, writeHookSettings } from './claude/hooks';
+import { AGENT_FILE_SUFFIXES, AgentState, EventTail, HookEvent, insertArgs, instrumentCommand, isClaudeCommand, nextState, pruneEvents, withIdeFlag, withoutPermissionArgs, writeHookSettings } from './claude/hooks';
 import { describeToolRequest } from './claude/guard';
 import { t } from './i18n';
 
@@ -114,6 +114,8 @@ export interface StartOptions {
   id?: string;
   /** Projeto longo que abre o terminal. */
   project?: string;
+  /** Modo de permissão do Claude (`--permission-mode`); vale sobre o de `claude.extraArgs`. */
+  permissionMode?: string;
 }
 
 /** O que a ponte com o AgentYard (src/bridge) acrescenta ao Claude aberto: hooks e servidor MCP. */
@@ -563,7 +565,11 @@ export class AgentTerminals implements vscode.Disposable {
   async start(worktreePath: string, branch: string | undefined, agent: string, command: string, opts: StartOptions = {}): Promise<OpenAgent> {
     const id = opts.id ?? newAgentId();
     const claude = isClaudeCommand(command);
-    if (claude && !opts.noExtraArgs) command = insertArgs(command, this.ctl.cfg().get<string>('claude.extraArgs', ''));
+    if (claude && !opts.noExtraArgs) {
+      const extra = this.ctl.cfg().get<string>('claude.extraArgs', '');
+      command = insertArgs(command, opts.permissionMode ? withoutPermissionArgs(extra) : extra);
+    }
+    if (claude && opts.permissionMode && !/(^|\s)--permission-mode(\s|=)/.test(command)) command = insertArgs(command, `--permission-mode ${opts.permissionMode}`);
     if (claude && this.ctl.cfg().get<boolean>('claude.connectIde', false)) command = withIdeFlag(command);
     const preserveFocus = keepsFocus(this.ctl.cfg().get<string>('agentTerminalFocus', 'interactive'), !!opts.task);
     let hooks = false;
@@ -657,13 +663,13 @@ export class AgentTerminals implements vscode.Disposable {
   }
 
   /** Abre um terminal novo com o agente já recebendo `prompt` como tarefa. */
-  async launchWithPrompt(worktreePath: string, branch: string | undefined, prompt: string, agentName?: string): Promise<void> {
+  async launchWithPrompt(worktreePath: string, branch: string | undefined, prompt: string, agentName?: string, opts: { permissionMode?: string } = {}): Promise<void> {
     const agent = await this.pickAgent(worktreePath, branch, agentName ?? agents(this.ctl)[0]?.name);
     if (!agent) return;
     const p = promptArgument(prompt);
     this.lastPromptFile = p.file;
     const command = promptCommandOf(agent).replace(/\{prompt\}/g, () => p.arg).trim();
-    await this.start(worktreePath, branch, agent.name, command, { task: true, prompt });
+    await this.start(worktreePath, branch, agent.name, command, { task: true, prompt, permissionMode: opts.permissionMode });
     this.ctl.log(t('Agent {0} with a task in {1} (prompt in {2})', agent.name, worktreePath, p.file));
   }
 

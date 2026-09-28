@@ -80,6 +80,8 @@ export class MergePanel {
         return this.onPublish(a.source);
       case 'queue':
         return vscode.commands.executeCommand('worktreeGraph.mergeQueue.add', a.source, a.target);
+      case 'queueAuthorized':
+        return vscode.commands.executeCommand('worktreeGraph.mergeQueue.addAuthorized', a.source, a.target);
       case 'rechain':
         if (this.migrations && (await applyRechain(this.ctl, this.migrations, { commit: true }))) {
           vscode.window.showInformationMessage(t('Migrations from {0} rechained after {1}.', this.migrations.branch, this.migrations.onto));
@@ -146,6 +148,7 @@ export class MergePanel {
         ${canPublish ? `<button data-action="publish">${t('Publish {0}', this.ctl.requests?.label ?? 'PR')}</button>` : ''}
         ${a.conflicts.length ? `<button data-action="resolve" class="agent" title="${t('Opens the agent in the worktree with the task of bringing in {0} and resolving the conflicts', esc(a.target === this.ctl.state?.base ? a.target : a.source))}">✦ ${t('Ask {0} to merge and resolve', esc(resolverName(this.ctl)))}</button>` : ''}
         ${a.incoming.length ? `<button data-action="queue" title="${t('Queue {0} to go into {1}; the queue merges one branch at a time and hands conflicts to the agent', esc(a.source), esc(a.target))}">${t('Add to merge queue')}</button>` : ''}
+        ${a.incoming.length ? `<button data-action="queueAuthorized" class="agent" title="${t('Queue {0} and authorize {1} to resolve conflicts on its own when its turn comes', esc(a.source), esc(resolverName(this.ctl)))}">✦ ${t('Queue and let {0} resolve', esc(resolverName(this.ctl)))}</button>` : ''}
         <button data-action="merge" class="primary" ${a.incoming.length ? '' : 'disabled'}>${t('Merge {0} into {1}', esc(a.source), esc(a.target))}</button>
         <button data-action="refresh" title="${t('Run the simulation again')}">↻</button></div></header>
       <div class="verdict ${verdict.cls}">${esc(verdict.text)}</div>

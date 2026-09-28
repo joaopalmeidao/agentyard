@@ -10,7 +10,7 @@ Module._resolveFilename = function (r, ...a) {
   return r === 'vscode' ? 'vscode' : orig.call(this, r, ...a);
 };
 require.cache.vscode = { id: 'vscode', filename: 'vscode', loaded: true, exports: {} };
-const { hookCommand, hookSettings, writeHookSettings, isClaudeCommand, instrumentCommand, insertArgs, claudeArgs, withIdeFlag, parseEvents, nextState, EventTail, pruneEvents } = require('../out/claude/hooks');
+const { hookCommand, hookSettings, writeHookSettings, isClaudeCommand, instrumentCommand, insertArgs, claudeArgs, withIdeFlag, withoutPermissionArgs, parseEvents, nextState, EventTail, pruneEvents } = require('../out/claude/hooks');
 const { mentionOf, selectionLines, diagnosticsText } = require('../out/claude/sendContext');
 const { placementOf, keepsFocus } = require('../out/agents');
 const { pickRelevant, insideFolders } = require('../out/claude/terminalUx');
@@ -50,6 +50,13 @@ check('hooks extras da ponte entram junto dos de estado', () => {
   assert.strictEqual(s.hooks.Stop.length, 2);
   const f = writeHookSettings(dir, { Stop: [] }, 'outro.settings.json');
   assert.ok(f.endsWith('outro.settings.json'));
+});
+
+check('withoutPermissionArgs tira só o modo de permissão', () => {
+  assert.strictEqual(withoutPermissionArgs('--model opus --permission-mode plan --verbose'), '--model opus --verbose');
+  assert.strictEqual(withoutPermissionArgs('--permission-mode=acceptEdits'), '');
+  assert.strictEqual(withoutPermissionArgs('--dangerously-skip-permissions --model opus'), '--model opus');
+  assert.strictEqual(withoutPermissionArgs('--model opus'), '--model opus');
 });
 
 check('insertArgs e claudeArgs', () => {
