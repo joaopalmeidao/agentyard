@@ -39,7 +39,7 @@ check('instrumentCommand põe --settings logo depois do claude', () => {
   assert.strictEqual(instrumentCommand('claude (Get-Content -Raw x)', 'C:\\a b\\s.json'), 'claude --settings "C:\\a b\\s.json" (Get-Content -Raw x)');
   assert.strictEqual(instrumentCommand('codex', '/s.json'), 'codex');
   assert.strictEqual(instrumentCommand('claude --settings mine.json', '/s.json'), 'claude --settings mine.json');
-  assert.strictEqual(instrumentCommand('claude -c', '/s.json', '/m.json'), 'claude --settings "/s.json" --mcp-config "/m.json" -c');
+  assert.strictEqual(instrumentCommand('claude -c', '/s.json', '/m.json'), 'claude --settings "/s.json" --mcp-config="/m.json" -c');
   assert.strictEqual(instrumentCommand('claude --mcp-config x.json', '/s.json', '/m.json'), 'claude --settings "/s.json" --mcp-config x.json');
   assert.strictEqual(instrumentCommand('codex', '/s.json', '/m.json'), 'codex');
 });
