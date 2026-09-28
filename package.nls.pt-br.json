@@ -351,5 +351,21 @@
   "config.claude.connectIde.markdownDescription": "Abre o Claude Code com `--ide`, conectando-o ao VS Code ao abrir (diffs no editor, seleção e problemas compartilhados). Precisa da extensão do Claude Code e da worktree dentro do workspace.",
   "config.claude.ideWorkspace.markdownDescription": "O Claude só se conecta ao VS Code (`/ide`) quando a pasta dele está dentro do workspace. Quando um Claude abre numa worktree fora dele (e a extensão do Claude Code está instalada), oferecer adicionar a worktree como pasta do workspace.",
   "config.claude.ideWorkspace.enumDescriptions.0": "Perguntar uma vez por worktree.",
-  "config.claude.ideWorkspace.enumDescriptions.1": "Nunca perguntar."
+  "config.claude.ideWorkspace.enumDescriptions.1": "Nunca perguntar.",
+  "view.longProjects.name": "Projetos longos",
+  "welcome.longProjects.1": "Projetos grandes demais para uma sessão do agente: ele planeja os marcos e depois faz um marco por sessão nova. O plano e o diário ficam no repositório, e o agente só pode parar com o checklist do marco feito, o progresso anotado, tudo commitado e a verificação passando.\n[Novo projeto longo](command:worktreeGraph.longProjects.new)",
+  "command.longProjects.new.title": "Novo projeto longo…",
+  "command.longProjects.start.title": "Iniciar / continuar",
+  "command.longProjects.pause.title": "Pausar (não avançar sozinho)",
+  "command.longProjects.replan.title": "Planejar de novo com o agente",
+  "command.longProjects.openPlan.title": "Abrir plano (PLAN.md)",
+  "command.longProjects.openProgress.title": "Abrir diário (PROGRESS.md)",
+  "command.longProjects.showTerminal.title": "Ir para o terminal do agente",
+  "command.longProjects.verify.title": "Rodar a verificação agora",
+  "command.longProjects.retryMilestone.title": "Refazer marco numa sessão nova",
+  "command.longProjects.markDone.title": "Marcar marco como feito",
+  "command.longProjects.forget.title": "Zerar o progresso registrado…",
+  "config.longProjects.gateRetries.description": "Projetos longos: quantas vezes seguidas o portão manda o agente voltar ao trabalho (checklist, diário, commit, verificação) antes de desistir e pausar o projeto.",
+  "config.longProjects.milestoneMinutes.description": "Projetos longos: avisar quando um marco passar deste tempo em minutos (0 = nunca).",
+  "config.longProjects.maxSessionsPerMilestone.description": "Projetos longos: sessões abertas para o mesmo marco antes de ele ser considerado travado e o projeto pausar (0 = sem limite)."
 }

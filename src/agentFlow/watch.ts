@@ -91,6 +91,7 @@ export class AgentWatch implements vscode.Disposable {
 
   /** Começa a acompanhar um agente recém-aberto; abrir de novo limpa o "pronto". */
   track(l: AgentLaunch) {
+    if (l.project) return; // o projeto longo decide quando o marco terminou
     const key = keyOf(l.path);
     void this.clearReady(l.path);
     const head = readHead(l.path);

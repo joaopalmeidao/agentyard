@@ -13,7 +13,7 @@ veja o [README](../README.md); para o que mudou em cada versão, o [CHANGELOG](.
 3. [Onde fica cada coisa](#3-onde-fica-cada-coisa)
 4. [Worktrees](#4-worktrees)
 5. [Agentes (Claude Code, Codex, Gemini…)](#5-agentes-claude-code-codex-gemini)
-6. [Tarefas: fila, lote, modelos e agendamentos](#6-tarefas-fila-lote-modelos-e-agendamentos)
+6. [Tarefas: fila, lote, modelos, agendamentos e projetos longos](#6-tarefas-fila-lote-modelos-agendamentos-e-projetos-longos)
 7. [Revisar o que o agente fez](#7-revisar-o-que-o-agente-fez)
 8. [Merge](#8-merge)
 9. [Remoto: push, pull, PR/MR e pipelines](#9-remoto-push-pull-prmr-e-pipelines)
@@ -259,7 +259,7 @@ O card avisa quando duas worktrees mexem nos mesmos arquivos (risco de conflito 
 80% e aos 100%. Com `worktreeGraph.budget.action: "pause-queue"`, a worktree que estourou deixa de
 receber tarefas da fila e dos agendamentos.
 
-## 6. Tarefas: fila, lote, modelos e agendamentos
+## 6. Tarefas: fila, lote, modelos, agendamentos e projetos longos
 
 ### Fila de tarefas
 
@@ -314,6 +314,36 @@ Code fechado: executar uma vez ao abrir, ou pular.
 
 Com várias janelas abertas, só uma executa os agendamentos de cada repositório. Na view: editar,
 duplicar, pausar/retomar, executar agora, histórico e excluir.
+
+### Projetos longos
+
+Para o que não cabe numa sessão do agente. **Novo projeto longo…** (view **Projetos longos**, ou
+no menu da worktree) pede o objetivo, o comando de verificação (vem de `autoSync.testCommand` ou
+do projeto: `npm test`, `cargo test`, `pytest`…) e se para para revisão a cada marco ou avança sozinho.
+
+1. **Planejamento.** O Claude abre só para planejar: explora o código, pergunta o necessário e
+   escreve `.agentyard/projects/<projeto>/PLAN.md`. Cada marco é um título `## [M1] Título` com
+   um checklist `- [ ]`. Quando o plano tem marcos, aparece **Iniciar marco [M1]**.
+2. **Um marco por sessão.** Cada marco abre uma sessão nova do Claude, com contexto limpo. A
+   memória está nos arquivos: o hook `SessionStart` injeta o objetivo, os marcos, o checklist do
+   marco atual, as últimas entradas do `PROGRESS.md` e as regras, também depois de compactar ou retomar.
+3. **Portão no Stop.** O agente só consegue parar quando: o checklist do marco está todo marcado
+   no PLAN.md, o PROGRESS.md ganhou uma entrada neste turno, não há nada sem commit e a verificação
+   passa. Se faltar algo, o motivo (com as últimas linhas da verificação que falhou) volta para o
+   agente, que continua. Se ele depende de uma pessoa, escreve `BLOCKED.md` na pasta do projeto e para.
+4. **Próximo marco.** Com o portão liberado, o marco fica feito e o próximo começa numa sessão
+   nova, ou espera sua revisão ("Revisar alterações" / "Iniciar [M2]").
+
+O projeto pausa e avisa quando: o portão barrou `longProjects.gateRetries` vezes seguidas, o marco
+já teve `longProjects.maxSessionsPerMilestone` sessões sem terminar, o orçamento da worktree
+acabou (`budget.action: pause-queue`), o terminal do marco foi fechado ou o agente escreveu o
+BLOCKED.md. Um marco rodando há mais de `longProjects.milestoneMinutes` gera um aviso.
+
+Na view: marcos com o checklist, tempo e tokens de cada um; iniciar/continuar, pausar, ir para o
+terminal, rodar a verificação, abrir plano e diário, planejar de novo, refazer um marco numa
+sessão nova e marcar como feito. PLAN.md, PROGRESS.md e project.json são commitados na branch; o
+estado de execução fica na extensão. O projeto só aparece na worktree da branch que o criou.
+Precisa do Claude Code com `claude.trackState` ligado (usa os hooks dele).
 
 ## 7. Revisar o que o agente fez
 
@@ -659,6 +689,7 @@ Todas começam com `worktreeGraph.`. As mais usadas:
 | `checks.*` | | ver seção 14 |
 | `agents.idleMinutes` | `3` | minutos parado para considerar que o agente terminou |
 | `tasks.autoAdvance` | `true` | próxima tarefa da fila vai sozinha |
+| `longProjects.*` | `3`, `120`, `3` | projetos longos: tentativas do portão, aviso de tempo, sessões por marco |
 | `batch.maxParallel` | `3` | agentes simultâneos na tarefa em lote |
 | `budget.*` | `0` | orçamento por worktree |
 | `fetch.intervalMinutes` | `0` | fetch automático |

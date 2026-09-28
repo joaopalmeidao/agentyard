@@ -18,6 +18,7 @@ import { ReadySummaryService } from './env/readySummary';
 import { registerEnv } from './env/register';
 import { registerMigrations } from './migrations/register';
 import { registerTemplates } from './templates/register';
+import { registerLongProjects } from './longProject/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
@@ -82,6 +83,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
   registerAgentAttention(ctx, ctl, agentTerms);
+  registerLongProjects(ctx, ctl, agentTerms, claude);
   registerSendToClaude(ctx, ctl, agentTerms);
   registerTerminalUx(ctx, ctl, agentTerms);
   /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */

@@ -58,9 +58,9 @@ exports.run = async () => {
 
   await check('comandos registrados', async () => {
     const all = await vscode.commands.getCommands(true);
-    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
+    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask', 'longProjects.new', 'longProjects.start']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
     // o painel foca views pelos comandos <view>.focus que o VS Code cria para cada view declarada
-    for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules', 'mergeQueue']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
+    for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules', 'mergeQueue', 'longProjects']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
   });
 
   await check('árvore: worktrees + branches sem worktree', async () => {
