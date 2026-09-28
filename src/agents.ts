@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
-import { AgentState, EventTail, instrumentCommand, isClaudeCommand, nextState, pruneEvents, writeHookSettings } from './claude/hooks';
+import { AGENT_FILE_SUFFIXES, AgentState, EventTail, HookEvent, instrumentCommand, isClaudeCommand, nextState, pruneEvents, withIdeFlag, writeHookSettings } from './claude/hooks';
 import { t } from './i18n';
 
 export interface AgentConfig {
@@ -59,6 +59,8 @@ export interface AgentLaunch {
   terminal: vscode.Terminal;
   agent: string;
   prompt?: string;
+  /** Aberto por um projeto longo (chave do projeto): o projeto cuida do "terminou". */
+  project?: string;
 }
 
 /** Um terminal de agente aberto pela extensão. */
@@ -79,8 +81,17 @@ export interface OpenAgent {
   stateAt?: number;
   /** Mensagem do pedido que deixou o Claude esperando (ex.: permissão para uma ferramenta). */
   message?: string;
+  /** Tipo do pedido (`permission_prompt`, por exemplo), quando o Claude está esperando. */
+  notificationType?: string;
   /** Sessão do Claude Code deste terminal (vem do hook SessionStart). */
   sessionId?: string;
+  /** Projeto longo que abriu este terminal (chave do projeto). */
+  project?: string;
+}
+
+export interface AgentHookEvent {
+  open: OpenAgent;
+  event: HookEvent;
 }
 
 export interface AgentStateChange {
@@ -92,6 +103,36 @@ export interface StartOptions {
   task?: boolean;
   prompt?: string;
   name?: string;
+  /** Id do terminal (nome dos arquivos dos hooks), quando quem abre precisa gravar algo antes. */
+  id?: string;
+  /** Projeto longo que abre o terminal. */
+  project?: string;
+}
+
+/** Onde um terminal de agente abre: painel, aba no editor ativo, editor ao lado ou dividido com outro da worktree. */
+export type Placement = 'panel' | 'editor' | 'beside' | 'split';
+
+/**
+ * Lugar do terminal pela configuração `agentTerminalLocation`. `auto`: tarefas no painel, sessões
+ * interativas no editor ao lado. `split` sem outro terminal da worktree para dividir cai no painel.
+ */
+export function placementOf(pref: string | undefined, task: boolean, hasSibling: boolean): Placement {
+  switch (pref) {
+    case 'editor':
+      return 'editor';
+    case 'editorBeside':
+      return 'beside';
+    case 'split':
+      return hasSibling ? 'split' : 'panel';
+    case 'auto':
+      return task ? 'panel' : 'beside';
+  }
+  return 'panel';
+}
+
+/** Terminais que abrem sem tirar o foco de onde você está (`agentTerminalFocus`). */
+export function keepsFocus(pref: string | undefined, task: boolean): boolean {
+  return pref === 'never' || (pref !== 'always' && task);
 }
 
 /** Nomes repetidos viram "Claude Code ×2". */
@@ -138,6 +179,10 @@ export function terminalColorOf(worktreePath: string): string {
   return TERMINAL_COLORS[h % TERMINAL_COLORS.length];
 }
 
+/** Colunas da grade de agentes, e o comando que foca cada uma. */
+const GRID_MAX = 4;
+const GROUP_FOCUS = ['First', 'Second', 'Third', 'Fourth'].map(n => `workbench.action.focus${n}EditorGroup`);
+
 /** Espera máxima pela sessão antes de digitar mesmo assim (hooks que não rodam, por exemplo). */
 const PENDING_MS = 10_000;
 /** Sem hooks: tempo para o Claude abrir antes de digitar num terminal recém-aberto. */
@@ -162,7 +207,10 @@ export class AgentTerminals implements vscode.Disposable {
   private readonly stateChanged = new vscode.EventEmitter<AgentStateChange>();
   /** Um Claude mudou de estado. */
   readonly onDidChangeState = this.stateChanged.event;
-  private readonly disposables: vscode.Disposable[] = [this.launched, this.changed, this.stateChanged];
+  private readonly hookEvent = new vscode.EventEmitter<AgentHookEvent>();
+  /** Cada evento dos hooks de um Claude, na ordem em que chegou. */
+  readonly onDidHookEvent = this.hookEvent.event;
+  private readonly disposables: vscode.Disposable[] = [this.launched, this.changed, this.stateChanged, this.hookEvent];
   private readonly tails = new Map<string, EventTail>();
   private readonly pending = new Map<string, { text: string; submit: boolean }>();
   private watcher?: fs.FSWatcher;
@@ -207,6 +255,7 @@ export class AgentTerminals implements vscode.Disposable {
       id,
       task: env.WTGRAPH_TASK === '1',
       claude: env.WTGRAPH_CLAUDE === '1',
+      project: env.WTGRAPH_PROJECT || undefined,
     };
     this.open.push(o);
     if (env.WTGRAPH_HOOKS === '1') {
@@ -288,9 +337,13 @@ export class AgentTerminals implements vscode.Disposable {
     for (const e of events) {
       o.state = nextState(o.state ?? 'starting', e);
       if (e.session_id) o.sessionId = e.session_id;
-      if (e.hook_event_name === 'Notification' && o.state === 'waiting') o.message = e.message;
+      if (e.hook_event_name === 'Notification' && o.state === 'waiting') {
+        o.message = e.message;
+        o.notificationType = e.notification_type;
+      }
+      this.hookEvent.fire({ open: o, event: e });
     }
-    if (o.state !== 'waiting') o.message = undefined;
+    if (o.state !== 'waiting') o.message = o.notificationType = undefined;
     if (o.state === previous) {
       if (o.sessionId !== session) this.changed.fire();
       return;
@@ -304,10 +357,12 @@ export class AgentTerminals implements vscode.Disposable {
   private forget(o: OpenAgent) {
     this.pending.delete(o.id);
     if (this.tails.delete(o.id)) {
-      try {
-        fs.unlinkSync(path.join(this.eventsDir(), `${o.id}.jsonl`));
-      } catch {
-        // o hook nunca escreveu, ou já foi apagado
+      for (const suffix of AGENT_FILE_SUFFIXES) {
+        try {
+          fs.unlinkSync(path.join(this.eventsDir(), `${o.id}${suffix}`));
+        } catch {
+          // o hook nunca escreveu, ou já foi apagado
+        }
       }
     }
     if (!this.tails.size) this.stopWatcher();
@@ -363,6 +418,70 @@ export class AgentTerminals implements vscode.Disposable {
     o.terminal.sendText(p.text, p.submit);
   }
 
+  // ---------- controlar ----------
+
+  /** O terminal está como aba no editor? (a API não diz; a aba de terminal tem o nome dele) */
+  inEditor(term: vscode.Terminal): boolean {
+    return vscode.window.tabGroups.all.some(g => g.tabs.some(tab => tab.input instanceof vscode.TabInputTerminal && tab.label === term.name));
+  }
+
+  /** Esc no Claude: interrompe o que ele está fazendo (ou recusa o pedido em aberto). */
+  interrupt(o: OpenAgent) {
+    o.terminal.sendText('\x1b', false);
+  }
+
+  /** Responde o pedido de permissão em aberto: Enter aceita a opção marcada ("Yes"), Esc recusa. */
+  answerPermission(o: OpenAgent, allow: boolean): boolean {
+    if (o.state !== 'waiting' || o.terminal.exitStatus !== undefined) return false;
+    o.terminal.sendText(allow ? '\r' : '\x1b', false);
+    return true;
+  }
+
+  /** Abre de novo, no mesmo terminal, a sessão que terminou (o shell dele continua aberto). */
+  resumeInPlace(o: OpenAgent) {
+    if (!o.sessionId || o.terminal.exitStatus !== undefined) return;
+    // o comando do agente configurado (com as flags dele), não um `claude` qualquer
+    const configured = agents(this.ctl).find(a => a.name === o.agent && isClaudeCommand(a.command))?.command.replace(/\{prompt\}/g, '').trim();
+    let command = `${configured || 'claude'} --resume ${o.sessionId}`;
+    if (this.ctl.cfg().get<boolean>('claude.connectIde', false)) command = withIdeFlag(command);
+    if (this.tails.has(o.id)) {
+      try {
+        command = instrumentCommand(command, writeHookSettings(this.eventsDir()));
+        o.state = 'starting';
+        o.stateAt = Date.now();
+      } catch (e) {
+        this.ctl.log(t('Could not prepare the Claude Code hooks: {0}', (e as Error).message));
+      }
+    }
+    o.terminal.show();
+    o.terminal.sendText(command);
+    this.changed.fire();
+  }
+
+  /** Leva o terminal para o editor (ao lado) ou de volta ao painel, pelos comandos do próprio VS Code. */
+  async moveTo(o: OpenAgent, where: 'editor' | 'panel') {
+    const inEditor = this.inEditor(o.terminal);
+    if ((where === 'editor') === inEditor) return o.terminal.show();
+    o.terminal.show();
+    await vscode.commands.executeCommand(where === 'editor' ? 'workbench.action.terminal.moveToEditor' : 'workbench.action.terminal.moveToTerminalPanel');
+  }
+
+  /**
+   * Põe os terminais lado a lado no editor, um por coluna (até 4): primeiro volta todos ao painel,
+   * depois monta as colunas e move cada um para a sua.
+   */
+  async arrangeGrid(list: OpenAgent[]) {
+    const terms = list.slice(0, GRID_MAX);
+    if (!terms.length) return;
+    for (const o of terms) if (this.inEditor(o.terminal)) await this.moveTo(o, 'panel');
+    await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: terms.map(() => ({})) });
+    for (let i = 0; i < terms.length; i++) {
+      await vscode.commands.executeCommand(GROUP_FOCUS[i]);
+      terms[i].terminal.show(true);
+      await vscode.commands.executeCommand('workbench.action.terminal.moveToEditor');
+    }
+  }
+
   // ---------- abrir ----------
 
   private async pickAgent(worktreePath: string, branch: string | undefined, agentName?: string): Promise<AgentConfig | undefined> {
@@ -379,10 +498,18 @@ export class AgentTerminals implements vscode.Disposable {
     return agent;
   }
 
-  private async createTerminal(worktreePath: string, branch: string | undefined, name: string, env: Record<string, string>) {
+  private async createTerminal(worktreePath: string, branch: string | undefined, name: string, env: Record<string, string>, task: boolean, preserveFocus: boolean) {
     const { base } = await this.ctl.base().catch(() => ({ base: '' }));
-    const location =
-      this.ctl.cfg().get<string>('agentTerminalLocation', 'panel') === 'editor' ? vscode.TerminalLocation.Editor : vscode.TerminalLocation.Panel;
+    const sibling = this.list(worktreePath).filter(o => !this.inEditor(o.terminal)).pop();
+    const place = placementOf(this.ctl.cfg().get<string>('agentTerminalLocation', 'panel'), task, !!sibling);
+    const location: vscode.TerminalOptions['location'] =
+      place === 'editor'
+        ? { viewColumn: vscode.ViewColumn.Active, preserveFocus }
+        : place === 'beside'
+          ? { viewColumn: vscode.ViewColumn.Beside, preserveFocus }
+          : place === 'split' && sibling
+            ? { parentTerminal: sibling.terminal }
+            : vscode.TerminalLocation.Panel;
     return vscode.window.createTerminal({
       name,
       cwd: worktreePath,
@@ -409,8 +536,10 @@ export class AgentTerminals implements vscode.Disposable {
    * Code ganham os hooks de estado (`claude.trackState`).
    */
   async start(worktreePath: string, branch: string | undefined, agent: string, command: string, opts: StartOptions = {}): Promise<OpenAgent> {
-    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = opts.id ?? newAgentId();
     const claude = isClaudeCommand(command);
+    if (claude && this.ctl.cfg().get<boolean>('claude.connectIde', false)) command = withIdeFlag(command);
+    const preserveFocus = keepsFocus(this.ctl.cfg().get<string>('agentTerminalFocus', 'interactive'), !!opts.task);
     let hooks = false;
     if (claude && this.ctl.cfg().get<boolean>('claude.trackState', true)) {
       try {
@@ -426,14 +555,15 @@ export class AgentTerminals implements vscode.Disposable {
       WTGRAPH_TASK: opts.task ? '1' : '',
       WTGRAPH_CLAUDE: claude ? '1' : '',
       WTGRAPH_HOOKS: hooks ? '1' : '',
-    });
-    const o: OpenAgent = { terminal, path: worktreePath, branch, agent, started: Date.now(), id, task: opts.task, claude, state: hooks ? 'starting' : undefined };
+      WTGRAPH_PROJECT: opts.project ?? '',
+    }, !!opts.task, preserveFocus);
+    const o: OpenAgent = { terminal, path: worktreePath, branch, agent, started: Date.now(), id, task: opts.task, claude, state: hooks ? 'starting' : undefined, project: opts.project };
     this.open.push(o);
     if (hooks) this.watchEvents(o);
     this.changed.fire();
-    terminal.show();
+    terminal.show(preserveFocus);
     terminal.sendText(command);
-    this.launched.fire({ path: worktreePath, branch, terminal, agent, prompt: opts.prompt });
+    this.launched.fire({ path: worktreePath, branch, terminal, agent, prompt: opts.prompt, project: opts.project });
     this.ctl.scheduleRefresh(50);
     return o;
   }
@@ -526,6 +656,11 @@ export class AgentTerminals implements vscode.Disposable {
     this.stopWatcher();
     this.disposables.forEach(d => d.dispose());
   }
+}
+
+/** Id novo de terminal de agente (nome dos arquivos dos hooks). */
+export function newAgentId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /** Terminais agrupados por worktree, na ordem em que cada worktree apareceu. */
