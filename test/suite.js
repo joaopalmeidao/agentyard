@@ -1208,80 +1208,37 @@ exports.run = async () => {
     g('branch -D velha/pendente');
   });
 
-  await check('acesso remoto: painel no celular recebe o estado e os diálogos da ação que pediu', async () => {
-    const http = require('http');
-    const cfg = vscode.workspace.getConfiguration('worktreeGraph');
-    const port = 7498;
-    await cfg.update('remoteAccess.port', port, vscode.ConfigurationTarget.Global);
-    await cfg.update('remoteAccess.enabled', true, vscode.ConfigurationTarget.Global);
-    const token = require('../out/remote/core').remoteToken();
-    const auth = { authorization: `Bearer ${token}` };
-    const req = (method, url, body) =>
-      new Promise((resolve, reject) => {
-        const r = http.request({ host: '127.0.0.1', port, path: url, method, headers: { ...auth, 'content-type': 'application/json' } }, res => {
-          let data = '';
-          res.on('data', d => (data += d));
-          res.on('end', () => resolve({ status: res.statusCode, body: data }));
-        });
-        r.on('error', reject);
-        r.end(body ? JSON.stringify(body) : undefined);
-      });
-    await until(async () => (await req('GET', '/panel').catch(() => ({}))).status === 200);
-    assert.ok((await req('GET', '/media/graph.js')).body.includes('acquireVsCodeApi'));
-    assert.strictEqual((await req('GET', '/media/../package.json')).status, 404);
+  await check('status depois do commit: watcher vence o cache e mark_ready lê do git na hora', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const { worktreeOfGitFile } = require('../out/model');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const g = c => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd: wt.path, encoding: 'utf8' }).trim();
+    const k = path.normalize(wt.path).toLowerCase();
+    const common = ctl.repo.commonDir;
+    const name = fs.readdirSync(path.join(common, 'worktrees')).find(n => worktreeOfGitFile(common, path.join(common, 'worktrees', n, 'index')) && path.normalize(worktreeOfGitFile(common, path.join(common, 'worktrees', n, 'index'))).toLowerCase() === k);
+    assert.ok(name, 'worktrees/<nome>/index aponta para a worktree');
+    assert.strictEqual(worktreeOfGitFile(common, path.join(common, 'refs', 'heads', 'x')), undefined);
 
-    // aba do celular: fluxo de eventos
-    const client = 'abcdef0123456789';
-    const got = [];
-    const stream = await new Promise((resolve, reject) => {
-      const r = http.get({ host: '127.0.0.1', port, path: `/api/events?c=${client}`, headers: auth }, res => {
-        let buf = '';
-        res.on('data', d => {
-          buf += d;
-          let nl;
-          while ((nl = buf.indexOf('\n')) >= 0) {
-            const line = buf.slice(0, nl).trim();
-            buf = buf.slice(nl + 1);
-            if (line) got.push(JSON.parse(line));
-          }
-        });
-        resolve(r);
-      });
-      r.on('error', reject);
-    });
+    fs.writeFileSync(path.join(wt.path, 'status-cache.txt'), 'x');
+    const dirty = await ctl.freshWorktree(wt.path);
+    assert.ok(dirty.changes >= 1, JSON.stringify(dirty));
+    const aheadBefore = dirty.ahead;
+    g('add status-cache.txt');
+    g('commit -q -m status-cache');
     try {
-      await until(() => got.some(m => m.type === 'hello'));
-      await req('POST', '/api/msg', { c: client, msg: { type: 'ready' } });
-      const st = await until(() => got.find(m => m.type === 'state' && m.state));
-      assert.ok(st.state.worktrees.some(w => w.branch === 'ai/login-oauth'));
-
-      // ação do celular: a lista de destino e a confirmação do merge aparecem no celular, não no VS Code
-      const before = require('child_process').execSync('git rev-parse ai/refatorar-api', { cwd: ctl.repo.root, encoding: 'utf8' }).trim();
-      await req('POST', '/api/msg', { c: client, msg: { type: 'action', action: 'mergeInto', args: { branch: 'ai/precos-promo' } } });
-      const pick = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'pick'));
-      const i = pick.items.findIndex(x => x.label.replace(/^\$\([\w-]+\) /, '') === 'ai/refatorar-api');
-      assert.ok(i >= 0, JSON.stringify(pick.items));
-      await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: pick.id, value: i } });
-      const confirm = await until(() => got.find(m => m.type === 'dialog' && m.kind === 'message' && m.modal));
-      assert.ok(confirm.modal && confirm.message.includes('ai/precos-promo'), confirm.message);
-      await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: confirm.id } });
-      await until(() => got.some(m => m.type === 'busy' && m.busy === false));
-      const after = require('child_process').execSync('git rev-parse ai/refatorar-api', { cwd: ctl.repo.root, encoding: 'utf8' }).trim();
-      assert.strictEqual(after, before, 'cancelado no celular: nada mesclado');
-
-      // aviso com botões que o VS Code mostra sozinho: espelhado no celular, e a resposta de lá vale
-      const shown = vscode.window.showWarningMessage('Pergunta de teste', 'Sim', 'Não');
-      const mirror = await until(() => got.find(m => m.type === 'dialog' && m.message === 'Pergunta de teste'));
-      assert.ok(!mirror.modal);
-      await req('POST', '/api/msg', { c: client, msg: { type: 'answer', id: mirror.id, value: 1 } });
-      assert.strictEqual(await shown, 'Não');
-
-      // sem token não entra
-      assert.strictEqual(await new Promise(r => http.get({ host: '127.0.0.1', port, path: `/api/events?c=${client}` }, res => r(res.statusCode))), 401);
+      // sem esperar o statusRefresh.activeSeconds: o commit mexe no index e o watcher vence o status
+      await until(() => ctl.cache.statuses.get(k)?.at === 0 || ctl.state.worktrees.find(w => w.path === wt.path)?.changes === 0);
+      const now = await ctl.freshWorktree(wt.path);
+      assert.strictEqual(now.changes, dirty.changes - 1);
+      assert.strictEqual(now.ahead, aheadBefore + 1);
+      assert.strictEqual(ctl.cache.statuses.get(k).changes, now.changes, 'status lido vai para o cache');
     } finally {
-      stream.destroy();
-      await cfg.update('remoteAccess.enabled', undefined, vscode.ConfigurationTarget.Global);
-      await cfg.update('remoteAccess.port', undefined, vscode.ConfigurationTarget.Global);
+      // desfaz só o commit do teste (a worktree pode ter outras mudanças da demo)
+      g('reset -q --soft HEAD~1');
+      g('rm -q --cached status-cache.txt');
+      fs.unlinkSync(path.join(wt.path, 'status-cache.txt'));
     }
   });
 

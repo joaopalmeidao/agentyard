@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { t } from './i18n';
-import { isRemoteAction } from './remote/dialogs';
 
 /** Extensão que dá ao VS Code o reconhecimento de voz (roda local, sem mandar o áudio para fora). */
 export const SPEECH_EXTENSION = 'ms-vscode.vscode-speech';
@@ -20,10 +19,8 @@ export interface TaskInputOptions {
 /**
  * Pede o texto de uma tarefa como o showInputBox (undefined = cancelou, '' = Enter vazio), com um
  * botão de microfone: a tarefa é ditada (VS Code Speech) e volta para a caixa para revisar e enviar.
- * Numa ação vinda do celular vira o showInputBox de sempre, que lá tem o próprio microfone.
  */
 export async function askTask(o: TaskInputOptions): Promise<string | undefined> {
-  if (isRemoteAction()) return vscode.window.showInputBox({ title: o.title, prompt: o.prompt, value: o.value, ignoreFocusOut: true });
   let value = o.value ?? '';
   if (o.voice) {
     const spoken = await dictate(o.title, value);

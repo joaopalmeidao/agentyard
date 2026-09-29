@@ -343,7 +343,10 @@ export class ClaudeBridge implements vscode.Disposable {
       const f = args.worktree ? undefined : await this.foreign(open?.path ?? cwd);
       if (f) return `Repository ${f.repoName}, base ${f.baseRef}.\n${this.describeForeign(f)}`;
       const s = state();
-      return `Repository ${s.repoName}, base ${s.baseRef}.\n${this.describe(this.resolve(args.worktree, cwd))}`;
+      const w = this.resolve(args.worktree, cwd);
+      // o status guardado pode ser de antes do último commit
+      await this.ctl.freshWorktree(w.path);
+      return `Repository ${s.repoName}, base ${s.baseRef}.\n${this.describe(w)}`;
     });
     this.addTool('list_worktrees', async () => {
       const s = state();
@@ -391,10 +394,13 @@ export class ClaudeBridge implements vscode.Disposable {
       const f = await this.foreign(open?.path ?? cwd);
       const w = f ?? this.resolve(open?.path, cwd);
       const where = w.branch ?? ('name' in w ? w.name : path.basename(w.path));
-      if ((f || ('statusKnown' in w && w.statusKnown)) && w.changes > 0) return { text: `There are still ${w.changes} uncommitted file(s) in ${where}. Commit before marking it ready.`, isError: true };
+      // lido agora do git: o status guardado pode ser de antes do commit que o agente acabou de fazer
+      const now = f ? { changes: f.changes, ahead: f.ahead } : await this.ctl.freshWorktree(w.path);
+      const changes = now?.changes ?? w.changes;
+      if (changes > 0) return { text: `There are still ${changes} uncommitted file(s) in ${where}. Commit before marking it ready.`, isError: true };
       const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
       if (summary) this.ctl.log(t('Claude marked {0} as ready: {1}', where, summary));
-      if (!(await flow().watch.markReady(w.path, w.branch, w.ahead))) {
+      if (!(await flow().watch.markReady(w.path, w.branch, now?.ahead ?? w.ahead))) {
         return `Not marked yet: AgentYard still has to check ${where} (the checks when you stop, or the automatic review). Finish your turn; if something comes back, fix it.`;
       }
       return `${where} marked as ready for review.`;

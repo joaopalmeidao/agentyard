@@ -6,11 +6,8 @@ import { bundle, locale, t } from './i18n';
 
 export type ActionHandler = (action: string, args: Record<string, string>) => Promise<void>;
 
-/**
- * Mensagens do painel (graph.js): as mesmas no VS Code e no celular (src/remote). No celular, o layout
- * fica no próprio navegador e não substitui o do VS Code.
- */
-export async function panelMessage(ctl: Controller, handler: ActionHandler, msg: any, post: (m: unknown) => void, remote = false) {
+/** Mensagens do painel (graph.js). */
+export async function panelMessage(ctl: Controller, handler: ActionHandler, msg: any, post: (m: unknown) => void) {
   if (msg?.type === 'commitDetails') {
     try {
       post({ type: 'commitDetails', sha: msg.sha, details: await commitDetails(ctl, msg.sha) });
@@ -20,11 +17,11 @@ export async function panelMessage(ctl: Controller, handler: ActionHandler, msg:
     return;
   }
   if (msg?.type === 'saveUi') {
-    if (!remote) await ctl.ctx.globalState.update('panelUi', msg.ui);
+    await ctl.ctx.globalState.update('panelUi', msg.ui);
     return;
   }
   if (msg?.type === 'ready') {
-    post({ type: 'ui', ui: remote ? null : ctl.ctx.globalState.get('panelUi') ?? null });
+    post({ type: 'ui', ui: ctl.ctx.globalState.get('panelUi') ?? null });
     post({ type: 'state', state: ctl.state ?? null });
     ctl.scheduleRefresh(50);
     return;

@@ -351,7 +351,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const claudeIntegration = registerClaudeIntegration(ctx, ctl, guard, { agentTerms, agentsTree, agentFlow, coord, openTranscript: id => claude.transcriptById(id) });
   // o Claude de um projeto da lista continua falando com a janela depois de trocar o projeto ativo
   claudeIntegration.bridge.setProjects(() => projects.list().filter(p => !p.missing).map(p => p.path), projects.onDidChange);
-  registerRemoteAccess(ctx, ctl, guard, handler);
+  registerRemoteAccess(ctx, ctl, guard);
   const autopilot = registerAutopilot(ctx, ctl, guard, { agentTerms, agentFlow, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration, coord, claude });
 
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));

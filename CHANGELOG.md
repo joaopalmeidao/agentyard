@@ -1,6 +1,14 @@
 # Changelog
 
 ## Não lançado
+- **Acesso remoto pelo VS Code inteiro**: **Acesso remoto: copiar link do vscode.dev** agora liga o
+  Remote Tunnels do VS Code e copia o link `vscode.dev/tunnel/…`, que abre este VS Code completo
+  (editor, terminais, Claude e AgentYard) no navegador de qualquer aparelho, com login GitHub ou
+  Microsoft. Sai a página própria (agentes e painel no celular), com o servidor na porta 7420, o token
+  e as settings `remoteAccess.enabled`, `.port`, `.phone`, `.host`, `.actions` e `.publicUrl`;
+  **Acesso remoto: gerar novo link** vira **Acesso remoto: gerenciar o túnel do VS Code**. O push pelo
+  ntfy continua (`remoteAccess.ntfyTopic`, agora sem precisar de `remoteAccess.phone`) e abre o link
+  do túnel.
 - **Uso do Claude** (clique no uso na barra de status ou **Uso do Claude Code: limites do plano, contexto
   e custo** na paleta): uma tela com os limites reais do plano (sessão de 5 h e semana, com a hora em
   que renovam), o histórico deles em 24 h ou 7 dias, cada Claude Code aberto com modelo, contexto usado,

@@ -751,32 +751,26 @@ Quando o VS Code está sem foco, os avisos também saem como notificação do si
 Code numa tela, com estado, há quanto tempo, custo e o próximo passo (responder, revisar, sua vez).
 **Ir** traz o terminal (ou a janela) para frente.
 
-### Acesso remoto (celular)
+### Acesso remoto (celular, outro computador)
 
-Para acompanhar os agentes longe do computador, ligue `worktreeGraph.remoteAccess.enabled` ou rode
-**Acesso remoto: copiar link** (também no menu `…` da view Agentes abertos). O AgentYard serve uma
-página feita para o celular com os agentes de todas as janelas: quem está esperando você aparece
-primeiro, com o pedido, há quanto tempo e o custo.
+O acesso remoto é o próprio VS Code, pelo [Remote Tunnels](https://code.visualstudio.com/docs/remote/tunnels):
+**Acesso remoto: copiar link do vscode.dev** (também no menu `…` da view Agentes abertos) liga o túnel
+do VS Code e copia o link `https://vscode.dev/tunnel/<máquina>/<pasta>`. Aberto no navegador de
+qualquer aparelho, inclusive o celular, ele mostra o VS Code inteiro desta máquina: editor, terminais,
+Claude Code e o AgentYard com todas as views e o painel.
 
-**Painel** (no topo da página) abre o painel principal da janela que está servindo, o mesmo do VS
-Code: cards, histórico, mesclar, sync, push, abrir agente, e assim por diante. As confirmações,
-listas de escolha e campos de texto das ações feitas pelo celular aparecem no celular, e os avisos
-viram mensagens embaixo da tela. Os pedidos com botões que o VS Code mostra sozinho, como a
-permissão de um Claude, aparecem nos dois lugares, e vale a primeira resposta. O que abre um editor
-ou terminal (diff, arquivo, terminal) continua abrindo no computador. Com `remoteAccess.actions` desligado,
-o painel no celular só mostra.
-
-- A página escuta só em `127.0.0.1:7420` (`remoteAccess.host`, `remoteAccess.port`). Para abrir de fora, exponha
-  a porta com um túnel, por exemplo `tailscale serve --bg 7420` (fica visível só na sua rede
-  Tailscale), a view **Portas** do VS Code ou o `cloudflared`, e preencha `remoteAccess.publicUrl` com o
-  endereço do túnel.
-- O link leva um token depois do `#`, que não é enviado ao servidor nem ao túnel. Abra o link uma vez
-  no celular e ele guarda o acesso. **Acesso remoto: gerar novo link** invalida o link antigo em
-  todos os aparelhos.
+- Na primeira vez, o VS Code pede a conta (GitHub ou Microsoft) e se o túnel fica ligado só enquanto a
+  janela estiver aberta ou como serviço (continua ligado com o VS Code fechado). Só essa conta abre o
+  link; não há porta aberta nem token.
+- Com o túnel já ligado, o comando só copia o link. **Acesso remoto: gerenciar o túnel do VS Code**
+  (ou o menu Contas do VS Code) mostra a situação, troca o nome da máquina e desliga.
+- A janela aberta pelo túnel roda as extensões do lado do servidor do túnel: na primeira vez, instale o
+  AgentYard (e o Claude Code) lá quando o VS Code oferecer. Os agentes abertos nas outras janelas
+  aparecem no **Mission control**, mas os terminais deles continuam naquelas janelas.
 - **Notificação push**: com `remoteAccess.ntfyTopic` (ex.: `https://ntfy.sh/agentyard-<algo aleatório>`),
   os avisos que saem quando o VS Code está sem foco também chegam ao app do [ntfy](https://ntfy.sh)
-  no celular, e tocar no aviso abre a página. Quem souber o nome do tópico consegue ler as
-  mensagens: use um nome difícil de adivinhar ou um servidor ntfy seu.
+  no celular, e tocar no aviso abre o último link do túnel copiado. Quem souber o nome do tópico
+  consegue ler as mensagens: use um nome difícil de adivinhar ou um servidor ntfy seu.
 
 ## 16. Ambiente por worktree (portas, .env, dependências)
 
@@ -795,7 +789,9 @@ porta e as seguintes +1, +2. O card mostra a porta; clique para abrir `http://lo
 - **Abrir a porta desta worktree no navegador**.
 
 Dependências na criação: npm, pnpm, yarn, bun, pip, poetry e uv são detectados; para Node,
-`worktreeGraph.setup.nodeModules: "link"` compartilha o `node_modules` da principal.
+`worktreeGraph.setup.nodeModules: "link"` compartilha o `node_modules` da principal. No padrão (`ask`), as worktrees
+criadas sem diálogo (por tarefa, pelo `create_worktree` de um agente ou por voz) instalam as dependências
+num terminal `<branch>: setup`, em vez de ficarem sem `node_modules`.
 
 O espaço em disco (💾) de cada worktree aparece na tabela, na limpeza e em *Remover mescladas*
 (`worktreeGraph.diskUsage.*`).

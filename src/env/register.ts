@@ -147,6 +147,9 @@ export class EnvService implements vscode.Disposable {
     if (plan.node) {
       let choice: string | undefined = mode === 'ask' ? undefined : mode;
       if (mode === 'link' && !canLink) choice = 'install';
+      // criada sem diálogo (tarefa, agente, voz): sem ninguém para perguntar, instala. Compartilhar não:
+      // um `npm ci` do agente nesta worktree apagaria o node_modules da principal pelo link.
+      if (!choice && quiet) choice = 'install';
       if (!choice && !quiet) {
         const pick = await vscode.window.showQuickPick(
           [
