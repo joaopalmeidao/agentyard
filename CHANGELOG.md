@@ -1,6 +1,9 @@
 # Changelog
 
 ## Não lançado
+- **Botão ☁ Pull na barra de status**, ao lado do **☁ Push**: traz do remoto as branches escolhidas numa
+  lista (as que dão fast-forward em worktree limpa ou sem worktree já vêm marcadas) e mostra quantas
+  branches têm novidades no remoto. Desliga com `worktreeGraph.pullStatusBar`.
 - **Acesso remoto pelo VS Code inteiro**: **Acesso remoto: copiar link do vscode.dev** agora liga o
   Remote Tunnels do VS Code e copia o link `vscode.dev/tunnel/…`, que abre este VS Code completo
   (editor, terminais, Claude e AgentYard) no navegador de qualquer aparelho, com login GitHub ou

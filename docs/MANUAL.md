@@ -507,7 +507,8 @@ O remoto usado é `worktreeGraph.remote` (padrão `origin`).
 
 - **☁↓ Trazer** por branch: fast-forward; se divergir, pergunta merge ou rebase. Worktree suja
   pode guardar num stash e devolver depois.
-- **☁↓ Trazer n**: em lote.
+- **☁↓ Trazer n**: em lote. O botão **☁ Pull n** na barra de status (ao lado do **☁ Push**) abre a
+  mesma lista; `n` é quantas branches têm novidades no remoto (`worktreeGraph.pullStatusBar`).
 - **Fetch agora**, ou automático com `worktreeGraph.fetch.intervalMinutes`.
 
 ### Publicar PR/MR

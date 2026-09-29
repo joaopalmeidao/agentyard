@@ -7,7 +7,7 @@ import { registerPrFeedback } from './prs/feedback';
 import { registerStack } from './stack/register';
 import { registerGitExtras } from './gitExtras';
 import * as commits from './commits';
-import { pushBranch, pushMany, pushSelected, PushStatus } from './push';
+import { pushBranch, pushMany, pushSelected, PullStatus, PushStatus } from './push';
 import { resolveConflict, ResolveOptions } from './conflicts';
 import { generateCiWorkflow } from './ciTemplate';
 import { Controller } from './controller';
@@ -119,7 +119,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     return pick && { cwd: pick.w.path, label: pick.w.name };
   };
 
-  ctx.subscriptions.push(new PushStatus(ctl));
+  ctx.subscriptions.push(new PushStatus(ctl), new PullStatus(ctl));
   const sync = new AutoSync(ctl);
   ctl.beforePush = branch => sync.beforePush(branch);
   const tree = new WorktreeTreeProvider(ctl);
