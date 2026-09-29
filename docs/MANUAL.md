@@ -726,10 +726,6 @@ Todo Claude Code aberto pelo AgentYard sai com hooks (`--settings`) e com o serv
 executável do VS Code como node: não precisa de Node.js. Cada janela abre um servidor local em
 `127.0.0.1` com token e se anuncia em `~/.agentyard/bridges`.
 
-- **Guarda da worktree** (`worktreeGraph.claude.guard`): antes de rodar, bloqueia edições e comandos
-  em outras worktrees, push forçado, push direto em branch protegida, trocar a worktree para a base e
-  remover worktrees. `strict` também impede criar/trocar de branch dentro da worktree. O Claude recebe
-  o motivo e segue por outro caminho.
 - **Permissão pelo VS Code** (`worktreeGraph.claude.approveInVsCode`): o pedido de permissão vira uma
   notificação com **Permitir**, **Permitir nesta sessão**, **Negar** e **Responder no terminal**. Ir
   ao terminal mostra o pedido lá, como sempre.
@@ -891,7 +887,6 @@ Todas começam com `worktreeGraph.`. As mais usadas:
 | `pullRequests.mergeMethod` | `merge` | método ao mesclar pela view |
 | `prompts.*` | | textos enviados ao agente (conflito, issue, pipeline, checagens, revisão) |
 | `claude.bridge`, `claude.mcp` | `true` | hooks e MCP do AgentYard no Claude aberto pela extensão |
-| `claude.guard` | `on` | guarda da worktree (`on`, `strict`, `off`) |
 | `claude.approveInVsCode` | `true` | responder pedidos de permissão na notificação |
 | `claude.checkpoints`, `claude.checkpointDays` | `true`, `7` | checkpoints por turno |
 | `claude.extraArgs` | | argumentos em todo Claude aberto (ex.: `--model opus`) |

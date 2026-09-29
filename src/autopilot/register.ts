@@ -75,7 +75,7 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
     if (w) await reviewer.show(w.path);
   });
 
-  ctx.subscriptions.push(new StuckWatch(ctl, d.bridge, d.integration, d.agentTerms));
+  ctx.subscriptions.push(new StuckWatch(ctl, d.integration, d.agentTerms));
 
   const board = new AgentBoard(ctl, d.bridge, d.agentFlow);
   ctx.subscriptions.push(board);

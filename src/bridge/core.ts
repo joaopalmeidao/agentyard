@@ -342,8 +342,8 @@ export function hookCommand() {
   return `node -e "${loader(HOOK_SCRIPT)}"`;
 }
 
-/** Ferramentas que o hook PreToolUse confere (guarda da worktree e plano do modo plan). */
-export const GUARDED_TOOLS = 'Edit|MultiEdit|Write|NotebookEdit|Bash|ExitPlanMode';
+/** Ferramentas que o hook PreToolUse acompanha: só o plano do modo plan (nada é bloqueado). */
+export const GUARDED_TOOLS = 'ExitPlanMode';
 
 /** Eventos do Claude Code que a ponte atende (matcher vazio = todos) e o tempo máximo de cada hook. */
 export const HOOK_EVENTS: { event: string; matcher?: string; timeout: number }[] = [

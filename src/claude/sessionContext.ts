@@ -22,8 +22,6 @@ export interface SessionFacts {
   ci?: { status: string; name?: string };
   /** Migrations novas na branch e no destino que vão colidir. */
   migrations?: string;
-  /** Proteções ativas (guarda da worktree). */
-  guard?: boolean;
   /** O servidor MCP do AgentYard está disponível. */
   mcp?: boolean;
   /** Instruções extras do usuário (worktreeGraph.claude.sessionContext). */
@@ -35,7 +33,7 @@ const MAX_FILES = 15;
 export function sessionContext(f: SessionFacts): string {
   const lines: string[] = [];
   lines.push(`AgentYard: you are working in the git worktree ${f.worktree} (branch ${f.branch ?? 'detached'}) of the repository ${f.repo}. The base branch is ${f.base}.`);
-  lines.push('Other agents may be working in parallel in other worktrees of this repository: edit files only inside this worktree and stay on this branch.');
+  lines.push('Other agents may be working in parallel in other worktrees of this repository.');
   const status: string[] = [];
   if (f.ahead !== undefined && f.behind !== undefined) status.push(`${f.ahead} commit(s) ahead and ${f.behind} behind ${f.base}`);
   if (f.changes) status.push(`${f.changes} uncommitted file(s)`);
@@ -49,7 +47,6 @@ export function sessionContext(f: SessionFacts): string {
   if (f.request) lines.push(`This branch has ${f.request.ref} (${f.request.state}${f.request.review ? `, review: ${f.request.review}` : ''}): ${f.request.url}`);
   if (f.ci) lines.push(`Latest CI on this branch: ${f.ci.status}${f.ci.name ? ` (${f.ci.name})` : ''}.`);
   if (f.migrations) lines.push(f.migrations);
-  if (f.guard) lines.push('AgentYard blocks edits in other worktrees, switching this worktree to the base, force pushes and removing worktrees.');
   if (f.mcp) {
     lines.push(
       'The `agentyard` MCP tools are available: `status`, `overlaps`, `pr_feedback`, `ci_status`, `review_comments`, `turn_diff`, `queue_task`, `create_worktree`, and `mark_ready` (call it after committing, when the work is done and ready for review).',

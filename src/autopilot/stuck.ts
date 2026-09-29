@@ -1,26 +1,19 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { AgentTerminals, OpenAgent } from '../agents';
-import type { BridgeHookEvent, ClaudeBridge } from '../bridge/register';
-import { hookJson } from '../bridge/register';
 import type { ClaudeIntegration } from '../claude/integration';
 import { osNotify } from '../claude/osNotify';
 import * as turns from '../claude/turns';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
-import { actionSignature, StuckTracker, stuckNudge, trackAction } from './core';
 
 const TICK_MS = 60_000;
 
 /**
- * Agente travado. Dois sinais:
- *  - a mesma ação (comando ou edição) repetida `claude.stuck.repeats` vezes seguidas no turno: a
- *    próxima é negada com um pedido para repensar, e você recebe um aviso;
- *  - um turno trabalhando há `claude.stuck.minutes` sem mudar nenhum arquivo: aviso com Mostrar
- *    terminal e Interromper (Esc).
+ * Agente travado: um turno trabalhando há `claude.stuck.minutes` sem mudar nenhum arquivo gera um
+ * aviso com Mostrar terminal e Interromper (Esc). Só avisa; nada é negado.
  */
 export class StuckWatch implements vscode.Disposable {
-  private readonly trackers = new Map<string, StuckTracker>();
   /** Turnos já avisados por tempo (chave do log + número do turno). */
   private readonly warned = new Set<string>();
   private readonly timer: NodeJS.Timeout;
@@ -28,38 +21,14 @@ export class StuckWatch implements vscode.Disposable {
 
   constructor(
     private readonly ctl: Controller,
-    bridge: ClaudeBridge,
     private readonly integration: ClaudeIntegration,
     private readonly agentTerms: AgentTerminals,
   ) {
-    bridge.onHook('UserPromptSubmit', e => {
-      this.trackers.delete(this.key(e));
-      return undefined;
-    });
-    bridge.onHook('PreToolUse', e => this.onTool(e));
     this.timer = setInterval(() => void this.tick(), TICK_MS);
   }
 
   private cfg() {
     return this.ctl.cfg();
-  }
-
-  private key(e: BridgeHookEvent) {
-    return e.open?.id ?? e.session_id ?? e.cwd;
-  }
-
-  private onTool(e: BridgeHookEvent) {
-    const limit = this.cfg().get<number>('claude.stuck.repeats', 5);
-    if (limit <= 0 || !e.worktree) return undefined;
-    const k = this.key(e);
-    const tr = this.trackers.get(k) ?? { repeats: 0, nudged: false };
-    this.trackers.set(k, tr);
-    const sig = actionSignature(e.tool_name, e.tool_input);
-    if (!trackAction(tr, sig, limit) || !sig) return undefined;
-    const where = e.worktree.branch ?? e.worktree.name;
-    this.ctl.log(t('Claude in {0} repeated the same action {1} times in a row; asked it to rethink.', where, tr.repeats));
-    this.warn(t('Claude in {0} seems stuck: it repeated the same action {1} times in a row. AgentYard asked it to rethink.', where, tr.repeats), e.open, e.worktree.path);
-    return hookJson({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: stuckNudge(sig, tr.repeats) } });
   }
 
   private async tick() {

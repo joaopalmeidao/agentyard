@@ -4341,21 +4341,6 @@
           "default": true,
           "markdownDescription": "%config.claude.mcp.markdownDescription%"
         },
-        "worktreeGraph.claude.guard": {
-          "type": "string",
-          "default": "on",
-          "enum": [
-            "on",
-            "strict",
-            "off"
-          ],
-          "enumDescriptions": [
-            "%config.claude.guard.enumDescriptions.0%",
-            "%config.claude.guard.enumDescriptions.1%",
-            "%config.claude.guard.enumDescriptions.2%"
-          ],
-          "description": "%config.claude.guard.description%"
-        },
         "worktreeGraph.claude.approveInVsCode": {
           "type": "boolean",
           "default": true,
@@ -4945,12 +4930,6 @@
           "default": "",
           "description": "%config.agents.autoReview.focus.description%"
         },
-        "worktreeGraph.claude.stuck.repeats": {
-          "type": "number",
-          "default": 5,
-          "minimum": 0,
-          "description": "%config.claude.stuck.repeats.description%"
-        },
         "worktreeGraph.claude.stuck.minutes": {
           "type": "number",
           "default": 20,
@@ -4961,21 +4940,6 @@
           "type": "boolean",
           "default": true,
           "description": "%config.claude.board.description%"
-        },
-        "worktreeGraph.claude.claims": {
-          "type": "string",
-          "default": "ask",
-          "enum": [
-            "ask",
-            "block",
-            "off"
-          ],
-          "enumDescriptions": [
-            "%config.claude.claims.enumDescriptions.0%",
-            "%config.claude.claims.enumDescriptions.1%",
-            "%config.claude.claims.enumDescriptions.2%"
-          ],
-          "description": "%config.claude.claims.description%"
         },
         "worktreeGraph.claude.claims.hours": {
           "type": "number",

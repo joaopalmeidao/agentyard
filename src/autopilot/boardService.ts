@@ -4,23 +4,19 @@ import type { AgentFlow } from '../agentFlow/register';
 import { keyOf } from '../agentFlow/head';
 import type { BridgeHookEvent, ClaudeBridge } from '../bridge/register';
 import { hookJson } from '../bridge/register';
-import { isInside } from '../bridge/core';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
-import { addNote, Board, boardPath, claim, claimOn, formatNotes, notesFor, pruneClaims, readBoard, release, updateBoard } from './board';
-
-export type ClaimsMode = 'ask' | 'block' | 'off';
+import { addNote, Board, boardPath, claim, formatNotes, notesFor, pruneClaims, readBoard, release, updateBoard } from './board';
 
 const FIRST_LOOK_MS = 24 * 3600_000;
-const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 
 /**
  * Mural entre os agentes e reservas de arquivos (src/autopilot/board.ts):
  *  - ferramentas MCP `post_note`, `read_notes`, `claim_files`, `release_files` e `list_claims`;
  *  - notas novas de outras worktrees (e as suas, pelo VS Code) entram no contexto do próximo prompt
  *    de cada Claude;
- *  - editar um arquivo reservado por outra worktree pede confirmação (`claude.claims: ask`) ou é
- *    recusado (`block`); as reservas saem quando a worktree fica pronta, vencem ou a worktree some.
+ *  - as reservas são só avisos para os outros agentes (nada é bloqueado); saem quando a worktree
+ *    fica pronta, vencem ou a worktree some.
  */
 export class AgentBoard implements vscode.Disposable {
   /** Até quando cada Claude (terminal ou sessão) já recebeu as notas. */
@@ -29,7 +25,6 @@ export class AgentBoard implements vscode.Disposable {
 
   constructor(private readonly ctl: Controller, private readonly bridge: ClaudeBridge, flow: AgentFlow) {
     bridge.onHook('UserPromptSubmit', e => this.onPrompt(e));
-    bridge.onHook('PreToolUse', e => this.onTool(e));
     this.disposables.push(flow.watch.onDidFinish(f => f.ready && this.file() && updateBoard(this.file()!, b => release(b, f.path))));
     this.registerTools();
   }
@@ -71,22 +66,6 @@ export class AgentBoard implements vscode.Disposable {
     this.seen.set(k, notes[notes.length - 1].at);
     const text = `AgentYard board — notes from the other agents working on this repository (and from the user):\n${formatNotes(notes)}\nTake them into account if they affect your work. To tell the others about a change that affects them, use the agentyard post_note tool.`;
     return hookJson({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } });
-  }
-
-  private onTool(e: BridgeHookEvent) {
-    const w = e.worktree;
-    const mode = this.cfg().get<ClaimsMode>('claude.claims', 'ask');
-    if (!w || mode === 'off' || !EDIT_TOOLS.has(e.tool_name ?? '')) return undefined;
-    const raw = String(e.tool_input?.file_path ?? e.tool_input?.notebook_path ?? '');
-    if (!raw) return undefined;
-    const abs = path.resolve(e.cwd || w.path, raw);
-    if (!isInside(abs, w.path)) return undefined;
-    const rel = path.relative(w.path, abs);
-    const c = claimOn(this.board(), w.path, rel, Date.now());
-    if (!c) return undefined;
-    const why = `${rel} is reserved by the agent in ${c.branch}${c.note ? ` (${c.note})` : ''} until ${new Date(c.expires).toLocaleTimeString()}. Coordinate first: leave a note with the agentyard post_note tool, work on something else, or ask the user.`;
-    this.ctl.log(t('File reservation: {0} in {1} is reserved by {2}.', rel, w.branch ?? w.name, c.branch));
-    return hookJson({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: mode === 'block' ? 'deny' : 'ask', permissionDecisionReason: why } });
   }
 
   // ------------------------------------------------------------ ferramentas

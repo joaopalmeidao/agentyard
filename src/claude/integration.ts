@@ -9,7 +9,7 @@ import type { Coord } from '../coord/register';
 import { gitUri } from '../diff';
 import { t } from '../i18n';
 import type { WorktreeView } from '../model';
-import { describeToolRequest, guardToolUse } from './guard';
+import { describeToolRequest } from './guard';
 import { osNotify } from './osNotify';
 import { sessionContext } from './sessionContext';
 import * as turns from './turns';
@@ -100,27 +100,11 @@ export class ClaudeIntegration implements vscode.Disposable {
     return this.ctl.cfg();
   }
 
-  // ------------------------------------------------------------ guarda e plano
-
-  private guardContext(w: WorktreeView) {
-    const s = this.ctl.state;
-    const others = (s?.worktrees ?? []).filter(x => !x.bare && !x.prunable && keyOf(x.path) !== keyOf(w.path)).map(x => ({ path: x.path, name: x.branch ?? x.name }));
-    const prot = new Set([s?.base, ...(s?.protectedBranches ?? [])].filter(Boolean) as string[]);
-    return { worktree: w.path, others, protectedBranches: [...prot], strict: this.cfg().get<string>('claude.guard', 'on') === 'strict' };
-  }
+  // ------------------------------------------------------------ plano
 
   private async onPreToolUse(e: BridgeHookEvent) {
-    const w = e.worktree;
-    if (e.tool_name === 'ExitPlanMode') {
-      this.showPlan(e);
-      return undefined;
-    }
-    if (!w || this.cfg().get<string>('claude.guard', 'on') === 'off') return undefined;
-    const why = guardToolUse({ tool_name: e.tool_name, tool_input: e.tool_input, cwd: e.cwd }, this.guardContext(w));
-    if (!why) return undefined;
-    this.ctl.log(t('Worktree guard blocked {0} in {1}: {2}', describeToolRequest(e.tool_name, e.tool_input), w.branch ?? w.name, why));
-    void this.bump(w.path, 'guardBlocks');
-    return hookJson({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: why } });
+    if (e.tool_name === 'ExitPlanMode') this.showPlan(e);
+    return undefined;
   }
 
   private showPlan(e: BridgeHookEvent) {
@@ -215,7 +199,6 @@ export class ClaudeIntegration implements vscode.Disposable {
       busy,
       request: w.request ? { ref: w.request.ref, url: w.request.url, state: w.request.state, review: w.request.review?.state } : undefined,
       ci: ci ? { status: ci.status, name: ci.name } : undefined,
-      guard: this.cfg().get<string>('claude.guard', 'on') !== 'off',
       mcp: this.cfg().get<boolean>('claude.mcp', true) && !!e.open,
       extra: this.cfg().get<string>('claude.extraContext', ''),
     });

@@ -1117,11 +1117,11 @@ exports.run = async () => {
     await core.callBridge(info, 'tool', { name: 'queue_task', args: { text: 'tarefa via MCP', worktree: 'ai/refatorar-api' }, cwd: wt.path });
     const wt3 = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
     assert.ok(api.agentFlow.tasks.queue(wt3.path).tasks.some(x => x.text === 'tarefa via MCP'));
-    // guarda: editar arquivo de outra worktree é negado; na própria, passa
-    const deny = await core.callBridge(info, 'hook', { hook_event_name: 'PreToolUse', cwd: wt.path, tool_name: 'Edit', tool_input: { file_path: path.join(other.path, 'x.ts') } });
-    assert.strictEqual(JSON.parse(deny.stdout).hookSpecificOutput.permissionDecision, 'deny');
-    const pass = await core.callBridge(info, 'hook', { hook_event_name: 'PreToolUse', cwd: wt.path, tool_name: 'Edit', tool_input: { file_path: path.join(wt.path, 'x.ts') } });
-    assert.ok(!pass.stdout);
+    // sem travas: editar arquivo de outra worktree ou rodar git em outra branch passa
+    const edit = await core.callBridge(info, 'hook', { hook_event_name: 'PreToolUse', cwd: wt.path, tool_name: 'Edit', tool_input: { file_path: path.join(other.path, 'x.ts') } });
+    assert.ok(!edit.stdout, edit.stdout);
+    const git = await core.callBridge(info, 'hook', { hook_event_name: 'PreToolUse', cwd: wt.path, tool_name: 'Bash', tool_input: { command: 'git checkout master' } });
+    assert.ok(!git.stdout, git.stdout);
     // contexto da sessão
     const ctxOut = await core.callBridge(info, 'hook', { hook_event_name: 'SessionStart', cwd: wt.path, source: 'startup' });
     const add = JSON.parse(ctxOut.stdout).hookSpecificOutput.additionalContext;

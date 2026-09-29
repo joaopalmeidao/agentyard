@@ -1,6 +1,12 @@
 # Changelog
 
 ## Não lançado
+- **Sem travas nos agentes**: saíram a guarda da worktree (`claude.guard`: bloqueio de edições e
+  comandos em outras worktrees, troca de branch, force push, push na base, remover worktrees), a
+  recusa de edição em arquivo reservado (`claude.claims`) e a negação de ação repetida
+  (`claude.stuck.repeats`). O hook `PreToolUse` agora só acompanha o `ExitPlanMode` (aviso do plano),
+  então nenhum processo sobe a cada Bash/Edit, nem nos subagentes. Ficam os avisos e as notas: mural,
+  reservas como aviso, contexto da sessão e o aviso de turno parado sem mudar arquivos.
 - **Criar projeto novo do zero**: o comando **Novo projeto (git init)…** (botão de pasta nova na view
   Projetos, opção em **Adicionar projeto…** e link na tela de "nenhum repositório") pede a pasta-mãe e o
   nome, escolhe um `.gitignore` (genérico, Node.js, Python, .NET ou nenhum), faz `git init` na branch
