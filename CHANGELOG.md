@@ -1,6 +1,13 @@
 # Changelog
 
 ## Não lançado
+- **Criar projeto novo do zero**: o comando **Novo projeto (git init)…** (botão de pasta nova na view
+  Projetos, opção em **Adicionar projeto…** e link na tela de "nenhum repositório") pede a pasta-mãe e o
+  nome, escolhe um `.gitignore` (genérico, Node.js, Python, .NET ou nenhum), faz `git init` na branch
+  padrão do git (`init.defaultBranch`, senão `main`), cria o `README.md` e o commit inicial (sem ele não
+  dá para criar worktrees), adiciona o projeto à lista e oferece torná-lo ativo ou abri-lo numa janela.
+  Uma pasta existente sem git também serve (nada é sobrescrito); se o commit falhar por falta de
+  `user.name`/`user.email`, o repositório fica criado e o aviso diz o que configurar.
 - **Anexar arquivos e pastas e escrever prompts longos nas tarefas**: toda caixa de tarefa para o agente
   (nova worktree com tarefa, abrir agente, fila, tentativas, tarefa em lote…) ganha, além do microfone,
   o botão **Anexar arquivos ou pastas** (arquivos, pastas ou abas abertas no editor, vários de uma vez,

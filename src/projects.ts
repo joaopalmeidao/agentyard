@@ -4,8 +4,11 @@ import * as vscode from 'vscode';
 import type { Controller } from './controller';
 import { Repo } from './git';
 import { t } from './i18n';
+import { checkTarget, createProject, GitignoreKind, validateProjectName } from './newProject';
 
 const STORE_KEY = 'projects';
+/** Última pasta onde se criou um projeto, para sugerir de novo. */
+const NEW_PARENT_KEY = 'newProjectParent';
 
 export interface ProjectInfo {
   /** Pasta da worktree principal. */
@@ -128,10 +131,12 @@ export class Projects implements vscode.Disposable {
       [
         { label: `$(folder-opened) ${t('Choose a repository folder…')}`, v: 'one' },
         { label: `$(search) ${t('Find repositories in a folder…')}`, detail: t('Lists the repositories right below the chosen folder (e.g. git_repos)'), v: 'scan' },
+        { label: `$(new-folder) ${t('Create a new project…')}`, detail: t('New folder with git init, README, .gitignore and an initial commit'), v: 'new' },
       ],
       { title: t('Add project') },
     );
     if (!how) return;
+    if (how.v === 'new') return this.create();
     const dir = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: how.v === 'one' ? t('Add') : t('Search here') });
     if (!dir?.[0]) return;
     let targets = [dir[0].fsPath];
@@ -160,6 +165,66 @@ export class Projects implements vscode.Disposable {
       if (go) await this.ctl.setActiveRepo(targets[0]);
     } else if (added.length) {
       vscode.window.showInformationMessage(t('{0} projects added.', added.length));
+    }
+  }
+
+  /** Cria um repositório novo do zero (pasta, git init, README, .gitignore, commit inicial) e o adiciona à lista. */
+  async create() {
+    const lastParent = this.ctl.ctx.globalState.get<string>(NEW_PARENT_KEY);
+    const around = lastParent ?? (this.ctl.repo ? path.dirname(mainPathOf(this.ctl.repo)) : undefined);
+    const parentPick = await vscode.window.showOpenDialog({
+      canSelectFolders: true,
+      canSelectFiles: false,
+      canSelectMany: false,
+      defaultUri: around ? vscode.Uri.file(around) : undefined,
+      openLabel: t('Create the project here'),
+      title: t('New project: where should the folder be created?'),
+    });
+    const parent = parentPick?.[0]?.fsPath;
+    if (!parent) return;
+    const name = await vscode.window.showInputBox({
+      title: t('New project in {0}', parent),
+      prompt: t('Folder name (an existing folder without git also works: it becomes the project)'),
+      validateInput: v => validateProjectName(v) ?? checkTarget(path.join(parent, v.trim())),
+    });
+    if (!name) return;
+    const ignore = await vscode.window.showQuickPick(
+      [
+        { label: t('Generic'), description: '.DS_Store, .env, *.log', v: 'generic' as GitignoreKind },
+        { label: 'Node.js', description: 'node_modules, dist, out…', v: 'node' as GitignoreKind },
+        { label: 'Python', description: '__pycache__, .venv…', v: 'python' as GitignoreKind },
+        { label: '.NET', description: 'bin, obj, .vs…', v: 'dotnet' as GitignoreKind },
+        { label: t('No .gitignore'), v: 'none' as GitignoreKind },
+      ],
+      { title: t('.gitignore for {0}', name.trim()) },
+    );
+    if (!ignore) return;
+    let result;
+    try {
+      result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Creating {0}…', name.trim()) }, () =>
+        createProject(parent, name, { readme: true, gitignore: ignore.v, commit: true }),
+      );
+    } catch (e) {
+      vscode.window.showErrorMessage(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    await this.ctl.ctx.globalState.update(NEW_PARENT_KEY, parent);
+    await this.addPath(result.path);
+    this.ctl.log(t('Project created: {0} (branch {1})', result.path, result.branch));
+    if (!result.committed) {
+      vscode.window.showWarningMessage(
+        t('The repository was created, but the initial commit failed (worktrees need one): {0}', result.commitError ?? ''),
+        { detail: t('Set your identity with git config --global user.name and user.email, then commit in {0}.', result.path) },
+      );
+    }
+    const here = t('Make active');
+    const newWindow = t('Open in new window');
+    const openHere = t('Open in this window');
+    const choices = vscode.workspace.workspaceFolders?.length ? [here, newWindow] : [openHere, newWindow];
+    const go = await vscode.window.showInformationMessage(t('Project {0} created on branch {1}.', path.basename(result.path), result.branch), ...choices);
+    if (go === here) await this.ctl.setActiveRepo(result.path);
+    else if (go === openHere || go === newWindow) {
+      await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(result.path), { forceNewWindow: go === newWindow });
     }
   }
 

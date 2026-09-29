@@ -360,6 +360,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('openGraph', () => GraphPanel.show(ctl, handler));
   reg('refresh', () => ctl.refresh());
   reg('addProject', () => projects.add());
+  reg('newProject', () => projects.create());
   reg('removeProject', item => projects.remove(typeof item === 'string' ? item : item?.path));
   reg('switchProject', (p?: string | { path?: string }) => projects.switch(typeof p === 'string' ? p : p?.path));
   reg('openProjectGraph', async (p?: string | { path?: string }) => {
