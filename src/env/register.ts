@@ -1,3 +1,4 @@
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -175,11 +176,36 @@ export class EnvService implements vscode.Disposable {
       const ok = await vscode.window.showInformationMessage(t('{0}: create the Python environment ({1})?', branch, plan.python.tool), install, t('Not now'));
       if (ok === install) cmds.push(plan.python.install);
     }
+    // sem diálogo (uma worktree por prompt do agente): em segundo plano, sem abrir terminal
+    if (cmds.length && quiet) {
+      for (const c of cmds) this.runHidden(c, dir, branch);
+      return;
+    }
     if (cmds.length) {
       const term = vscode.window.createTerminal({ name: `${branch}: setup`, cwd: dir });
       term.show(true);
       for (const c of cmds) term.sendText(c);
     }
+  }
+
+  /** Roda sem terminal; saída no log. Só avisa se falhar. */
+  private runHidden(cmd: string, dir: string, branch: string) {
+    this.ctl.log(t('{0}: {1} in the background…', branch, cmd));
+    const child = spawn(cmd, { cwd: dir, shell: true, windowsHide: true });
+    let tail = '';
+    const keep = (d: Buffer) => (tail = (tail + d.toString()).slice(-4000));
+    child.stdout?.on('data', keep);
+    child.stderr?.on('data', keep);
+    let finished = false;
+    const done = (ok: boolean, detail: string) => {
+      if (finished) return;
+      finished = true;
+      if (ok) return this.ctl.log(t('{0}: {1} done.', branch, cmd));
+      this.ctl.log(`${t('{0}: {1} failed.', branch, cmd)}\n${detail}`);
+      void vscode.window.showWarningMessage(t('{0}: {1} failed.', branch, cmd), t('View log')).then(p => p && this.ctl.out.show());
+    };
+    child.on('error', e => done(false, e.message));
+    child.on('close', code => done(code === 0, tail.trim()));
   }
 
   // ---------- rodar e abrir ----------
