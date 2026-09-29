@@ -82,6 +82,7 @@ export class TaskQueue implements vscode.Disposable {
       (await askTask({
         title: t('New task for {0}', branch ?? path.basename(p)),
         prompt: t('What the agent should do. It goes into the queue and runs when the previous one is ready.'),
+        cwd: p,
       }));
     if (!typed?.trim()) return undefined;
     const all = this.all();

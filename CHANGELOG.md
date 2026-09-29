@@ -1,6 +1,16 @@
 # Changelog
 
 ## Não lançado
+- **Anexar arquivos e pastas e escrever prompts longos nas tarefas**: toda caixa de tarefa para o agente
+  (nova worktree com tarefa, abrir agente, fila, tentativas, tarefa em lote…) ganha, além do microfone,
+  o botão **Anexar arquivos ou pastas** (arquivos, pastas ou abas abertas no editor, vários de uma vez,
+  viram `@menções` relativas à worktree) e o botão **Escrever num editor**, que abre um rascunho em
+  Markdown onde cabe um prompt de várias linhas: **Ctrl+Enter** ou o botão de enviar no título envia, e
+  o botão de arquivos anexa na posição do cursor. Texto de várias linhas sempre segue no editor (a caixa
+  juntaria as linhas). No Explorer, **Nova worktree com tarefa sobre estes arquivos…** já começa a tarefa
+  com os arquivos e pastas selecionados, e **Enviar ao Claude (@menção)** agora aceita pastas. Tarefa
+  longa demais para a linha de comando (mais de 20 mil caracteres, 6 mil no cmd) vai ao agente como o
+  caminho do arquivo com o texto inteiro.
 - **Botão ☁ Pull na barra de status**, ao lado do **☁ Push**: traz do remoto as branches escolhidas numa
   lista (as que dão fast-forward em worktree limpa ou sem worktree já vêm marcadas) e mostra quantas
   branches têm novidades no remoto. Desliga com `worktreeGraph.pullStatusBar`.

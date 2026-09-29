@@ -227,6 +227,11 @@ ao lado do código). Agentes abertos com uma tarefa não tiram o foco de onde vo
 
 Nada disso aperta Enter: você completa a mensagem.
 
+Nas caixas de tarefa para o agente, o botão **Anexar arquivos ou pastas** põe `@menções` no texto
+(arquivos, pastas ou abas abertas no editor) e o botão **Escrever num editor** abre um rascunho para
+prompts longos, de várias linhas: **Ctrl+Enter** (ou o botão de enviar no título) envia. No Explorer,
+selecione arquivos e pastas e use **Nova worktree com tarefa sobre estes arquivos…**.
+
 ### Permissões, fim da sessão e `/ide`
 
 - `worktreeGraph.claude.answerFromNotification` (experimental) põe **Permitir** e **Negar** na

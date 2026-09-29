@@ -48,12 +48,23 @@ export function promptArgument(prompt: string, shell = vscode.env.shell): { arg:
   const file = path.join(dir, `${Date.now()}-${Math.random().toString(36).slice(2, 7)}.md`);
   fs.writeFileSync(file, prompt, 'utf8');
   const sh = path.basename(shell || '').toLowerCase();
+  const cmd = sh.startsWith('cmd');
+  // longo demais para a linha de comando: o agente recebe só o caminho do arquivo com a tarefa inteira
+  if (prompt.length > (cmd ? MAX_CMD_PROMPT_ARG : MAX_PROMPT_ARG)) {
+    const pointer = t('The full task is in the file {0}. Read the whole file and do what it asks.', file);
+    const arg = /pwsh|powershell/.test(sh) ? `'${pointer.replace(/'/g, "''")}'` : cmd ? `"${pointer.replace(/"/g, "'")}"` : `'${pointer.replace(/'/g, `'\\''`)}'`;
+    return { arg, file };
+  }
   let arg: string;
   if (/pwsh|powershell/.test(sh)) arg = `(Get-Content -Raw -LiteralPath '${file.replace(/'/g, "''")}')`;
-  else if (sh.startsWith('cmd')) arg = `"${prompt.replace(/\r?\n/g, ' ').replace(/"/g, "'")}"`;
+  else if (cmd) arg = `"${prompt.replace(/\r?\n/g, ' ').replace(/"/g, "'")}"`;
   else arg = `"$(cat '${file.replace(/\\/g, '/').replace(/'/g, `'\\''`)}')"`;
   return { arg, file };
 }
+
+/** Acima disso a tarefa não vai como argumento: a linha de comando do Windows tem 32767 caracteres, a do cmd 8191. */
+const MAX_PROMPT_ARG = 20000;
+const MAX_CMD_PROMPT_ARG = 6000;
 
 /** Um agente acabou de ser aberto pela extensão (a frente "pronto para revisar" acompanha a partir daqui). */
 export interface AgentLaunch {
@@ -655,6 +666,7 @@ export class AgentTerminals implements vscode.Disposable {
       const prompt = await askTask({
         title: t('{0} in {1}', agent.name, branch ?? path.basename(worktreePath)),
         prompt: t('Initial task for the agent (empty = open without a task)'),
+        cwd: worktreePath,
       });
       if (prompt === undefined) return;
       if (prompt.trim()) {

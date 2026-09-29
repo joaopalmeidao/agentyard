@@ -311,6 +311,21 @@ exports.run = async () => {
     assert.ok(ps.arg.startsWith("(Get-Content -Raw -LiteralPath '") && fs.readFileSync(ps.file, 'utf8') === 'a\nb "c"');
     assert.ok(promptArgument('x', '/bin/bash').arg.startsWith('"$(cat \''));
     assert.strictEqual(promptArgument('a\nb "c"', 'C:/Windows/System32/cmd.exe').arg, `"a b 'c'"`);
+    // longo demais para a linha de comando: vai só o caminho do arquivo com a tarefa inteira
+    const long = 'x'.repeat(30000);
+    for (const sh of ['C:/Program Files/PowerShell/7/pwsh.exe', '/bin/bash', 'C:/Windows/System32/cmd.exe']) {
+      const p = promptArgument(long, sh);
+      assert.ok(p.arg.length < 1000 && p.arg.includes(p.file) && fs.readFileSync(p.file, 'utf8') === long, sh);
+    }
+    assert.ok(promptArgument('y'.repeat(7000), 'C:/Windows/System32/cmd.exe').arg.length < 1000, 'cmd tem limite menor');
+    const { attachmentText } = require('../out/taskInput');
+    const pathMod = require('path');
+    const cwd = pathMod.resolve('/repo/wt');
+    assert.strictEqual(
+      attachmentText([pathMod.join(cwd, 'src', 'a.ts'), pathMod.join(cwd, 'docs'), pathMod.join(cwd, 'src', 'a.ts'), pathMod.join(cwd, 'my notes.md')], cwd),
+      '@src/a.ts @docs @"my notes.md"',
+    );
+    assert.ok(attachmentText([pathMod.resolve('/outro/b.ts')], cwd).startsWith('@') && attachmentText([pathMod.resolve('/outro/b.ts')], cwd).endsWith('/outro/b.ts'));
     assert.strictEqual(promptCommandOf({ name: 'G', command: 'gemini' }), 'gemini -i {prompt}');
     assert.strictEqual(promptCommandOf({ name: 'X', command: 'aider' }), 'aider {prompt}');
   });

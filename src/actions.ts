@@ -14,7 +14,8 @@ import { migrationGate } from './migrations/register';
 import { Repo, Worktree } from './git';
 import { t } from './i18n';
 import { applySparse, hasSubmodules, initSubmodules } from './sparse';
-import { askTask } from './taskInput';
+import { askTask, attachmentText } from './taskInput';
+import { worktreeOfFile } from './claude/sendContext';
 
 type BranchArg = string | { branch?: string } | undefined;
 
@@ -527,7 +528,10 @@ export async function showUncommitted(ctl: Controller, arg: BranchArg | { path?:
  * Nova worktree a partir de uma branch escolhida (a base por padrão) e já com uma tarefa para o agente.
  * `arg` com branch (item da árvore, card do grafo) ou `startPoint` pula a escolha da origem.
  */
-export async function newWorktreeWithTask(ctl: Controller, arg?: string | { branch?: string; startPoint?: string; prompt?: string; name?: string; agent?: string; voice?: boolean }) {
+export async function newWorktreeWithTask(
+  ctl: Controller,
+  arg?: string | { branch?: string; startPoint?: string; prompt?: string; name?: string; agent?: string; voice?: boolean; attach?: string[] },
+) {
   const repo = repoOf(ctl);
   const o = typeof arg === 'string' ? { branch: arg } : (arg ?? {});
   let from = o.startPoint ?? o.branch;
@@ -535,18 +539,24 @@ export async function newWorktreeWithTask(ctl: Controller, arg?: string | { bran
     from = await pickStartPoint(ctl, t('New worktree with task (1/3)'));
     if (!from) return;
   }
+  // anexos relativos à worktree de onde vieram: o mesmo caminho vale na worktree nova
+  const cwd = (o.attach?.length ? worktreeOfFile(ctl, o.attach[0])?.path : undefined) ?? ctl.state?.worktrees.find(w => w.isCurrent)?.path;
   const prompt =
     o.prompt ??
     (await askTask({
       title: t('New worktree with task (2/3) — from {0}', from),
       prompt: t('What should the agent do in the new worktree?'),
       voice: o.voice,
+      value: o.attach?.length ? `${attachmentText(o.attach, cwd)} ` : undefined,
+      cwd,
     }));
   if (!prompt?.trim()) return;
   const names = new Set((await repo.refs()).filter(r => r.kind === 'head').map(r => r.name));
   const { slugify } = await import('./agentFlow/attempts');
-  let suggestion = `ai/${slugify(prompt) || 'tarefa'}`;
-  for (let i = 2; names.has(suggestion); i++) suggestion = `ai/${slugify(prompt) || 'tarefa'}-${i}`;
+  // as @menções dos anexos não entram no nome da branch
+  const slug = slugify(prompt.replace(/@"[^"]*"\S*|@\S+/g, ' ')) || 'tarefa';
+  let suggestion = `ai/${slug}`;
+  for (let i = 2; names.has(suggestion); i++) suggestion = `ai/${slug}-${i}`;
   const branch =
     o.name ??
     (await vscode.window.showInputBox({

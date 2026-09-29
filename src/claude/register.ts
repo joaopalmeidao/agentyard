@@ -126,6 +126,7 @@ export function registerClaudeIntegration(ctx: vscode.ExtensionContext, ctl: Con
     const task = await askTask({
       title: t('Claude Code in {0} (3/3): task', where),
       prompt: t('Initial task for the agent (empty = open without a task)'),
+      cwd: w.path,
     });
     if (task === undefined) return;
     await ctx.globalState.update(LAST_KEY, { model: modelId || undefined, permissionMode: mode.label });
