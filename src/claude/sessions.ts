@@ -617,6 +617,88 @@ export function renderRecap(title: string, root: string | undefined, sessions: {
   return lines.join('\n');
 }
 
+/** Branch que um commit de merge trouxe, pelo assunto que o git, GitHub, GitLab e Bitbucket escrevem. */
+export function mergeSource(subject: string): string | undefined {
+  const s = subject.trim();
+  let m = /^Merge remote-tracking branch '[^/']+\/([^']+)'/.exec(s);
+  if (m) return m[1];
+  m = /^Merge branch '([^']+)'/.exec(s);
+  if (m) return m[1];
+  m = /^Merge pull request #\d+ from [^/\s]+\/(\S+)/.exec(s);
+  if (m) return m[1];
+  m = /^Merged in (\S+)/.exec(s);
+  return m ? m[1] : undefined;
+}
+
+/**
+ * Sessões do Claude feitas numa branch deste repositório: pelo `gitBranch` gravado no log (vale mesmo
+ * depois que a worktree foi removida) ou por terem rodado dentro de `wtPath`. `roots` limita às pastas
+ * do repositório (a principal e onde ficam as worktrees), para não pegar branch de mesmo nome de outro projeto.
+ */
+export function sessionsOfBranch(sessions: SessionInfo[], branch: string, roots: string[], wtPath?: string): SessionInfo[] {
+  const rs = roots.map(norm);
+  const wt = wtPath ? norm(wtPath) : undefined;
+  return sessions
+    .filter(s => {
+      if (!s.cwd) return false;
+      const c = norm(s.cwd);
+      if (wt && (c === wt || c.startsWith(wt + path.sep.toLowerCase()) || c.startsWith(wt + '/'))) return true;
+      return s.gitBranch === branch && rs.some(r => c.startsWith(r));
+    })
+    .sort((a, b) => a.start - b.start);
+}
+
+/** Uma branch trazida por merge (ou a própria branch pedida), com o que a IA fez nela. */
+export interface MergePart {
+  branch: string;
+  /** Commits de merge que a trouxeram, do mais antigo ao mais novo. */
+  merges: { sha: string; at: number; into?: string }[];
+  /** Commits da branch (`git log --oneline --first-parent`). */
+  commits: string[];
+  sessions: { info: SessionInfo; turns: SessionTurn[] }[];
+  /** Recapitulação guardada no momento do merge, usada quando os logs do Claude já não têm as sessões. */
+  saved?: { md: string; at: number };
+  /** Pasta onde a branch foi trabalhada (a worktree), para mostrar os arquivos relativos a ela. */
+  root?: string;
+}
+
+/** Tira o título de primeiro nível e desce os demais `levels` níveis (para caber embaixo de outro título). */
+function demote(md: string, levels = 1): string {
+  const extra = '#'.repeat(levels);
+  return md.replace(/^# .*\r?\n+/, '').replace(/^(#{1,5}) /gm, (_m, h: string) => `${h}${extra} `);
+}
+
+/**
+ * Recapitulação de uma cadeia de merges: um índice com cada branch trazida e, por branch, os commits
+ * e cada pedido feito à IA com a resposta final (das sessões ou do que foi guardado no merge).
+ */
+export function renderMergeRecap(title: string, root: string | undefined, parts: MergePart[], replyMax = 800): string {
+  const when = (ms?: number) => (ms ? new Date(ms).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+  const lines = [`# ${t('Merge recap: {0}', title)}`, ''];
+  if (!parts.length) return [...lines, t('No merged branch found here.')].join('\n');
+  const withAi = parts.filter(p => p.sessions.length || p.saved).length;
+  lines.push(`_${t('{0} branch(es) · {1} with Claude sessions', parts.length, withAi)}_`, '');
+  for (const p of parts) {
+    const last = p.merges[p.merges.length - 1];
+    const bits = [
+      last ? `${last.into ? `→ \`${last.into}\` ` : ''}${when(last.at)}` : '',
+      t('{0} commit(s)', p.commits.length),
+      p.sessions.length ? t('{0} session(s)', p.sessions.length) : p.saved ? t('saved at the merge') : t('no Claude session'),
+    ].filter(Boolean);
+    lines.push(`- **${p.branch}** · ${bits.join(' · ')}`);
+  }
+  lines.push('');
+  for (const p of parts) {
+    lines.push(`## ${p.branch}`, '');
+    if (p.merges.length) lines.push(`_${p.merges.map(m => `${t('merged')} ${m.into ? `${t('into')} \`${m.into}\` ` : ''}${when(m.at)} (\`${m.sha.slice(0, 8)}\`)`).join(' · ')}_`, '');
+    if (p.commits.length) lines.push(`### ${t('Commits')}`, '', ...p.commits.slice(0, 30).map(c => `- ${c}`), ...(p.commits.length > 30 ? [`- … ${t('{0} more', p.commits.length - 30)}`] : []), '');
+    if (p.sessions.length) lines.push(demote(renderRecap(p.branch, p.root ?? root, p.sessions, undefined, replyMax)), '');
+    else if (p.saved) lines.push(`_${t('Saved when it was merged ({0}); the Claude logs no longer have these sessions.', when(p.saved.at))}_`, '', demote(p.saved.md), '');
+    else lines.push(`_${t('No Claude Code session found for this branch.')}_`, '');
+  }
+  return lines.join('\n');
+}
+
 /** Prompt para o Claude (sem terminal) resumir a recapitulação. */
 export function recapSummaryPrompt(recap: string, lang: string): string {
   const max = 80_000;

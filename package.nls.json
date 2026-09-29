@@ -100,6 +100,8 @@
   "command.claude.lastMessage.title": "Last Message from the Agent",
   "command.claude.recap.title": "Recap What Was Done",
   "command.claude.recapSummary.title": "Recap with a Summary by Claude",
+  "command.claude.recapMerges.title": "Recap What the AI Did in the Merges",
+  "command.claude.recapMergesSummary.title": "Recap the Merges with a Summary by Claude",
   "command.claude.usage.title": "Claude Code Usage: Plan Limits, Context and Cost",
   "command.claudeConfig.refresh.title": "Claude: Refresh Configuration",
   "command.claudeConfig.newSkill.title": "Claude: New Skill…",
