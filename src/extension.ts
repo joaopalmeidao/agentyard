@@ -47,6 +47,7 @@ import { ClaudeService, ClaudeSessionsProvider, SessionItem, TRANSCRIPT_SCHEME, 
 import { ClaudeUsage } from './claude/usage';
 import { UsagePanel } from './claude/usagePanel';
 import { WorktreeTreeProvider } from './treeView';
+import { registerTaskDraft } from './taskInput';
 import { t } from './i18n';
 
 export async function activate(ctx: vscode.ExtensionContext) {
@@ -103,6 +104,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   registerAgentAttention(ctx, ctl, agentTerms);
   registerLongProjects(ctx, ctl, agentTerms, claude);
   registerSendToClaude(ctx, ctl, agentTerms);
+  registerTaskDraft(ctx);
   registerClaudeVoice(ctx, ctl, agentTerms);
   registerTerminalUx(ctx, ctl, agentTerms);
   /** Worktree a partir de item da árvore, grupo de sessões, caminho ou nada (pergunta). */
@@ -372,6 +374,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg('newWorktreeWithTask', item => actions.newWorktreeWithTask(ctl, item));
   reg('newWorktreeWithTaskFrom', item => actions.newWorktreeWithTask(ctl, item));
   reg('newWorktreeWithTaskByVoice', () => actions.newWorktreeWithTask(ctl, { voice: true }));
+  // Explorer: os arquivos e pastas selecionados já entram como @menções na tarefa
+  reg('newWorktreeWithTaskForFiles', (uri?: vscode.Uri, uris?: vscode.Uri[]) => {
+    const list = Array.isArray(uris) && uris.length ? uris : uri instanceof vscode.Uri ? [uri] : [];
+    return actions.newWorktreeWithTask(ctl, { attach: list.filter(u => u.scheme === 'file').map(u => u.fsPath) });
+  });
   reg('openTerminal', item => actions.openTerminal(ctl, item));
   reg('launchAgent', (item, agent?: string) => launchAgent(item, agent));
   // botão da barra de status: o primeiro agente configurado, na worktree desta janela

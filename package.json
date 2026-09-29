@@ -53,6 +53,12 @@
         "command": "worktreeGraph.agents.pickWaiting",
         "key": "ctrl+alt+shift+j",
         "mac": "cmd+alt+shift+j"
+      },
+      {
+        "command": "worktreeGraph.taskDraft.send",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "worktreeGraph.taskDraftFocused && editorTextFocus"
       }
     ],
     "viewsContainers": {
@@ -217,6 +223,24 @@
         "title": "%command.newWorktreeWithTaskFrom.title%",
         "category": "AgentYard",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.newWorktreeWithTaskForFiles",
+        "title": "%command.newWorktreeWithTaskForFiles.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "worktreeGraph.taskDraft.send",
+        "title": "%command.taskDraft.send.title%",
+        "category": "AgentYard",
+        "icon": "$(send)"
+      },
+      {
+        "command": "worktreeGraph.taskDraft.attach",
+        "title": "%command.taskDraft.attach.title%",
+        "category": "AgentYard",
+        "icon": "$(files)"
       },
       {
         "command": "worktreeGraph.showUncommitted",
@@ -3495,6 +3519,18 @@
         {
           "command": "worktreeGraph.redmine.openProject",
           "when": "config.worktreeGraph.redmine.url"
+        },
+        {
+          "command": "worktreeGraph.newWorktreeWithTaskForFiles",
+          "when": "false"
+        },
+        {
+          "command": "worktreeGraph.taskDraft.send",
+          "when": "worktreeGraph.taskDraftFocused"
+        },
+        {
+          "command": "worktreeGraph.taskDraft.attach",
+          "when": "worktreeGraph.taskDraftFocused"
         }
       ],
       "editor/context": [
@@ -3531,8 +3567,11 @@
       "explorer/context": [
         {
           "command": "worktreeGraph.claude.sendSelection",
-          "when": "!explorerResourceIsFolder",
           "group": "9_worktreeGraph@0"
+        },
+        {
+          "command": "worktreeGraph.newWorktreeWithTaskForFiles",
+          "group": "9_worktreeGraph@1"
         }
       ],
       "comments/commentThread/context": [
@@ -3831,6 +3870,18 @@
           "command": "worktreeGraph.sparseCheckout",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "2_sparse@0"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "worktreeGraph.taskDraft.attach",
+          "when": "worktreeGraph.taskDraftFocused",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeGraph.taskDraft.send",
+          "when": "worktreeGraph.taskDraftFocused",
+          "group": "navigation@2"
         }
       ]
     },
