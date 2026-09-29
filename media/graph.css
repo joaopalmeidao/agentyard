@@ -118,6 +118,11 @@ button.agent:hover:not(:disabled) { background: color-mix(in srgb, var(--agent) 
 .menu-item.agent { color: color-mix(in srgb, var(--agent) 70%, var(--vscode-menu-foreground, var(--fg))); }
 .last { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .last .muted { font-size: 11px; }
+/* última mensagem do Claude no card */
+.agent-last { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; padding-left: 6px; border-left: 2px solid color-mix(in srgb, var(--agent) 55%, transparent); font-size: 12px; }
+.agent-last-text { flex: 1; min-width: 0; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; cursor: pointer; }
+.agent-last-text:hover { color: var(--fg); }
+.agent-last-meta { flex: none; color: var(--muted); font-size: 11px; white-space: nowrap; }
 /* ações no rodapé do card: alinhadas entre cards da mesma linha */
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: auto; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
 .actions .spacer { flex: 1; }

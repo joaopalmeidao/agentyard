@@ -30,6 +30,13 @@ export interface SessionInfo {
   aiTitle?: string;
   /** Primeira mensagem digitada pelo usuário, truncada. */
   firstPrompt?: string;
+  /** Última mensagem digitada pelo usuário, truncada. */
+  lastPrompt?: string;
+  /** Último texto do Claude (o fim do último turno), truncado. */
+  lastReply?: string;
+  lastReplyAt?: number;
+  /** id da resposta de `lastReply`: blocos de texto da mesma resposta se juntam. */
+  lastReplyId?: string;
   start: number;
   end: number;
   /** Mensagens do usuário (sem resultados de ferramenta) + respostas do assistente. */
@@ -62,8 +69,10 @@ export interface ScanCache {
   entries: Record<string, CacheEntry>;
 }
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const TITLE_MAX = 90;
+const PROMPT_MAX = 300;
+const REPLY_MAX = 1500;
 /** Eventos por resposta são mantidos só para sessões que terminaram há menos disso. */
 const EVENTS_KEEP_MS = 9 * 24 * 3600_000;
 
@@ -90,6 +99,17 @@ export function totalTokens(u: TokenUsage): number {
 function dayKey(ms: number): string {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const clipTo = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+
+/** Todos os blocos de texto de uma linha de resposta do assistente, juntos. */
+function replyText(content: unknown): string {
+  if (!Array.isArray(content)) return typeof content === 'string' ? content : '';
+  return content
+    .filter(b => b && b.type === 'text' && typeof b.text === 'string' && b.text.trim())
+    .map(b => b.text as string)
+    .join('\n\n');
 }
 
 function textOf(content: unknown): string | undefined {
@@ -156,16 +176,24 @@ async function readIncremental(file: string, st: FileState, info: SessionInfo, i
       const text = textOf(o.message?.content);
       if (!text || isNoise(text)) return;
       info.userMessages++;
-      if (!info.firstPrompt) {
-        const one = text.replace(/\s+/g, ' ').trim();
-        info.firstPrompt = one.length > TITLE_MAX ? `${one.slice(0, TITLE_MAX - 1)}…` : one;
-      }
+      const one = text.replace(/\s+/g, ' ').trim();
+      if (!info.firstPrompt) info.firstPrompt = clipTo(one, TITLE_MAX);
+      info.lastPrompt = clipTo(one, PROMPT_MAX);
       return;
     }
     if (o.type === 'assistant') {
       const msg = o.message ?? {};
       // Cada bloco de conteúdo de uma resposta vira uma linha com o mesmo id e o mesmo usage.
       const id = msg.id ?? o.requestId;
+      if (isMain) {
+        const text = replyText(msg.content).trim();
+        if (text) {
+          const joined = id && id === info.lastReplyId && info.lastReply ? `${info.lastReply}\n\n${text}` : text;
+          info.lastReply = clipTo(joined, REPLY_MAX);
+          info.lastReplyId = id;
+          if (!Number.isNaN(ts)) info.lastReplyAt = ts;
+        }
+      }
       if (id && id === lastMsgId) return;
       lastMsgId = id;
       if (isMain) info.assistantMessages++;
@@ -448,6 +476,162 @@ export async function renderTranscript(s: SessionInfo, maxChars = 4000): Promise
     stream.on('error', reject);
   });
   return lines.join('\n');
+}
+
+/** Um turno: o que a pessoa pediu, o que o Claude mexeu e o texto com que ele fechou. */
+export interface SessionTurn {
+  prompt: string;
+  at: number;
+  /** Último texto do Claude no turno (a mensagem final). */
+  reply: string;
+  replyAt?: number;
+  /** Arquivos passados a Edit/Write/MultiEdit/NotebookEdit, na ordem em que apareceram. */
+  files: string[];
+  /** Chamadas de ferramenta no turno. */
+  tools: number;
+}
+
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+
+/** Lê a transcrição inteira e separa por turno (cada mensagem digitada abre um turno). */
+export async function readTurns(file: string): Promise<SessionTurn[]> {
+  const turns: SessionTurn[] = [];
+  let cur: SessionTurn | undefined;
+  let replyId: string | undefined;
+  const handle = (line: string) => {
+    if (!line.includes('"type":"user"') && !line.includes('"type":"assistant"')) return;
+    let o: any;
+    try {
+      o = JSON.parse(line);
+    } catch {
+      return;
+    }
+    const ts = o.timestamp ? Date.parse(o.timestamp) : NaN;
+    if (o.type === 'user') {
+      if (o.toolUseResult !== undefined || o.isMeta) return;
+      const text = textOf(o.message?.content);
+      if (!text || isNoise(text)) return;
+      cur = { prompt: text.trim(), at: Number.isNaN(ts) ? 0 : ts, reply: '', files: [], tools: 0 };
+      replyId = undefined;
+      turns.push(cur);
+      return;
+    }
+    if (!cur) {
+      // resposta antes de qualquer mensagem (sessão retomada/compactada): turno sem pedido
+      cur = { prompt: '', at: Number.isNaN(ts) ? 0 : ts, reply: '', files: [], tools: 0 };
+      turns.push(cur);
+    }
+    const msg = o.message ?? {};
+    const id = msg.id ?? o.requestId;
+    for (const b of Array.isArray(msg.content) ? msg.content : []) {
+      if (b?.type !== 'tool_use') continue;
+      cur.tools++;
+      const f = b.input?.file_path ?? b.input?.notebook_path;
+      if (EDIT_TOOLS.has(b.name) && typeof f === 'string' && !cur.files.includes(f)) cur.files.push(f);
+    }
+    const text = replyText(msg.content).trim();
+    if (!text) return;
+    cur.reply = id && id === replyId && cur.reply ? `${cur.reply}\n\n${text}` : text;
+    replyId = id;
+    if (!Number.isNaN(ts)) cur.replyAt = ts;
+  };
+  await new Promise<void>((resolve, reject) => {
+    let leftover = '';
+    const stream = fs.createReadStream(file, { encoding: 'utf8', highWaterMark: 1 << 20 });
+    stream.on('data', (chunk: string | Buffer) => {
+      const parts = (leftover + chunk).split('\n');
+      leftover = parts.pop() ?? '';
+      for (const p of parts) handle(p.endsWith('\r') ? p.slice(0, -1) : p);
+    });
+    stream.on('end', () => {
+      if (leftover) handle(leftover);
+      resolve();
+    });
+    stream.on('error', reject);
+  });
+  return turns;
+}
+
+/** Arquivos relativos à worktree, em `código`; os de fora dela (rascunhos, temporários) ficam de fora. */
+function fileList(root: string | undefined, files: string[], sep = ', '): string {
+  const inside = root
+    ? files.map(f => path.relative(root, f)).filter(r => r && !r.startsWith('..') && !path.isAbsolute(r)).map(r => r.replace(/\\/g, '/'))
+    : files;
+  return inside.map(f => `\`${f}\``).join(sep);
+}
+
+/** Última mensagem do Claude numa sessão, com o pedido que ela responde (Markdown). */
+export function renderLastMessage(s: SessionInfo, turns: SessionTurn[], root?: string): string {
+  const when = (ms?: number) => (ms ? new Date(ms).toLocaleString(locale()) : '');
+  const last = [...turns].reverse().find(x => x.reply) ?? turns[turns.length - 1];
+  const lines = [`# ${sessionTitle(s)}`, '', `${t('Session {0}', `\`${s.id}\``)}${s.gitBranch ? ` · ${s.gitBranch}` : ''} · ${when(s.end)}`, ''];
+  if (!last) return [...lines, t('No messages in this session yet.')].join('\n');
+  if (last.prompt) lines.push(`## ${t('You')} · ${when(last.at)}`, '', quote(clipTo(last.prompt, 3000)), '');
+  lines.push(`## Claude · ${when(last.replyAt ?? last.at)}`, '', last.reply || `_${t('No text reply in this turn yet.')}_`, '');
+  const files = fileList(root, last.files);
+  if (files) lines.push(`**${t('Files edited in this turn')}:** ${files}`, '');
+  return lines.join('\n');
+}
+
+const quote = (s: string) => s.split('\n').map(l => `> ${l}`).join('\n');
+
+export interface RecapGit {
+  branch?: string;
+  base?: string;
+  /** `git log --oneline base..HEAD` */
+  commits: string[];
+  /** `git status --short` */
+  uncommitted: string[];
+  /** Última linha de `git diff --stat base...HEAD` */
+  stat?: string;
+}
+
+/**
+ * Recapitulação de uma worktree: estado no git e, por sessão (da mais antiga para a mais nova), cada
+ * pedido, os arquivos editados e a resposta final do Claude. `replyMax` corta respostas longas.
+ */
+export function renderRecap(title: string, root: string | undefined, sessions: { info: SessionInfo; turns: SessionTurn[] }[], git?: RecapGit, replyMax = 1200): string {
+  const when = (ms?: number) => (ms ? new Date(ms).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+  const lines = [`# ${t('Recap: {0}', title)}`, ''];
+  if (git) {
+    lines.push(`## ${t('Where it stands')}`, '');
+    if (git.base) lines.push(`- ${t('{0} commit(s) ahead of {1}', git.commits.length, `\`${git.base}\``)}${git.stat ? ` · ${git.stat}` : ''}`);
+    lines.push(`- ${git.uncommitted.length ? t('{0} uncommitted file(s)', git.uncommitted.length) : t('No uncommitted changes')}`);
+    if (git.commits.length) lines.push('', `### ${t('Commits')}`, '', ...git.commits.slice(0, 40).map(c => `- ${c}`), ...(git.commits.length > 40 ? [`- … ${t('{0} more', git.commits.length - 40)}`] : []));
+    if (git.uncommitted.length) lines.push('', `### ${t('Uncommitted')}`, '', '```', ...git.uncommitted.slice(0, 40), '```');
+    lines.push('');
+  }
+  if (!sessions.length) lines.push(t('No Claude Code session in this worktree.'));
+  const touched = fileList(root, [...new Set(sessions.flatMap(x => x.turns.flatMap(tn => tn.files)))], ' · ');
+  if (touched) lines.push(`## ${t('Files the agent edited')}`, '', touched, '');
+  for (const { info, turns } of sessions) {
+    lines.push(`## ${sessionTitle(info)}`, '', `_${when(info.start)} → ${when(info.end)} · ${t('{0} turn(s)', turns.length)} · \`${info.id.slice(0, 8)}\`_`, '');
+    turns.forEach((tn, i) => {
+      const head = tn.prompt ? clipTo(tn.prompt.replace(/\s+/g, ' '), 200) : t('(continued)');
+      lines.push(`### ${i + 1}. ${head}`, '');
+      const meta = [when(tn.at), tn.tools ? t('{0} tool call(s)', tn.tools) : '', fileList(root, tn.files) && `${t('edited')}: ${fileList(root, tn.files)}`].filter(Boolean).join(' · ');
+      if (meta) lines.push(`_${meta}_`, '');
+      if (tn.reply) lines.push(quote(clipTo(tn.reply, replyMax)), '');
+    });
+  }
+  return lines.join('\n');
+}
+
+/** Prompt para o Claude (sem terminal) resumir a recapitulação. */
+export function recapSummaryPrompt(recap: string, lang: string): string {
+  const max = 80_000;
+  const r = recap.length > max ? `${recap.slice(0, max)}\n… (truncated)` : recap;
+  return [
+    'Below is a log of what an AI coding agent did in a git worktree: the requests it got, the files it edited, its final replies, and the git state.',
+    `Write, in ${lang}, a short recap for the developer who is coming back to this work. Use Markdown with these sections:`,
+    '1. Goal (one or two lines)',
+    '2. What was done (bullets; mention the main files)',
+    '3. Current state (committed or not, tests, anything left broken)',
+    '4. Open points / next steps (what the agent said is pending, or questions it asked)',
+    'Be concrete and brief. Do not invent anything that is not in the log. No preamble.',
+    '',
+    r,
+  ].join('\n');
 }
 
 export interface ClaudeCommand {

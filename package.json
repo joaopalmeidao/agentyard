@@ -681,6 +681,24 @@
         "icon": "$(terminal-cmd)"
       },
       {
+        "command": "worktreeGraph.claude.lastMessage",
+        "title": "%command.claude.lastMessage.title%",
+        "category": "AgentYard",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "worktreeGraph.claude.recap",
+        "title": "%command.claude.recap.title%",
+        "category": "AgentYard",
+        "icon": "$(history)"
+      },
+      {
+        "command": "worktreeGraph.claude.recapSummary",
+        "title": "%command.claude.recapSummary.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "worktreeGraph.claude.usage",
         "title": "%command.claude.usage.title%",
         "category": "AgentYard",
@@ -2439,6 +2457,36 @@
           "group": "inline@2"
         },
         {
+          "command": "worktreeGraph.claude.lastMessage",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.claude.recap",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "inline@4"
+        },
+        {
+          "command": "worktreeGraph.claude.lastMessage",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "1@1"
+        },
+        {
+          "command": "worktreeGraph.claude.recap",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "1@2"
+        },
+        {
+          "command": "worktreeGraph.claude.recapSummary",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeGroup",
+          "group": "1@3"
+        },
+        {
+          "command": "worktreeGraph.claude.lastMessage",
+          "when": "view == worktreeGraph.claudeSessions && viewItem == claudeSession",
+          "group": "1@4"
+        },
+        {
           "command": "worktreeGraph.claudeConfig.learn",
           "when": "view == worktreeGraph.claudeConfig && viewItem =~ /^claudeLearn$/",
           "group": "inline@1"
@@ -3615,6 +3663,21 @@
           "command": "worktreeGraph.claude.lessons",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "4_claude@1"
+        },
+        {
+          "command": "worktreeGraph.claude.lastMessage",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_claude@2"
+        },
+        {
+          "command": "worktreeGraph.claude.recap",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_claude@3"
+        },
+        {
+          "command": "worktreeGraph.claude.recapSummary",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_claude@4"
         }
       ],
       "worktreeGraph.wt.open": [

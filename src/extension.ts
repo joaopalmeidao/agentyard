@@ -505,6 +505,19 @@ export async function activate(ctx: vscode.ExtensionContext) {
     const target = await claudeTarget(item);
     if (target) await claude.commands(target.cwd, target.label);
   });
+  reg('claude.lastMessage', async (item?: SessionItem | { path?: string; wtPath?: string; branch?: string }) => {
+    if (item instanceof SessionItem) return claude.lastMessage(item.session.cwd ?? '', item.session);
+    const target = await claudeTarget(item);
+    if (target) await claude.lastMessage(target.cwd);
+  });
+  reg('claude.recap', async item => {
+    const target = await claudeTarget(item);
+    if (target) await claude.recap(target.cwd);
+  });
+  reg('claude.recapSummary', async item => {
+    const target = await claudeTarget(item);
+    if (target) await claude.recap(target.cwd, true);
+  });
   reg('claude.usage', () => usagePanel.show());
   reg('publishRequest', async item => {
     const b = await actions.pickBranch(ctl, item, t('Publish a PR/MR for which branch?'));

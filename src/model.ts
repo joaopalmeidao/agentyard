@@ -57,7 +57,18 @@ export interface WorktreeView extends Worktree {
   agentStates?: { waiting: number; working: number; idle: number; message?: string };
   favorite: boolean;
   /** Sessões do Claude Code cujo cwd está nesta worktree (preenchido em segundo plano). */
-  claude?: { sessions: number; tokens: number; last: number; lastId: string; /** custo estimado em US$ (preços configurados) */ usd?: number };
+  claude?: {
+    sessions: number;
+    tokens: number;
+    last: number;
+    lastId: string;
+    /** custo estimado em US$ (preços configurados) */
+    usd?: number;
+    /** Último texto do Claude na worktree (truncado), o pedido que ele respondeu e quando. */
+    lastReply?: string;
+    lastReplyAt?: number;
+    lastPrompt?: string;
+  };
   /** O agente terminou e deixou commits: "pronto para revisar" (src/agentFlow). */
   review?: { at: number; commits: number };
   /** Fila de tarefas do agente nesta worktree. */
