@@ -1240,6 +1240,8 @@
         agent.push(item('claude.recap', t('Recap what was done'), { path: wt.path, branch: b }));
         agent.push(item('claude.recapSummary', `✦ ${t('Recap with a summary by Claude')}`, { path: wt.path, branch: b }, 'agent'));
       }
+      agent.push(item('claude.recapMerges', isBase ? t('Recap what the AI did in the merges…') : t('Recap what the AI did in this branch and its merges'), { branch: b }));
+      agent.push('<hr>');
       agent.push(item('newWorktreeWithTask', `✦ ${t('New worktree from here, with task…')}`, { startPoint: b }, 'agent'));
       if (!isBase) agent.push(item('reviewWithAgent', `✦ ${t('Review PR/MR with the agent')}`, { branch: b }, 'agent'));
       items.push(sub(`✦ ${t('Agent')}`, agent, 'agent'));
@@ -1303,6 +1305,10 @@
       items.push(`<div class="menu-title">${sha.slice(0, 10)}</div>`);
       items.push(item('showCommit', t('View commit changes'), { sha }));
       if (state.agentNames && state.agentNames[0]) items.push(item('explainCommit', `✦ ${t('Explain with {0}', state.agentNames[0])}`, { sha }, 'agent'));
+      if ((row.dataset.parents || '').split(' ').filter(Boolean).length > 1) {
+        items.push(item('claude.recapMerges', `💬 ${t('Recap what the AI did in this merge')}`, { sha }));
+        items.push(item('claude.recapMergesSummary', `✦ ${t('Recap this merge with a summary by Claude')}`, { sha }, 'agent'));
+      }
       if (state.hosting) items.push(item('openCommitOnWeb', t('Open on {0}', state.hosting.kind === 'gitlab' ? 'GitLab' : 'GitHub'), { sha }));
       items.push('<hr>');
       items.push(item('copy', t('Copy hash'), { text: sha }));
