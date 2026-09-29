@@ -4552,6 +4552,11 @@
           "default": true,
           "markdownDescription": "%config.pushStatusBar.markdownDescription%"
         },
+        "worktreeGraph.pullStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.pullStatusBar.markdownDescription%"
+        },
         "worktreeGraph.agentStatusBar": {
           "type": "boolean",
           "default": true,

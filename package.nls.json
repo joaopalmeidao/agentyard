@@ -319,6 +319,7 @@
   "config.jira.issueType.description": "Issue type created by \"New Issue…\" in Jira.",
   "config.ciBranches.markdownDescription": "Extra branches for the history's **CI** filter (in addition to those found in the environment flow, the base and the CI files: `.github/workflows`, `.gitlab-ci.yml`, `bitbucket-pipelines.yml`, `azure-pipelines.yml`). Accepts patterns with `*`.",
   "config.pushStatusBar.markdownDescription": "Shows the **☁ Push** button in the status bar: pushes the branches chosen from a list in which the base and the CI branches (the same as the **CI** filter, including `#worktreeGraph.ciBranches#`) come preselected. The number next to it is how many of them have commits to push.",
+  "config.pullStatusBar.markdownDescription": "Shows the **☁ Pull** button in the status bar, next to **☁ Push**: pulls from the remote the branches chosen from a list (fast-forward in a clean worktree or without a worktree come preselected). The number next to it is how many local branches have new commits on the remote (after a fetch).",
   "config.agentStatusBar.markdownDescription": "Shows the **✦ agent** button in the status bar (the first of `#worktreeGraph.agents#`), which opens the agent in a terminal in this window's worktree.",
   "config.worktreeStatusBar.markdownDescription": "Shows in the status bar which worktree (folder) and branch this window is on. Click to open the panel.",
   "config.mergeQueue.pushBase.description": "Merge queue: push the base after each merge.",

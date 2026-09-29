@@ -275,3 +275,39 @@ export class PushStatus implements vscode.Disposable {
     this.item.dispose();
   }
 }
+
+/** Botão "☁ Pull" na barra de status, ao lado do Push: traz do remoto as branches escolhidas e mostra quantas têm novidades lá. */
+export class PullStatus implements vscode.Disposable {
+  private readonly item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 48.5);
+  private readonly subs: vscode.Disposable[];
+
+  constructor(private readonly ctl: Controller) {
+    this.item.name = t('Branch pull');
+    this.item.command = 'worktreeGraph.pullMany';
+    this.subs = [
+      ctl.onDidChange(() => this.update()),
+      vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('worktreeGraph') && this.update()),
+    ];
+    this.update();
+  }
+
+  private update() {
+    if (!this.ctl.state || !this.ctl.cfg().get<boolean>('pullStatusBar', true)) return this.item.hide();
+    const behind = localBranches(this.ctl).filter(b => b.track.published && b.track.behind > 0);
+    this.item.text = `$(cloud-download) Pull${behind.length ? ` ${behind.length}` : ''}`;
+    const tip = new vscode.MarkdownString(undefined, true);
+    tip.appendMarkdown(`**${t('Pull branches from the remote')}**\n\n`);
+    tip.appendMarkdown(
+      behind.length
+        ? t('With news on the remote: {0}', behind.map(b => `\`${b.name}\` ↓${b.track.behind}`).join(', '))
+        : t('No branch has news on the remote (fetch to check).'),
+    );
+    this.item.tooltip = tip;
+    this.item.show();
+  }
+
+  dispose() {
+    this.subs.forEach(d => d.dispose());
+    this.item.dispose();
+  }
+}
