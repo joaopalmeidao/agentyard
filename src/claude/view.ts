@@ -17,16 +17,20 @@ import {
   formatTokens,
   listClaudeCommands,
   mapToWorktrees,
+  MergePart,
+  mergeSource,
   readTurns,
   recapSummaryPrompt,
   RecapGit,
   renderLastMessage,
+  renderMergeRecap,
   renderRecap,
   renderTranscript,
   scanSessions,
   ScanCache,
   ClaudeCommand,
   SessionInfo,
+  sessionsOfBranch,
   sessionTitle,
   totalTokens,
   weekWindow,
@@ -396,6 +400,11 @@ export class ClaudeService implements vscode.Disposable {
       vscode.window.showInformationMessage(t('Nothing to recap in {0} yet.', name));
       return;
     }
+    await this.summarizeDoc(`summary:${norm(cwd)}`, name, md, cwd);
+  }
+
+  /** Pede ao Claude (sem terminal) um resumo de `md` e mostra o resumo em cima e `md` inteiro embaixo. */
+  private async summarizeDoc(key: string, name: string, md: string, cwd: string) {
     const lang = locale().toLowerCase().startsWith('pt') ? 'Brazilian Portuguese' : 'English';
     try {
       const r = await vscode.window.withProgress(
@@ -414,11 +423,155 @@ export class ClaudeService implements vscode.Disposable {
       );
       // o resumo em cima e o recap completo embaixo, um nível de título abaixo
       const details = md.replace(/^# .*\n/, `## ${t('Details')}\n`).replace(/^(#{2,}) /gm, (m, h: string, i: number) => (i === 0 ? m : `#${h} `));
-      await this.showDoc(`summary:${norm(cwd)}`, t('Summary · {0}', name), [`# ${t('Summary: {0}', name)}`, '', r.text, '', '---', '', details].join('\n'));
+      await this.showDoc(key, t('Summary · {0}', name), [`# ${t('Summary: {0}', name)}`, '', r.text, '', '---', '', details].join('\n'));
     } catch (e) {
       if ((e as Error).message === 'canceled') return;
       vscode.window.showErrorMessage(t('Could not summarize: {0}', (e as Error).message));
     }
+  }
+
+  // ---------- recapitulação dos merges ----------
+
+  /** Pastas onde as sessões deste repositório podem ter rodado: a principal e as pastas-mãe das worktrees. */
+  private async repoRoots(): Promise<{ roots: string[]; wts: { path: string; branch?: string }[] }> {
+    const repo = this.ctl.repo!;
+    const wts = await repo.worktreesFast().catch(() => []);
+    const roots = new Set<string>();
+    for (const w of wts) roots.add(w.isMain ? w.path : path.dirname(w.path));
+    if (!roots.size) roots.add(repo.root);
+    return { roots: [...roots], wts };
+  }
+
+  private recapFile(branch: string): string | undefined {
+    const dir = this.ctl.repo?.commonDir;
+    return dir && path.join(dir, 'agentyard', 'recaps', `${branch.replace(/[^\w.-]+/g, '_')}.json`);
+  }
+
+  private async branchSessions(branch: string, ctx: { roots: string[]; wts: { path: string; branch?: string }[] }) {
+    const wt = ctx.wts.find(w => w.branch === branch);
+    const list = sessionsOfBranch(this.sessions, branch, ctx.roots, wt?.path).slice(-10);
+    // removida a worktree, a pasta onde a primeira sessão começou faz as vezes dela
+    return { wt: wt?.path ?? list[0]?.cwd, sessions: await Promise.all(list.map(async info => ({ info, turns: await readTurns(info.file) }))) };
+  }
+
+  /**
+   * Guarda, no momento do merge, o que a IA fez na branch (pedidos, arquivos e respostas finais) em
+   * `.git/agentyard/recaps`: a worktree costuma ser removida logo depois e os logs do Claude são limpos com o tempo.
+   */
+  async saveMergeRecap(branch: string, target: string) {
+    const file = this.recapFile(branch);
+    if (!file) return;
+    try {
+      await this.scan();
+      const { wt, sessions } = await this.branchSessions(branch, await this.repoRoots());
+      if (!sessions.length) return;
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify({ branch, target, at: Date.now(), md: renderRecap(branch, wt, sessions) }));
+    } catch (e) {
+      this.ctl.log(t('Recap: could not save the recap of {0}: {1}', branch, (e as Error).message));
+    }
+  }
+
+  private savedRecap(branch: string): { md: string; at: number } | undefined {
+    const file = this.recapFile(branch);
+    try {
+      const o = file && JSON.parse(fs.readFileSync(file, 'utf8'));
+      return o && typeof o.md === 'string' ? { md: o.md, at: o.at } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Merges recentes na base (primeiro pai), para escolher quais recapitular. */
+  private async pickMerges(base: string): Promise<string[] | undefined> {
+    const r = await this.ctl.repo!.run(['log', '--merges', '--first-parent', '-n', '80', '--format=%H%x1f%ct%x1f%s', base]);
+    const items = r.stdout
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map(l => l.split('\x1f'))
+      .map(([sha, ct, subject]) => ({
+        label: mergeSource(subject) ?? subject,
+        description: new Date(Number(ct) * 1000).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
+        detail: `${sha.slice(0, 8)} · ${subject}`,
+        sha,
+      }));
+    if (!items.length) {
+      vscode.window.showInformationMessage(t('No merge commits on {0}.', base));
+      return undefined;
+    }
+    const pick = await vscode.window.showQuickPick(items, { title: t('Recap which merges into {0}?', base), canPickMany: true, matchOnDetail: true });
+    return pick?.length ? pick.map(p => p.sha) : undefined;
+  }
+
+  /**
+   * Recapitula o que a IA fez nas branches trazidas por merge: num commit de merge, tudo o que ele
+   * trouxe (inclusive os merges de dentro dele, a cadeia inteira); numa branch, os merges que ela
+   * recebeu desde a base e ela mesma; sem nada (ou na base), escolhe entre os merges recentes da base.
+   */
+  async recapMerges(arg: { sha?: string; branch?: string } = {}, summarize = false) {
+    const repo = this.ctl.repo;
+    if (!repo) return;
+    const { base } = await this.ctl.base();
+    const out = (r: { stdout: string }) => r.stdout.split(/\r?\n/).filter(l => l.trim());
+    const subjectOf = async (sha: string) => (await repo.run(['log', '-1', '--format=%s', sha])).stdout.trim();
+    const parents = arg.sha ? (await repo.run(['rev-list', '--parents', '-n', '1', arg.sha])).stdout.trim().split(/\s+/).slice(1) : [];
+    let ranges: string[];
+    let self: string | undefined;
+    let title: string;
+    if (arg.sha && parents.length > 1) {
+      ranges = [`${arg.sha}^1..${arg.sha}`];
+      title = mergeSource(await subjectOf(arg.sha)) ?? arg.sha.slice(0, 8);
+    } else if (arg.branch && arg.branch !== base) {
+      ranges = [`${base}..${arg.branch}`];
+      self = title = arg.branch;
+    } else if (arg.sha) {
+      vscode.window.showInformationMessage(t('{0} is not a merge commit.', arg.sha.slice(0, 8)));
+      return;
+    } else {
+      const shas = await this.pickMerges(base);
+      if (!shas) return;
+      ranges = shas.map(s => `${s}^1..${s}`);
+      title = shas.length === 1 ? (mergeSource(await subjectOf(shas[0])) ?? shas[0].slice(0, 8)) : t('{0} merge(s) into {1}', shas.length, base);
+    }
+
+    const md = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: t('Gathering what the AI did in the merges…') }, async () => {
+      const merges = new Map<string, { sha: string; p1: string; p2: string; at: number; subject: string }>();
+      for (const range of ranges) {
+        for (const l of out(await repo.run(['log', '--merges', '--format=%H%x1f%P%x1f%ct%x1f%s', range]))) {
+          const [sha, ps, ct, subject] = l.split('\x1f');
+          const [p1, p2] = ps.split(' ');
+          if (p2) merges.set(sha, { sha, p1, p2, at: Number(ct) * 1000, subject });
+        }
+      }
+      const parts = new Map<string, MergePart>();
+      for (const m of [...merges.values()].sort((a, b) => a.at - b.at)) {
+        const branch = mergeSource(m.subject) ?? m.sha.slice(0, 8);
+        // a base trazida para dentro de uma branch não é trabalho da IA
+        if (branch === base || branch.endsWith(`/${base}`)) continue;
+        const into = /\binto '?([^'\s]+)'?\s*$/.exec(m.subject)?.[1] ?? (m.subject.startsWith('Merge branch') ? base : undefined);
+        const commits = out(await repo.run(['log', '--oneline', '--no-decorate', '--first-parent', '-n', '60', `${m.p1}..${m.p2}`]));
+        const p = parts.get(branch) ?? { branch, merges: [], commits: [], sessions: [] };
+        p.merges.push({ sha: m.sha, at: m.at, into });
+        p.commits.push(...commits.filter(c => !p.commits.includes(c)));
+        parts.set(branch, p);
+      }
+      if (self && !parts.has(self)) {
+        const commits = out(await repo.run(['log', '--oneline', '--no-decorate', '--first-parent', '-n', '60', `${base}..${self}`]));
+        parts.set(self, { branch: self, merges: [], commits, sessions: [] });
+      }
+      await this.scan();
+      const ctx = await this.repoRoots();
+      for (const p of parts.values()) {
+        const found = await this.branchSessions(p.branch, ctx);
+        p.sessions = found.sessions;
+        p.root = found.wt;
+        if (!p.sessions.length) p.saved = this.savedRecap(p.branch);
+      }
+      return renderMergeRecap(title, repo.root, [...parts.values()]);
+    });
+    const key = `merges:${ranges.join(',')}`;
+    if (!summarize) return this.showDoc(key, t('Merge recap · {0}', title), md);
+    await this.summarizeDoc(`summary-${key}`, title, md, repo.root);
   }
 
   /** Uso estimado pelos logs para a tela "Uso do Claude": janela de 5 h, semana, por dia e por worktree. */

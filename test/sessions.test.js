@@ -200,6 +200,41 @@ const u = (i, o, cr = 0, cc = 0) => ({ input_tokens: i, output_tokens: o, cache_
     const outside = S.renderRecap('x', wtR, [{ info, turns: [{ prompt: 'p', at: now, reply: 'r', files: [path.join(root2, 'rascunho.js')], tools: 1 }] }]);
     assert.ok(!outside.includes('rascunho.js'), 'arquivo fora da worktree não aparece');
   });
+
+  await check('recap dos merges: branch do assunto, sessões por branch e cadeia', async () => {
+    assert.strictEqual(S.mergeSource("Merge branch 'ai/login'"), 'ai/login');
+    assert.strictEqual(S.mergeSource("Merge branch 'ai/login' into develop"), 'ai/login');
+    assert.strictEqual(S.mergeSource("Merge remote-tracking branch 'origin/feat/x'"), 'feat/x');
+    assert.strictEqual(S.mergeSource('Merge pull request #12 from joao/feat/y'), 'feat/y');
+    assert.strictEqual(S.mergeSource('Merged in feature/z (pull request #3)'), 'feature/z');
+    assert.strictEqual(S.mergeSource('Corrige o login'), undefined);
+
+    const mk = (id, cwd, gitBranch, start) => ({ id, cwd, gitBranch, start, end: start, file: '' });
+    const all = [
+      mk('a', path.join('G:', 'repo.worktrees', 'ai-login'), 'ai/login', 2),
+      mk('b', path.join('G:', 'outro'), 'ai/login', 1),
+      mk('c', path.join('G:', 'repo.worktrees', 'ai-login', 'src'), 'main', 3),
+      mk('d', path.join('G:', 'repo.worktrees', 'ai-logout'), 'ai/logout', 0),
+    ];
+    const roots = [path.join('G:', 'repo'), path.join('G:', 'repo.worktrees')];
+    assert.deepStrictEqual(S.sessionsOfBranch(all, 'ai/login', roots).map(s => s.id), ['a'], 'outro projeto com a mesma branch fica de fora');
+    assert.deepStrictEqual(S.sessionsOfBranch(all, 'ai/login', roots, path.join('G:', 'repo.worktrees', 'ai-login')).map(s => s.id), ['a', 'c'], 'e dentro da worktree vale qualquer branch');
+
+    const info = (await S.scanSessions(root2, S.emptyCache(), now)).sessions[0];
+    const turns = await S.readTurns(fr);
+    const md = S.renderMergeRecap('ai/integracao', wtR, [
+      { branch: 'ai/login', merges: [{ sha: 'aaaaaaaa11', at: now, into: 'ai/integracao' }], commits: ['abc123 Tela de login'], sessions: [{ info, turns }], root: wtR },
+      { branch: 'ai/antiga', merges: [{ sha: 'bbbbbbbb22', at: now, into: 'main' }], commits: [], sessions: [], saved: { md: '# Recapitulação: ai/antiga\n\n## Sessão velha\n\n### 1. Pedido guardado\n', at: now } },
+      { branch: 'manual', merges: [], commits: ['def456 Ajuste'], sessions: [] },
+    ]);
+    assert.ok(md.startsWith('# '), md);
+    assert.ok(md.includes('- **ai/login**') && md.includes('- **ai/antiga**'), 'índice');
+    assert.ok(md.includes('## ai/login') && md.includes('abc123 Tela de login'));
+    assert.ok(md.includes('#### 1. Crie a tela de login'), 'recap da branch um nível abaixo');
+    assert.ok(md.includes('> Falta o teste do logout.'));
+    assert.ok(md.includes('#### 1. Pedido guardado') && !md.includes('# Recapitulação: ai/antiga'), 'recap guardado no merge, sem o título');
+    assert.strictEqual((md.match(/^# /gm) || []).length, 1, 'um só título de primeiro nível');
+  });
   fs.rmSync(root2, { recursive: true, force: true });
 
   if (process.argv.includes('--real')) {

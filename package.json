@@ -723,6 +723,18 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "worktreeGraph.claude.recapMerges",
+        "title": "%command.claude.recapMerges.title%",
+        "category": "AgentYard",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "worktreeGraph.claude.recapMergesSummary",
+        "title": "%command.claude.recapMergesSummary.title%",
+        "category": "AgentYard",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "worktreeGraph.claude.usage",
         "title": "%command.claude.usage.title%",
         "category": "AgentYard",
@@ -3717,6 +3729,11 @@
           "command": "worktreeGraph.claude.recapSummary",
           "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
           "group": "4_claude@4"
+        },
+        {
+          "command": "worktreeGraph.claude.recapMerges",
+          "when": "view == worktreeGraph.worktrees && viewItem =~ /^worktree/",
+          "group": "4_claude@5"
         }
       ],
       "worktreeGraph.wt.open": [

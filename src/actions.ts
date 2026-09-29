@@ -172,17 +172,26 @@ export async function mergeBranches(ctl: Controller, source: string, target: str
 
 async function afterMerge(ctl: Controller, source: string, target: string, base: string, quiet?: boolean) {
   ctl.log(t('{0} merged into {1}.', source, target));
+  const repo = repoOf(ctl);
+  // o que a IA fez na branch fica guardado antes de a worktree sumir (src/claude/view.ts)
+  await Promise.resolve(vscode.commands.executeCommand('worktreeGraph.claude.saveMergeRecap', { branch: source, target })).catch(() => undefined);
   if (quiet) return;
+  const recapBtn = t('Recap what the AI did');
+  const recap = async () => {
+    const sha = (await repo.run(['rev-parse', target])).stdout.trim();
+    await vscode.commands.executeCommand('worktreeGraph.claude.recapMerges', { sha, branch: source });
+  };
   if (target === base && source !== base) {
-    const repo = repoOf(ctl);
     const wt = await worktreeOf(repo, source);
     const removeBoth = t('Remove worktree and branch');
     const delBranch = t('Delete branch');
-    const pick = await vscode.window.showInformationMessage(t('{0} merged into {1}.', source, target), wt ? removeBoth : delBranch);
+    const pick = await vscode.window.showInformationMessage(t('{0} merged into {1}.', source, target), wt ? removeBoth : delBranch, recapBtn);
     if (pick === removeBoth) await removeWorktree(ctl, source, { alsoBranch: true });
     else if (pick === delBranch) await deleteBranch(ctl, source);
+    else if (pick === recapBtn) await recap();
   } else {
-    vscode.window.showInformationMessage(t('{0} merged into {1}.', source, target));
+    const pick = await vscode.window.showInformationMessage(t('{0} merged into {1}.', source, target), recapBtn);
+    if (pick === recapBtn) await recap();
   }
 }
 

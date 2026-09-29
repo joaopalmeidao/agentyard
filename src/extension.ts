@@ -525,6 +525,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
     const target = await claudeTarget(item);
     if (target) await claude.recap(target.cwd, true);
   });
+  // item da árvore/grafo ({ branch }), commit de merge ({ sha }) ou nada (escolhe os merges da base)
+  const mergeArg = (item?: { sha?: string; branch?: string } | string) => (typeof item === 'string' ? { branch: item } : { sha: item?.sha, branch: item?.branch });
+  reg('claude.recapMerges', item => claude.recapMerges(mergeArg(item)));
+  reg('claude.recapMergesSummary', item => claude.recapMerges(mergeArg(item), true));
+  reg('claude.saveMergeRecap', (a: { branch: string; target: string }) => claude.saveMergeRecap(a.branch, a.target));
   reg('claude.usage', () => usagePanel.show());
   reg('publishRequest', async item => {
     const b = await actions.pickBranch(ctl, item, t('Publish a PR/MR for which branch?'));
