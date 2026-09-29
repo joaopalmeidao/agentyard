@@ -568,7 +568,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   });
 
   // Usado pelos testes de integração (test/).
-  const claudeConfig = registerClaudeConfig(ctx, ctl);
+  const claudeConfig = registerClaudeConfig(ctx, ctl, { agentTerms, claude });
 
   const guards = registerGuards(ctx, ctl);
   registerMigrations(ctx, ctl);

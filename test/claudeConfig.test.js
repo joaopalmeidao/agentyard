@@ -124,5 +124,70 @@ check('memória: criar atualiza o índice; excluir remove a linha; verificar ín
   assert.ok(!fs.existsSync(file));
 });
 
+check('recursos: MCP do .mcp.json liga/desliga no settings.local.json', () => {
+  const p = path.join(root, 'mcp-proj');
+  fs.mkdirSync(path.join(p, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(p, '.mcp.json'), JSON.stringify({ mcpServers: { db: {}, web: {} } }));
+  fs.writeFileSync(path.join(p, '.claude', 'settings.json'), JSON.stringify({ disabledMcpjsonServers: ['web'], outra: 1 }));
+  assert.deepStrictEqual(C.listMcpjsonServers(p).map(s => [s.name, s.on]), [['db', true], ['web', false]]);
+  C.setMcpjsonServer(p, 'db', false);
+  C.setMcpjsonServer(p, 'web', true);
+  assert.deepStrictEqual(C.listMcpjsonServers(p).map(s => [s.name, s.on]), [['db', false], ['web', true]]);
+  const local = JSON.parse(fs.readFileSync(path.join(p, '.claude', 'settings.local.json'), 'utf8'));
+  assert.deepStrictEqual(local, { enabledMcpjsonServers: ['web'], disabledMcpjsonServers: ['db'] });
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(p, '.claude', 'settings.json'), 'utf8')), { disabledMcpjsonServers: [], outra: 1 });
+  assert.deepStrictEqual(C.listMcpjsonServers(path.join(root, 'nada')), []);
+});
+
+check('recursos: plugins e disableAllHooks', () => {
+  const f = path.join(root, 'plug.json');
+  fs.writeFileSync(f, JSON.stringify({ enabledPlugins: { 'a@m': true, 'b@m': false } }));
+  assert.deepStrictEqual(C.listPlugins(f).map(p => [p.name, p.on]), [['a@m', true], ['b@m', false]]);
+  C.setPlugin(f, 'a@m', false);
+  assert.strictEqual(C.listPlugins(f)[0].on, false);
+  assert.strictEqual(C.hooksDisabled(f), false);
+  C.setHooksDisabled(f, true);
+  assert.strictEqual(C.hooksDisabled(f), true);
+  C.setHooksDisabled(f, false);
+  assert.ok(!('disableAllHooks' in JSON.parse(fs.readFileSync(f, 'utf8'))));
+});
+
+const L = require('../out/claude/learn');
+
+check('aprender com o uso: bloco no CLAUDE.md entra uma vez e sai sem mexer no resto', () => {
+  const orig = '# Minhas regras\n\n- responder em pt-BR\n';
+  const on = L.withLearningBlock(orig);
+  assert.ok(L.hasLearningBlock(on) && on.startsWith(orig.trimEnd() + '\n\n'));
+  assert.strictEqual(L.withLearningBlock(on), on);
+  assert.strictEqual(L.withoutLearningBlock(on), orig);
+  assert.strictEqual(L.withoutLearningBlock(L.withLearningBlock('')), '');
+  const middle = L.withLearningBlock('a\n') + '\n# depois\n';
+  assert.strictEqual(L.withoutLearningBlock(middle), 'a\n\n# depois\n');
+  assert.strictEqual(L.withoutLearningBlock(orig), orig);
+});
+
+check('aprender com o uso: pedidos citam onde gravar', () => {
+  const x = { memoryDir: '/m/memory', userSkillsDir: '/c/skills', projectSkillsDir: '/r/.claude/skills' };
+  for (const p of [L.learnPrompt(x), L.curateMemoryPrompt(x)]) for (const d of Object.values(x)) assert.ok(p.includes(d), d);
+  assert.ok(!L.learnPrompt({ userSkillsDir: '/c/skills' }).includes('Memory folder'));
+  assert.ok(L.improveSkillPrompt('/c/skills/x/SKILL.md').includes('/c/skills/x/SKILL.md'));
+});
+
+check('memória de worktree vai para o projeto com índice e nomes repetidos', () => {
+  const wt = path.join(root, 'mem-wt');
+  const proj = path.join(root, 'mem-proj');
+  C.createMemory(wt, { type: 'project', title: 'Build lento', description: 'usar cache', body: 'x' });
+  C.createMemory(wt, { type: 'user', title: 'Quem sou', description: 'dev', body: 'y' });
+  C.createMemory(proj, { type: 'project', title: 'Build lento', description: 'antigo', body: 'z' });
+  const moved = L.moveMemory(wt, 'build-lento.md', proj);
+  assert.ok(moved.endsWith('build-lento-2.md'));
+  assert.deepStrictEqual(C.checkIndex(proj), { missingInIndex: [], dangling: [] });
+  assert.deepStrictEqual(C.checkIndex(wt), { missingInIndex: [], dangling: [] });
+  L.moveAllMemories(wt, proj);
+  assert.ok(!fs.existsSync(wt));
+  assert.deepStrictEqual(C.listMemories(proj).map(m => m.fileName).sort(), ['build-lento-2.md', 'build-lento.md', 'quem-sou.md']);
+  assert.ok(C.listMemories(proj).every(m => m.indexed));
+});
+
 fs.rmSync(root, { recursive: true, force: true });
 if (failures) process.exit(1);

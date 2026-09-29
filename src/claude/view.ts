@@ -266,18 +266,18 @@ export class ClaudeService implements vscode.Disposable {
   }
 
   /** Se a sessão já está aberta num terminal, traz ele para frente; senão abre com --resume. */
-  resume(s: SessionInfo) {
+  async resume(s: SessionInfo): Promise<OpenAgent | undefined> {
     const open = this.openFor(s);
     if (open) {
       open.terminal.show();
-      return;
+      return open;
     }
     const cwd = this.existingDir(s.cwd, this.ctl.repo?.root);
     if (!cwd) {
       vscode.window.showWarningMessage(t('The session folder no longer exists: {0}', s.cwd ?? ''));
-      return;
+      return undefined;
     }
-    void this.start(cwd, `claude --resume ${s.id}`, `${this.agentName()} · ${sessionTitle(s).slice(0, 30)}`);
+    return this.start(cwd, `claude --resume ${s.id}`, `${this.agentName()} · ${sessionTitle(s).slice(0, 30)}`);
   }
 
   newSession(cwd: string) {

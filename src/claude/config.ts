@@ -443,6 +443,84 @@ export function listHooks(file: string): string[] {
   return out;
 }
 
+// ---------------------------------------------------------------- MCP do projeto e plugins
+
+export interface Toggle {
+  name: string;
+  on: boolean;
+  /** De onde veio (arquivo). */
+  source: string;
+}
+
+/**
+ * Servidores do `.mcp.json` do projeto. Desligado = está em `disabledMcpjsonServers` do
+ * settings.json ou settings.local.json do projeto (a regra do Claude Code).
+ */
+export function listMcpjsonServers(projectDir: string): Toggle[] {
+  const file = path.join(projectDir, '.mcp.json');
+  const servers = readSettings(file).data.mcpServers;
+  if (!servers || typeof servers !== 'object') return [];
+  const disabled = new Set<string>();
+  for (const f of ['settings.json', 'settings.local.json']) {
+    const d = readSettings(path.join(projectDir, '.claude', f)).data.disabledMcpjsonServers;
+    if (Array.isArray(d)) d.forEach(x => typeof x === 'string' && disabled.add(x));
+  }
+  return Object.keys(servers).map(name => ({ name, on: !disabled.has(name), source: file }));
+}
+
+/**
+ * Liga/desliga um servidor do `.mcp.json` no settings.local.json (só você): ligar tira de
+ * `disabledMcpjsonServers` e aprova em `enabledMcpjsonServers`; desligar faz o contrário.
+ */
+export function setMcpjsonServer(projectDir: string, name: string, on: boolean) {
+  // desligado no settings.json compartilhado: ligar tira de lá também (senão continuaria desligado)
+  const shared = path.join(projectDir, '.claude', 'settings.json');
+  const sharedOff = readSettings(shared).data.disabledMcpjsonServers;
+  if (on && Array.isArray(sharedOff) && sharedOff.includes(name)) {
+    updateSettings(shared, d => (d.disabledMcpjsonServers = sharedOff.filter(x => x !== name)));
+  }
+  return updateSettings(path.join(projectDir, '.claude', 'settings.local.json'), d => {
+    const list = (k: string): string[] => (Array.isArray(d[k]) ? d[k] : []);
+    const add = (k: string) => (d[k] = [...list(k).filter(x => x !== name), name]);
+    const rm = (k: string) => {
+      if (Array.isArray(d[k])) d[k] = list(k).filter(x => x !== name);
+    };
+    if (on) {
+      rm('disabledMcpjsonServers');
+      add('enabledMcpjsonServers');
+    } else {
+      rm('enabledMcpjsonServers');
+      add('disabledMcpjsonServers');
+    }
+  });
+}
+
+/** Plugins do Claude Code (`enabledPlugins` do settings.json: "nome@marketplace": true/false). */
+export function listPlugins(settingsFile: string): Toggle[] {
+  const p = readSettings(settingsFile).data.enabledPlugins;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return [];
+  return Object.entries(p).map(([name, v]) => ({ name, on: v !== false, source: settingsFile }));
+}
+
+export function setPlugin(settingsFile: string, name: string, on: boolean) {
+  return updateSettings(settingsFile, d => {
+    d.enabledPlugins = d.enabledPlugins && typeof d.enabledPlugins === 'object' ? d.enabledPlugins : {};
+    d.enabledPlugins[name] = on;
+  });
+}
+
+/** `disableAllHooks` do settings: true desliga todos os hooks daquele arquivo para baixo. */
+export function hooksDisabled(settingsFile: string): boolean {
+  return readSettings(settingsFile).data.disableAllHooks === true;
+}
+
+export function setHooksDisabled(settingsFile: string, disabled: boolean) {
+  return updateSettings(settingsFile, d => {
+    if (disabled) d.disableAllHooks = true;
+    else delete d.disableAllHooks;
+  });
+}
+
 // ---------------------------------------------------------------- memória
 
 const INDEX = 'MEMORY.md';
