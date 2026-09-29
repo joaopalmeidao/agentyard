@@ -2571,5 +2571,8 @@
   "recap": "recapitular",
   "Last message from the agent": "Última mensagem do agente",
   "Recap what was done": "Recapitular o que foi feito",
-  "Recap with a summary by Claude": "Recapitular com resumo do Claude"
+  "Recap with a summary by Claude": "Recapitular com resumo do Claude",
+  "{0}: {1} in the background…": "{0}: {1} em segundo plano…",
+  "{0}: {1} done.": "{0}: {1} concluído.",
+  "{0}: {1} failed.": "{0}: {1} falhou."
 }
