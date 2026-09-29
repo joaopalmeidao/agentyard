@@ -136,6 +136,72 @@ const u = (i, o, cr = 0, cc = 0) => ({ input_tokens: i, output_tokens: o, cache_
     assert.ok(by['/resume']);
   });
 
+  // última mensagem e recapitulação: raiz própria para não mexer nas contas acima
+  const root2 = fs.mkdtempSync(path.join(os.tmpdir(), 'wtgraph-recap-'));
+  const proj2 = path.join(root2, 'projects', 'G--wt');
+  fs.mkdirSync(proj2, { recursive: true });
+  const wtR = path.join(root2, 'wt');
+  const fr = path.join(proj2, 'rrrr.jsonl');
+  const tool = (ts, msgId, name, input) =>
+    JSON.stringify({ type: 'assistant', sessionId: 'rrrr', timestamp: iso(ts), message: { id: msgId, role: 'assistant', content: [{ type: 'tool_use', id: 'tu' + ts, name, input }] } });
+  fs.writeFileSync(
+    fr,
+    [
+      user('rrrr', wtR, now - H, 'Crie a tela de login'),
+      asst('rrrr', now - H + 1000, 'r1', u(1, 1), 'Vou olhar o projeto.'),
+      tool(now - H + 2000, 'r1', 'Edit', { file_path: path.join(wtR, 'src', 'login.ts') }),
+      tool(now - H + 3000, 'r2', 'Write', { file_path: path.join(wtR, 'src', 'login.css') }),
+      tool(now - H + 3500, 'r2', 'Bash', { command: 'npm test' }),
+      user('rrrr', wtR, now - H + 3600, 'x', { toolUseResult: { stdout: 'ok' } }),
+      asst('rrrr', now - H + 4000, 'r3', u(1, 1), 'Pronto: tela criada.'),
+      asst('rrrr', now - H + 4100, 'r3', u(1, 1), 'Falta o teste do logout.'),
+      user('rrrr', wtR, now - 10 * 60_000, 'Agora   o logout'),
+      asst('rrrr', now - 9 * 60_000, 'r4', u(1, 1), 'Logout feito.'),
+    ].join('\n') + '\n',
+  );
+
+  await check('última mensagem: último texto do Claude (blocos da mesma resposta juntos) e último pedido', async () => {
+    const c = S.emptyCache();
+    let s = (await S.scanSessions(root2, c, now)).sessions[0];
+    assert.strictEqual(s.lastReply, 'Logout feito.');
+    assert.strictEqual(s.lastPrompt, 'Agora o logout');
+    assert.strictEqual(s.lastReplyAt, now - 9 * 60_000);
+    // resposta nova só com ferramenta não apaga o último texto; texto novo com o mesmo id se junta
+    fs.appendFileSync(fr, [tool(now - 8 * 60_000, 'r5', 'Edit', { file_path: path.join(wtR, 'a.ts') }), asst('rrrr', now - 7 * 60_000, 'r5', u(1, 1), 'Parte 1'), asst('rrrr', now - 7 * 60_000 + 1, 'r5', u(1, 1), 'Parte 2')].join('\n') + '\n');
+    s = (await S.scanSessions(root2, c, now)).sessions[0];
+    assert.strictEqual(s.lastReply, 'Parte 1\n\nParte 2');
+  });
+
+  await check('turnos: pedido, arquivos editados, ferramentas e resposta final', async () => {
+    const turns = await S.readTurns(fr);
+    assert.strictEqual(turns.length, 2, 'resultado de ferramenta não abre turno');
+    assert.strictEqual(turns[0].prompt, 'Crie a tela de login');
+    assert.strictEqual(turns[0].reply, 'Pronto: tela criada.\n\nFalta o teste do logout.');
+    assert.deepStrictEqual(turns[0].files, [path.join(wtR, 'src', 'login.ts'), path.join(wtR, 'src', 'login.css')]);
+    assert.strictEqual(turns[0].tools, 3);
+    assert.strictEqual(turns[1].reply, 'Parte 1\n\nParte 2');
+    assert.deepStrictEqual(turns[1].files, [path.join(wtR, 'a.ts')]);
+  });
+
+  await check('recap e última mensagem em Markdown', async () => {
+    const info = (await S.scanSessions(root2, S.emptyCache(), now)).sessions[0];
+    const turns = await S.readTurns(fr);
+    const last = S.renderLastMessage(info, turns, wtR);
+    assert.ok(last.includes('> Agora   o logout'), last);
+    assert.ok(last.includes('Parte 1\n\nParte 2'));
+    assert.ok(last.includes('`a.ts`'), 'caminho relativo à worktree');
+    const md = S.renderRecap('ai/login', wtR, [{ info, turns }], { branch: 'ai/login', base: 'main', commits: ['abc123 Tela de login'], uncommitted: [' M src/a.ts'], stat: '2 files changed' });
+    assert.ok(md.includes('abc123 Tela de login'));
+    assert.ok(md.includes(' M src/a.ts'));
+    assert.ok(md.includes('`src/login.ts`'));
+    assert.ok(md.includes('### 1. Crie a tela de login'));
+    assert.ok(md.includes('> Falta o teste do logout.'));
+    assert.ok(S.recapSummaryPrompt(md, 'Brazilian Portuguese').includes('Falta o teste do logout.'));
+    const outside = S.renderRecap('x', wtR, [{ info, turns: [{ prompt: 'p', at: now, reply: 'r', files: [path.join(root2, 'rascunho.js')], tools: 1 }] }]);
+    assert.ok(!outside.includes('rascunho.js'), 'arquivo fora da worktree não aparece');
+  });
+  fs.rmSync(root2, { recursive: true, force: true });
+
   if (process.argv.includes('--real')) {
     const dir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
     const c = S.emptyCache();

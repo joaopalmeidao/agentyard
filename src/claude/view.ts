@@ -9,6 +9,7 @@ import type { GraphState } from '../model';
 import { locale, t } from '../i18n';
 import type { RateLimit } from './statusLine';
 import type { LiveLimits } from './usage';
+import { runHeadless } from './headless';
 import {
   currentBlock,
   dailyTotals,
@@ -16,6 +17,11 @@ import {
   formatTokens,
   listClaudeCommands,
   mapToWorktrees,
+  readTurns,
+  recapSummaryPrompt,
+  RecapGit,
+  renderLastMessage,
+  renderRecap,
   renderTranscript,
   scanSessions,
   ScanCache,
@@ -46,6 +52,12 @@ function sourceLabel(source: ClaudeCommand['source']): string {
   if (source === 'user') return t('user');
   if (source === 'builtin') return t('built-in');
   return source;
+}
+
+/** Citação em Markdown, cortada. */
+function clipQuote(text: string, max: number): string {
+  const s = text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  return s.split('\n').map(l => `> ${l}`).join('\n');
 }
 
 const hhmm = (ms: number) => new Date(ms).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
@@ -163,8 +175,17 @@ export class ClaudeService implements vscode.Disposable {
     );
     for (const w of s.worktrees) {
       const list = m.get(w.path);
+      const replied = list?.find(x => x.lastReply);
       w.claude = list?.length
-        ? { sessions: list.length, tokens: list.reduce((n, x) => n + weighted(x.usage), 0), last: Math.max(...list.map(x => x.end)), lastId: list[0].id }
+        ? {
+            sessions: list.length,
+            tokens: list.reduce((n, x) => n + weighted(x.usage), 0),
+            last: Math.max(...list.map(x => x.end)),
+            lastId: list[0].id,
+            lastReply: replied?.lastReply,
+            lastReplyAt: replied?.lastReplyAt,
+            lastPrompt: replied?.lastPrompt,
+          }
         : undefined;
     }
   }
@@ -304,6 +325,102 @@ export class ClaudeService implements vscode.Disposable {
     return s ? renderTranscript(s) : t('Session {0} not found.', id);
   }
 
+  /** Documentos gerados (última mensagem, recap), servidos pelo TranscriptProvider. */
+  readonly docs = new Map<string, string>();
+  readonly docChanged = new vscode.EventEmitter<vscode.Uri>();
+
+  private async showDoc(key: string, name: string, content: string) {
+    this.docs.set(key, content);
+    const uri = vscode.Uri.from({ scheme: TRANSCRIPT_SCHEME, path: `/${name.replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80)}.md`, query: `doc=${key}` });
+    this.docChanged.fire(uri);
+    try {
+      await vscode.commands.executeCommand('markdown.showPreview', uri);
+    } catch {
+      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { preview: true });
+    }
+  }
+
+  /** Sessões de uma worktree, da mais recente para a mais antiga (relê os logs antes). */
+  private async sessionsIn(cwd: string): Promise<SessionInfo[]> {
+    await this.scan();
+    return mapToWorktrees(this.sessions, [cwd]).get(cwd) ?? [];
+  }
+
+  private wtName(cwd: string) {
+    return this.ctl.state?.worktrees.find(w => norm(w.path) === norm(cwd))?.name ?? path.basename(cwd);
+  }
+
+  /** Última mensagem do agente na worktree (da sessão mais recente), com o pedido que ela responde. */
+  async lastMessage(cwd: string, session?: SessionInfo) {
+    const s = session ?? (await this.sessionsIn(cwd))[0];
+    if (!s) {
+      vscode.window.showInformationMessage(t('No Claude Code session in {0} yet.', this.wtName(cwd)));
+      return;
+    }
+    const md = renderLastMessage(s, await readTurns(s.file), s.cwd ?? cwd);
+    await this.showDoc(`last:${s.id}`, t('Last message · {0}', this.wtName(cwd)), md);
+  }
+
+  private async gitRecap(cwd: string): Promise<RecapGit | undefined> {
+    const repo = this.ctl.repo;
+    if (!repo) return undefined;
+    const wt = this.ctl.state?.worktrees.find(w => norm(w.path) === norm(cwd));
+    const lines = (s: string) => s.split(/\r?\n/).filter(l => l.trim());
+    try {
+      const { base } = await this.ctl.base();
+      const isBase = wt?.isBase || wt?.branch === base;
+      const none = Promise.resolve({ stdout: '' });
+      const [log, status, stat] = await Promise.all([
+        isBase ? none : repo.run(['log', '--oneline', '--no-decorate', `${base}..HEAD`], cwd),
+        repo.run(['status', '--short'], cwd),
+        isBase ? none : repo.run(['diff', '--shortstat', `${base}...HEAD`], cwd),
+      ]);
+      return { branch: wt?.branch, base: isBase ? undefined : base, commits: lines(log.stdout), uncommitted: lines(status.stdout), stat: stat.stdout.trim() || undefined };
+    } catch (e) {
+      this.ctl.log(t('Recap: could not read git: {0}', (e as Error).message));
+      return undefined;
+    }
+  }
+
+  /**
+   * Recapitula o que foi feito na worktree: git (commits, não commitados) e cada pedido com os
+   * arquivos editados e a resposta final. `summarize` pede ao Claude (sem terminal) um resumo disso.
+   */
+  async recap(cwd: string, summarize = false) {
+    const list = (await this.sessionsIn(cwd)).slice(0, 10).reverse();
+    const [git, sessions] = await Promise.all([this.gitRecap(cwd), Promise.all(list.map(async info => ({ info, turns: await readTurns(info.file) })))]);
+    const name = this.wtName(cwd);
+    const md = renderRecap(name, cwd, sessions, git);
+    if (!summarize) return this.showDoc(`recap:${norm(cwd)}`, t('Recap · {0}', name), md);
+    if (!sessions.length && !git?.commits.length && !git?.uncommitted.length) {
+      vscode.window.showInformationMessage(t('Nothing to recap in {0} yet.', name));
+      return;
+    }
+    const lang = locale().toLowerCase().startsWith('pt') ? 'Brazilian Portuguese' : 'English';
+    try {
+      const r = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: t('Claude is recapping {0}…', name), cancellable: true },
+        (_p, token) => {
+          const ac = new AbortController();
+          token.onCancellationRequested(() => ac.abort());
+          return runHeadless(recapSummaryPrompt(md, lang), {
+            cwd,
+            bin: this.ctl.cfg().get<string>('claude.headlessCommand', 'claude'),
+            model: this.ctl.cfg().get<string>('claude.headlessModel', 'haiku') || undefined,
+            timeoutMs: 5 * 60_000,
+            signal: ac.signal,
+          });
+        },
+      );
+      // o resumo em cima e o recap completo embaixo, um nível de título abaixo
+      const details = md.replace(/^# .*\n/, `## ${t('Details')}\n`).replace(/^(#{2,}) /gm, (m, h: string, i: number) => (i === 0 ? m : `#${h} `));
+      await this.showDoc(`summary:${norm(cwd)}`, t('Summary · {0}', name), [`# ${t('Summary: {0}', name)}`, '', r.text, '', '---', '', details].join('\n'));
+    } catch (e) {
+      if ((e as Error).message === 'canceled') return;
+      vscode.window.showErrorMessage(t('Could not summarize: {0}', (e as Error).message));
+    }
+  }
+
   /** Uso estimado pelos logs para a tela "Uso do Claude": janela de 5 h, semana, por dia e por worktree. */
   async estimate() {
     await this.scan();
@@ -357,6 +474,7 @@ export class ClaudeService implements vscode.Disposable {
     if (this.timer) clearInterval(this.timer);
     if (this.saveTimer) clearTimeout(this.saveTimer);
     if (this.rescan) clearTimeout(this.rescan);
+    this.docChanged.dispose();
     this.disposables.forEach(d => d.dispose());
   }
 }
@@ -392,6 +510,7 @@ export class SessionItem extends vscode.TreeItem {
     md.appendMarkdown(`**${sessionTitle(session)}**\n\n`);
     if (session.firstPrompt && session.firstPrompt !== sessionTitle(session)) md.appendMarkdown(`> ${session.firstPrompt}\n\n`);
     md.appendMarkdown(`\`${session.id}\`\n\n${session.cwd ?? ''}${session.gitBranch ? ` · ${session.gitBranch}` : ''}\n\n`);
+    if (session.lastReply) md.appendMarkdown(`**${t('Last message from Claude')}** (${ago(session.lastReplyAt ?? session.end)}):\n\n${clipQuote(session.lastReply, 500)}\n\n`);
     if (open) md.appendMarkdown(t('Open in the terminal **{0}**: "Resume" brings it to the front.', open.terminal.name) + '\n\n');
     md.appendMarkdown(`${new Date(session.start).toLocaleString(locale())} → ${new Date(session.end).toLocaleString(locale())}\n\n`);
     md.appendMarkdown(t('{0} messages from you · {1} responses · {2}', session.userMessages, session.assistantMessages, session.models.join(', ')) + '\n\n');
@@ -450,8 +569,12 @@ export class ClaudeSessionsProvider implements vscode.TreeDataProvider<ClaudeNod
 }
 
 export class TranscriptProvider implements vscode.TextDocumentContentProvider {
-  constructor(private readonly svc: ClaudeService) {}
+  readonly onDidChange: vscode.Event<vscode.Uri>;
+  constructor(private readonly svc: ClaudeService) {
+    this.onDidChange = svc.docChanged.event;
+  }
   provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
+    if (uri.query.startsWith('doc=')) return Promise.resolve(this.svc.docs.get(uri.query.slice(4)) ?? '');
     return this.svc.renderById(uri.query);
   }
 }

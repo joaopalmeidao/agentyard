@@ -307,6 +307,26 @@
     const c = w.claude;
     return `<span class="chip agent link" data-action="claudeResumeLast" data-id="${esc(c.lastId)}" title="${t('{0} Claude Code session(s) in this worktree, {1} tokens; last {2}. Click to resume the last one.', c.sessions, fmtTokens(c.tokens), ago(c.last / 1000))}">✦ ${c.sessions} · ${fmtTokens(c.tokens)}${c.usd !== undefined ? ` · ≈US$ ${c.usd.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}</span>`;
   }
+  /** Última mensagem do Claude na worktree: 2 linhas no card; o texto (e o pedido) inteiros no title. */
+  function lastReplyTip(c) {
+    return [
+      t('Last message from Claude ({0})', ago(c.lastReplyAt / 1000)),
+      c.lastPrompt ? `${t('You')}: ${c.lastPrompt}` : '',
+      c.lastReply,
+      t('Click to open the full message.'),
+    ].filter(Boolean).join('\n\n');
+  }
+
+  function agentLast(w) {
+    const c = w.claude;
+    if (!c || !c.lastReply) return '';
+    const p = esc(w.path);
+    return `<div class="agent-last">
+      <span class="agent-last-text link" data-action="claude.lastMessage" data-path="${p}" title="${esc(lastReplyTip(c))}">💬 ${esc(c.lastReply.replace(/\s+/g, ' ').slice(0, 400))}</span>
+      <span class="agent-last-meta">${ago(c.lastReplyAt / 1000)}
+        <button class="link" data-action="claude.recap" data-path="${p}" title="${t('Each request, the files edited and the final reply of every session here, plus commits and uncommitted files')}">${t('recap')}</button></span>
+    </div>`;
+  }
   const fmtTokens = n => (n >= 1e6 ? t('{0}M', (n / 1e6).toFixed(1)) : n >= 1e3 ? t('{0}k', Math.round(n / 1e3)) : String(n));
 
   /** Situação no remoto: não publicada, ↑ a enviar, ↓ a receber, ou em dia. */
@@ -538,6 +558,7 @@
         <td class="c-when">${lastChange(w)}</td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="${t('Open {0} in this worktree (Ctrl/Alt+click opens another, even with one already running)', esc(agent))}">✦</button>` : ''}
+          ${w.claude && w.claude.lastReply ? `<button data-action="claude.lastMessage" data-path="${esc(w.path)}" title="${esc(lastReplyTip(w.claude))}">💬</button>` : ''}
           ${w.remote.ahead || !w.remote.published ? pushButton(w.branch, w.remote, true) : ''}
           ${w.remote.published && w.remote.behind ? pullButton(w.branch, w.remote.behind, true) : ''}
           <button data-action="openWorktree" data-path="${esc(w.path)}" title="${t('Open in new window')}">${t('Open')}</button>
@@ -625,6 +646,7 @@
           <div class="path" title="${esc(w.path)}">${esc(w.path)}</div>
           <div class="chips">${chips.join('')}</div>
           <div class="last" title="${esc(w.subject)}">${esc(w.subject || '—')}</div>
+          ${agentLast(w)}
           <div class="actions">${act.join('')}</div>
         </div>`;
   }
@@ -1213,6 +1235,10 @@
         agent.push(item('templates.use', `✦ ${t('Use task template…')}`, { path: wt.path, branch: b }, 'agent'));
         if (req) agent.push(item('sendPrFeedback', `✦ ${t('Send the {0} review feedback to the agent', esc(req.ref))}`, { path: wt.path, branch: b }, 'agent'));
         agent.push(item('turns.pick', t('Agent turns (checkpoints)…'), { path: wt.path, branch: b }));
+        agent.push('<hr>');
+        agent.push(item('claude.lastMessage', `💬 ${t('Last message from the agent')}`, { path: wt.path, branch: b }));
+        agent.push(item('claude.recap', t('Recap what was done'), { path: wt.path, branch: b }));
+        agent.push(item('claude.recapSummary', `✦ ${t('Recap with a summary by Claude')}`, { path: wt.path, branch: b }, 'agent'));
       }
       agent.push(item('newWorktreeWithTask', `✦ ${t('New worktree from here, with task…')}`, { startPoint: b }, 'agent'));
       if (!isBase) agent.push(item('reviewWithAgent', `✦ ${t('Review PR/MR with the agent')}`, { branch: b }, 'agent'));

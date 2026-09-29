@@ -95,6 +95,12 @@ export class WorktreeItem extends vscode.TreeItem {
     if (wt.preview?.conflict) md.appendMarkdown(t('⚠ Merging {0} conflicts in: {1}', `\`${base}\``, wt.preview.files.join(', ')) + '\n\n');
     if (wt.agents.length) md.appendMarkdown(t('Open agents: {0}', agentsLabel(wt.agents)) + '\n\n');
     if (wt.agentStates?.waiting) md.appendMarkdown(`🔔 ${t('waiting for you')}${wt.agentStates.message ? `: ${wt.agentStates.message}` : ''}\n\n`);
+    const c = wt.claude;
+    if (c?.lastReply) {
+      const text = c.lastReply.length > 600 ? `${c.lastReply.slice(0, 599)}…` : c.lastReply;
+      const when = c.lastReplyAt ? new Date(c.lastReplyAt).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      md.appendMarkdown(`💬 **${t('Last message from Claude')}**${when ? ` · ${when}` : ''}\n\n${text.split('\n').map(l => `> ${l}`).join('\n')}\n\n`);
+    }
     if (wt.sync) md.appendMarkdown(`Sync: ${wt.sync.message}\n\n`);
     if (wt.request) md.appendMarkdown(`[${wt.request.ref} ${wt.request.title}](${wt.request.url})\n\n`);
     this.tooltip = md;
