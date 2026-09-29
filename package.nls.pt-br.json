@@ -339,7 +339,7 @@
   "config.env.ports.markdownDescription": "Portas por worktree, ex.: `{ \"base\": 3000, \"step\": 10, \"vars\": [\"PORT\", \"VITE_PORT\", \"API_PORT\"] }`. Cada worktree ganha um bloco estável; a 1ª variável recebe a porta, as seguintes +1, +2…",
   "config.env.devCommand.description": "Comando de desenvolvimento rodado por \"Rodar dev\" (ex.: npm run dev), com as variáveis de porta da worktree.",
   "config.setup.nodeModules.description": "O que fazer com as dependências Node ao criar uma worktree (postCreateCommand, se definido, vence).",
-  "config.setup.nodeModules.enumDescriptions.0": "Perguntar ao criar a worktree.",
+  "config.setup.nodeModules.enumDescriptions.0": "Perguntar ao criar a worktree; as criadas sem diálogo (por tarefa, agente ou voz) instalam.",
   "config.setup.nodeModules.enumDescriptions.1": "Instalar as dependências num terminal.",
   "config.setup.nodeModules.enumDescriptions.2": "Compartilhar o node_modules da principal (junction/symlink).",
   "config.diskUsage.enabled.description": "Calcular em segundo plano o espaço em disco de cada worktree.",

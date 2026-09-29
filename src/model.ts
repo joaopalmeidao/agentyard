@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { Commit, MergePreview, parseTrack, pLimit, Ref, RemoteTrack, Repo, Worktree, WorktreeStatus } from './git';
 import { CiBranch, discoverCiBranches } from './ciBranches';
@@ -171,6 +172,34 @@ interface CachedStatus extends WorktreeStatus {
 }
 
 const key = (p: string) => path.normalize(p).toLowerCase();
+
+/**
+ * Worktree cujo status muda com este arquivo do diretório git comum: `index`/`HEAD` da principal ou
+ * `worktrees/<nome>/index|HEAD` de uma ligada (o caminho dela está em `worktrees/<nome>/gitdir`).
+ */
+export function worktreeOfGitFile(commonDir: string, file: string): string | undefined {
+  const rel = path.relative(commonDir, file).split(path.sep).join('/');
+  if (rel === 'index' || rel === 'HEAD') return path.basename(commonDir).toLowerCase() === '.git' ? path.dirname(commonDir) : undefined;
+  const m = /^worktrees\/([^/]+)\/(index|HEAD)$/.exec(rel);
+  if (!m) return undefined;
+  try {
+    const gitdir = fs.readFileSync(path.join(commonDir, 'worktrees', m[1], 'gitdir'), 'utf8').trim();
+    return gitdir ? path.dirname(path.resolve(commonDir, 'worktrees', m[1], gitdir)) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Status guardado de uma worktree fica vencido: a próxima rodada relê primeiro (o valor antigo segue na tela até lá). */
+export function expireStatus(cache: RepoCache, worktreePath: string) {
+  const st = cache.statuses.get(key(worktreePath));
+  if (st) st.at = 0;
+}
+
+/** Grava um status recém-lido no cache. */
+export function storeStatus(cache: RepoCache, worktreePath: string, st: WorktreeStatus) {
+  cache.statuses.set(key(worktreePath), { ...st, at: Date.now() });
+}
 
 /**
  * O que é caro de calcular. Comparações dependem só dos dois commits, então valem para sempre;
@@ -410,10 +439,11 @@ export async function enrich(repo: Repo, state: GraphState, cache: RepoCache, o:
     const maxAge = (active ? o.activeSeconds : o.idleSeconds) * 1000;
     if (!st || now - st.at > maxAge) {
       jobs.push({
-        prio: w.isCurrent ? 0 : active ? 1 : st ? 4 : 2,
+        // vencido por um commit ou add (watcher do .git): antes de tudo
+        prio: w.isCurrent || st?.at === 0 ? 0 : active ? 1 : st ? 4 : 2,
         run: async () => {
           const s = await repo.status(w.path);
-          cache.statuses.set(key(w.path), { ...s, at: Date.now() });
+          storeStatus(cache, w.path, s);
         },
       });
     }

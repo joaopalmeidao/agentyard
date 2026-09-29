@@ -7,7 +7,7 @@ import { hostLabel } from './hosting/platforms';
 import { RequestService } from './hosting/service';
 import { Repo } from './git';
 import { t } from './i18n';
-import { applyCache, buildState, enrich, GraphState, RepoCache, resolveBase, SyncStatus, SyncWhere, GraphFilter } from './model';
+import { applyCache, buildState, enrich, expireStatus, GraphState, RepoCache, resolveBase, storeStatus, SyncStatus, SyncWhere, GraphFilter, worktreeOfGitFile } from './model';
 
 /** Dono do repositório aberto e do estado mostrado na árvore e no grafo. */
 export class Controller implements vscode.Disposable {
@@ -87,9 +87,15 @@ export class Controller implements vscode.Disposable {
     if (!this.repo) return;
     this.cache.importCompares(this.ctx.workspaceState.get(this.cacheKey()));
     const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(vscode.Uri.file(this.repo.commonDir), '{HEAD,packed-refs,refs/**,worktrees/*/HEAD,worktrees/*/index}'),
+      new vscode.RelativePattern(vscode.Uri.file(this.repo.commonDir), '{HEAD,index,packed-refs,refs/**,worktrees/*/HEAD,worktrees/*/index}'),
     );
-    const kick = () => this.scheduleRefresh();
+    const commonDir = this.repo.commonDir;
+    const kick = (uri: vscode.Uri) => {
+      // commit, add ou checkout numa worktree: o status guardado dela deixou de valer
+      const wt = worktreeOfGitFile(commonDir, uri.fsPath);
+      if (wt) expireStatus(this.cache, wt);
+      this.scheduleRefresh();
+    };
     this.repoWatch.push(watcher, watcher.onDidChange(kick), watcher.onDidCreate(kick), watcher.onDidDelete(kick));
   }
 
@@ -240,6 +246,25 @@ export class Controller implements vscode.Disposable {
     this.setLoading('ready');
     this.changed.fire(this.state);
     this.startEnrich();
+  }
+
+  /**
+   * Status e commits à frente da base de uma worktree lidos agora do git, sem o cache (que só é
+   * relido a cada statusRefresh.*Seconds): quem decide algo com eles, como o mark_ready, não pode ver
+   * o estado de antes do último commit. O status lido vai para o cache e para as views.
+   */
+  async freshWorktree(p: string): Promise<{ changes: number; operation?: string; ahead?: number } | undefined> {
+    const repo = this.repo;
+    if (!repo) return undefined;
+    const baseSha = this.state?.baseSha;
+    const [st, head] = await Promise.all([repo.status(p), repo.revParse('HEAD', p)]);
+    storeStatus(this.cache, p, st);
+    const ahead = baseSha && head ? (await repo.aheadBehind(baseSha, head))[1] : undefined;
+    if (this.state) applyCache(this.state, this.cache);
+    this.changed.fire(this.state);
+    this.cacheChanged.fire();
+    this.scheduleRefresh();
+    return { changes: st.changes, operation: st.operation, ahead };
   }
 
   /** Detalha em segundo plano; uma rodada por vez, sem segurar a fase rápida. */

@@ -789,7 +789,9 @@ porta e as seguintes +1, +2. O card mostra a porta; clique para abrir `http://lo
 - **Abrir a porta desta worktree no navegador**.
 
 Dependências na criação: npm, pnpm, yarn, bun, pip, poetry e uv são detectados; para Node,
-`worktreeGraph.setup.nodeModules: "link"` compartilha o `node_modules` da principal.
+`worktreeGraph.setup.nodeModules: "link"` compartilha o `node_modules` da principal. No padrão (`ask`), as worktrees
+criadas sem diálogo (por tarefa, pelo `create_worktree` de um agente ou por voz) instalam as dependências
+num terminal `<branch>: setup`, em vez de ficarem sem `node_modules`.
 
 O espaço em disco (💾) de cada worktree aparece na tabela, na limpeza e em *Remover mescladas*
 (`worktreeGraph.diskUsage.*`).

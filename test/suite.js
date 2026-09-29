@@ -1208,6 +1208,40 @@ exports.run = async () => {
     g('branch -D velha/pendente');
   });
 
+  await check('status depois do commit: watcher vence o cache e mark_ready lê do git na hora', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const { execSync } = require('child_process');
+    const { worktreeOfGitFile } = require('../out/model');
+    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
+    const g = c => execSync(`git -c user.name=t -c user.email=t@t ${c}`, { cwd: wt.path, encoding: 'utf8' }).trim();
+    const k = path.normalize(wt.path).toLowerCase();
+    const common = ctl.repo.commonDir;
+    const name = fs.readdirSync(path.join(common, 'worktrees')).find(n => worktreeOfGitFile(common, path.join(common, 'worktrees', n, 'index')) && path.normalize(worktreeOfGitFile(common, path.join(common, 'worktrees', n, 'index'))).toLowerCase() === k);
+    assert.ok(name, 'worktrees/<nome>/index aponta para a worktree');
+    assert.strictEqual(worktreeOfGitFile(common, path.join(common, 'refs', 'heads', 'x')), undefined);
+
+    fs.writeFileSync(path.join(wt.path, 'status-cache.txt'), 'x');
+    const dirty = await ctl.freshWorktree(wt.path);
+    assert.ok(dirty.changes >= 1, JSON.stringify(dirty));
+    const aheadBefore = dirty.ahead;
+    g('add status-cache.txt');
+    g('commit -q -m status-cache');
+    try {
+      // sem esperar o statusRefresh.activeSeconds: o commit mexe no index e o watcher vence o status
+      await until(() => ctl.cache.statuses.get(k)?.at === 0 || ctl.state.worktrees.find(w => w.path === wt.path)?.changes === 0);
+      const now = await ctl.freshWorktree(wt.path);
+      assert.strictEqual(now.changes, dirty.changes - 1);
+      assert.strictEqual(now.ahead, aheadBefore + 1);
+      assert.strictEqual(ctl.cache.statuses.get(k).changes, now.changes, 'status lido vai para o cache');
+    } finally {
+      // desfaz só o commit do teste (a worktree pode ter outras mudanças da demo)
+      g('reset -q --soft HEAD~1');
+      g('rm -q --cached status-cache.txt');
+      fs.unlinkSync(path.join(wt.path, 'status-cache.txt'));
+    }
+  });
+
   console.log('\n' + results.join('\n'));
   if (results.some(r => r.startsWith('FAIL'))) throw new Error('falhas nos testes');
 };
