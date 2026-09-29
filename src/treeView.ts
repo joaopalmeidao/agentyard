@@ -7,7 +7,7 @@ import { gitUri } from './diff';
 import { discardEffect, KIND_LABEL, parseNumstat, parseUncommitted, Uncommitted } from './gitops/core';
 import { BranchView, WorktreeView } from './model';
 import { LOG_FORMAT, parseLog } from './summary/core';
-import { t } from './i18n';
+import { locale, t } from './i18n';
 
 type Node = OrphansGroup | WorktreeItem | UncommittedGroup | UncommittedFileItem | CommitsItem | CommitItem | ChangesItem | ChangeItem | DirItem | FileItem | BranchesGroup | BranchItem | TreeEntryItem;
 
@@ -81,6 +81,7 @@ export class WorktreeItem extends vscode.TreeItem {
     md.appendMarkdown(`**${wt.name}**${wt.isCurrent ? ` — ${t('this window')}` : ''}\n\n`);
     md.appendMarkdown(`\`${wt.path}\`\n\n`);
     if (wt.subject) md.appendMarkdown(t('Last commit: {0}', wt.subject) + '\n\n');
+    if (wt.lastChange) md.appendMarkdown(t('Last change: {0}', new Date(wt.lastChange * 1000).toLocaleString(locale(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })) + '\n\n');
     if (!wt.isBase) md.appendMarkdown(t('{0} behind and {1} ahead of {2}', wt.behind, wt.ahead, `\`${baseRef}\``) + '\n\n');
     md.appendMarkdown((wt.changes ? t('{0} uncommitted change(s)', wt.changes) : t('Clean worktree')) + '\n\n');
     if (wt.branch)

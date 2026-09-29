@@ -79,6 +79,8 @@ export interface WorktreeStatus {
   /** [código XY do porcelain, caminho relativo com "/"]. */
   files?: [string, string][];
   operation?: 'merge' | 'rebase' | 'cherry-pick';
+  /** Data (unix, s) do arquivo não commitado mais recente; ausente numa worktree limpa. */
+  modified?: number;
 }
 
 export interface MergePreview {
@@ -239,7 +241,17 @@ export class Repo {
       else if (has('rebase-merge') || has('rebase-apply')) operation = 'rebase';
       else if (has('CHERRY_PICK_HEAD')) operation = 'cherry-pick';
     }
-    return { changes, operation, files };
+    // "Última alteração" do que está em disco: o mtime mais novo entre os arquivos alterados (apagados não contam).
+    let modified: number | undefined;
+    for (const [, rel] of files.slice(0, 500)) {
+      try {
+        const m = Math.floor(fs.statSync(path.join(worktreePath, rel)).mtimeMs / 1000);
+        if (!modified || m > modified) modified = m;
+      } catch {
+        // apagado ou inacessível
+      }
+    }
+    return { changes, operation, files, modified };
   }
 
   /**

@@ -45,6 +45,8 @@ export interface WorktreeView extends Worktree {
   remote: RemoteTrack;
   subject: string;
   date: number;
+  /** Última alteração (unix, s): o mais recente entre o último commit e os arquivos não commitados. */
+  lastChange: number;
   isCurrent: boolean;
   isBase: boolean;
   paused: boolean;
@@ -259,6 +261,7 @@ export async function buildState(repo: Repo, opts: BuildOptions, cache: RepoCach
       remote: parseTrack(ref?.upstream, ref?.track),
       subject: ref?.subject ?? '',
       date: ref?.date ?? 0,
+      lastChange: ref?.date ?? 0,
       isCurrent: key(wt.path) === key(repo.root),
       isBase: wt.branch === base,
       paused: !!wt.branch && opts.paused.includes(wt.branch),
@@ -378,6 +381,7 @@ export function applyCache(state: GraphState, cache: RepoCache) {
     if (st) {
       w.changes = st.changes;
       w.operation = st.operation;
+      w.lastChange = Math.max(w.date, st.changes ? st.modified ?? 0 : 0);
       w.statusKnown = true;
     }
     const target = w.isBase ? (state.baseRef !== state.base ? w.head : '') : w.head;

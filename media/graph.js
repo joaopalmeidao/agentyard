@@ -471,6 +471,16 @@
   let wtFilter = '';
   let onlyDirty = false;
   let bySize = false;
+  let byRecent = false;
+
+  /** Última alteração (commit ou arquivo não commitado), com as duas datas completas no title. */
+  function lastChange(w) {
+    const at = w.lastChange || w.date;
+    if (!at) return '';
+    const tip = [t('Last change: {0}', fullDate(at)), w.date ? t('Last commit: {0}', fullDate(w.date)) : '', w.changes && at > w.date ? t('(uncommitted files edited after the last commit)') : ''].filter(Boolean).join('\n');
+    const fresh = Date.now() / 1000 - at < 86400;
+    return `<span class="when ${fresh ? 'fresh' : ''}" title="${esc(tip)}">🕒 ${ago(at)}</span>`;
+  }
 
   function formatBytes(n) {
     const u = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -495,6 +505,7 @@
         <button class="link" data-action="cleanupWorktrees" title="${t('Remove several at once; merged and clean ones come pre-selected')}">${t('bulk cleanup…')}</button>
         <button class="link ${onlyDirty ? 'on' : ''}" data-local="dirty" title="${t('Show only worktrees with uncommitted changes')}">${onlyDirty ? '✓ ' : ''}${t('with changes ({0})', state.worktrees.filter(w => w.changes > 0).length)}</button>
         <button class="link ${bySize ? 'on' : ''}" data-local="bysize" title="${t('Sort by disk space')}">${bySize ? '✓ ' : ''}${t('by size')}</button>
+        <button class="link ${byRecent ? 'on' : ''}" data-local="byrecent" title="${t('Sort by last change (commit or uncommitted file), newest first')}">${byRecent ? '✓ ' : ''}${t('most recent')}</button>
         <input id="wtfilter" type="search" placeholder="${t('Filter by branch, folder or commit')}" /></h2>
       <div class="table-wrap"><table class="wts"><tbody id="wt-rows">${tableRows()}</tbody></table></div>
     </section>`;
@@ -505,6 +516,7 @@
     const rest = state.worktrees.filter(w => !w.prunable && !featured(w));
     const match = rest.filter(w => (!q || `${w.name} ${w.path} ${w.subject}`.toLowerCase().includes(q)) && (!onlyDirty || w.changes > 0));
     if (bySize) match.sort((a, b) => ((b.size && b.size.bytes) || 0) - ((a.size && a.size.bytes) || 0));
+    else if (byRecent) match.sort((a, b) => (b.lastChange || b.date) - (a.lastChange || a.date));
     const agent = state.agentNames && state.agentNames[0];
     const rows = match.slice(0, rowLimit).map(w => {
       const b = esc(w.branch || '');
@@ -522,7 +534,8 @@
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
         <td class="c-chips">${w.size ? sizeChip(w.size) : ''}${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.overlap ? overlapChip(w) : ''}${w.budget ? budgetChip(w) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
-        <td class="subject" title="${esc(w.subject)}">${esc(w.subject)} <span class="muted">${ago(w.date)}</span></td>
+        <td class="subject" title="${esc(w.subject)}">${esc(w.subject)}</td>
+        <td class="c-when">${lastChange(w)}</td>
         <td class="row-actions">
           ${agent ? `<button class="agent" data-action="launchAgent" data-path="${esc(w.path)}" data-branch="${b}" data-agent="${esc(agent)}" title="${t('Open {0} in this worktree (Ctrl/Alt+click opens another, even with one already running)', esc(agent))}">✦</button>` : ''}
           ${w.remote.ahead || !w.remote.published ? pushButton(w.branch, w.remote, true) : ''}
@@ -534,8 +547,8 @@
           ${moreBtn()}
         </td></tr>`;
     });
-    if (match.length > rowLimit) rows.push(`<tr><td colspan="5" class="more"><button data-local="more">${t('Show {0} more of {1}', Math.min(60, match.length - rowLimit), match.length - rowLimit)}</button></td></tr>`);
-    if (!match.length) rows.push(`<tr><td colspan="5" class="muted">${t('No worktree matching “{0}”.', esc(wtFilter))}</td></tr>`);
+    if (match.length > rowLimit) rows.push(`<tr><td colspan="6" class="more"><button data-local="more">${t('Show {0} more of {1}', Math.min(60, match.length - rowLimit), match.length - rowLimit)}</button></td></tr>`);
+    if (!match.length) rows.push(`<tr><td colspan="6" class="muted">${t('No worktree matching “{0}”.', esc(wtFilter))}</td></tr>`);
     return rows.join('');
   }
 
@@ -606,11 +619,12 @@
               ${w.isMain ? `<span class="tag">${t('main')}</span>` : ''}
               ${w.isCurrent ? `<span class="tag accent">${t('this window')}</span>` : ''}
             </span>
+            ${lastChange(w)}
             ${w.branch ? moreBtn() : ''}
           </div>
           <div class="path" title="${esc(w.path)}">${esc(w.path)}</div>
           <div class="chips">${chips.join('')}</div>
-          <div class="last" title="${esc(w.subject)}">${esc(w.subject || '—')} <span class="muted">${ago(w.date)}</span></div>
+          <div class="last" title="${esc(w.subject)}">${esc(w.subject || '—')}</div>
           <div class="actions">${act.join('')}</div>
         </div>`;
   }
@@ -895,6 +909,13 @@
     }
     if (local && local.dataset.local === 'bysize') {
       bySize = !bySize;
+      if (bySize) byRecent = false;
+      render();
+      return;
+    }
+    if (local && local.dataset.local === 'byrecent') {
+      byRecent = !byRecent;
+      if (byRecent) bySize = false;
       render();
       return;
     }

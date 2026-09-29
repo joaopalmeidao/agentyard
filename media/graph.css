@@ -95,6 +95,10 @@ details[open] > summary h2::before { content: '▾'; }
 .card-head .branch { flex: 0 1 auto; min-width: 0; }
 .card-head .tags { display: flex; gap: 4px; flex: none; }
 .card-head button.more { margin-left: auto; }
+.card-head .when { margin-left: auto; }
+.card-head .when + button.more { margin-left: 0; }
+.when { font-size: 11px; color: var(--muted); white-space: nowrap; flex: none; }
+.when.fresh { color: var(--fg); font-weight: 600; }
 .branch { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; border-radius: 3px; padding: 0 5px; line-height: 16px; color: var(--muted); background: color-mix(in srgb, var(--fg) 8%, transparent); white-space: nowrap; }
 .tag.accent { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
@@ -188,6 +192,7 @@ table.wts td.c-name .path { font-size: 10.5px; max-width: 340px; }
 table.wts td.c-chips > * { margin: 2px 4px 2px 0; vertical-align: middle; }
 table.wts td.subject { overflow: hidden; text-overflow: ellipsis; max-width: 1px; width: 100%; }
 table.wts td.more { text-align: center; }
+table.wts td.c-when { text-align: right; }
 table.wts .row-actions button { font-size: 12px; padding: 1px 7px; }
 .card-head button.star { margin-right: 2px; }
 .progress { flex-basis: 100%; display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
