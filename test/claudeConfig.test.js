@@ -154,22 +154,10 @@ check('recursos: plugins e disableAllHooks', () => {
 
 const L = require('../out/claude/learn');
 
-check('aprender com o uso: bloco no CLAUDE.md entra uma vez e sai sem mexer no resto', () => {
-  const orig = '# Minhas regras\n\n- responder em pt-BR\n';
-  const on = L.withLearningBlock(orig);
-  assert.ok(L.hasLearningBlock(on) && on.startsWith(orig.trimEnd() + '\n\n'));
-  assert.strictEqual(L.withLearningBlock(on), on);
-  assert.strictEqual(L.withoutLearningBlock(on), orig);
-  assert.strictEqual(L.withoutLearningBlock(L.withLearningBlock('')), '');
-  const middle = L.withLearningBlock('a\n') + '\n# depois\n';
-  assert.strictEqual(L.withoutLearningBlock(middle), 'a\n\n# depois\n');
-  assert.strictEqual(L.withoutLearningBlock(orig), orig);
-});
-
-check('aprender com o uso: pedidos citam onde gravar', () => {
+check('memória e skills com o Claude: pedidos citam onde gravar', () => {
   const x = { memoryDir: '/m/memory', userSkillsDir: '/c/skills', projectSkillsDir: '/r/.claude/skills' };
-  for (const p of [L.learnPrompt(x), L.curateMemoryPrompt(x)]) for (const d of Object.values(x)) assert.ok(p.includes(d), d);
-  assert.ok(!L.learnPrompt({ userSkillsDir: '/c/skills' }).includes('Memory folder'));
+  for (const d of Object.values(x)) assert.ok(L.curateMemoryPrompt(x).includes(d), d);
+  assert.ok(!L.curateMemoryPrompt({ userSkillsDir: '/c/skills' }).includes('Memory folder'));
   assert.ok(L.improveSkillPrompt('/c/skills/x/SKILL.md').includes('/c/skills/x/SKILL.md'));
 });
 

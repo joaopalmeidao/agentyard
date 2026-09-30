@@ -10,12 +10,10 @@ import { DEFAULT_ISSUE_PROMPT, renderPrompt } from '../issues/core';
 import { mainPathOf } from '../projects';
 import { Attempts } from './attempts';
 import { keyOf } from './head';
-import { TaskItem, TaskQueue, TasksProvider } from './tasks';
 import { AgentWatch, ReadyInfo } from './watch';
 
 export interface AgentFlow {
   watch: AgentWatch;
-  tasks: TaskQueue;
   attempts: Attempts;
   /** Ações vindas do painel; devolve true se tratou. */
   handle(action: string, a: Record<string, string>): Promise<boolean>;
@@ -51,10 +49,6 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     const L = ctl.requests.label;
     const review = t('Review');
     const analyze = t('Analyze merge');
-    // Mesma fila de merge da view (destino: a base); o merge sai quando chegar a vez dela.
-    const queue = t('Add to merge queue…');
-    // Na fila com o Claude já autorizado: se der conflito, ele resolve sozinho e a fila segue.
-    const queueAuthorized = t('✦ Queue (Claude resolves conflicts)');
     const publish = t('Publish {0}', L);
     const openTerminal = t('Open terminal');
     const extra = watch.describers
@@ -68,8 +62,6 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
           : t('{0}: the agent finished. Ready for review.', name)) +
         (extra ? ` (${extra})` : ''),
       review,
-      queue,
-      queueAuthorized,
       analyze,
       publish,
       openTerminal,
@@ -78,26 +70,21 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     if (pick !== openTerminal) await watch.clearReady(r.path);
     if (project && pick !== openTerminal) await ctl.setActiveRepo(project);
     if (pick === review && r.branch) await actions.diffWithBase(ctl, r.branch);
-    if (pick === queue && r.branch) await vscode.commands.executeCommand('worktreeGraph.mergeQueue.add', r.branch);
-    if (pick === queueAuthorized && r.branch) await vscode.commands.executeCommand('worktreeGraph.mergeQueue.addAuthorized', r.branch);
     if (pick === analyze && r.branch) await vscode.commands.executeCommand('worktreeGraph.analyzeMerge', r.branch);
     if (pick === publish && r.branch) await ctl.requests.publish(r.branch);
     if (pick === openTerminal) await actions.openTerminal(ctl, { path: r.path });
   };
 
   const watch = new AgentWatch(ctl, agentTerms, r => void notify(r));
-  const tasks = new TaskQueue(ctl, agentTerms, watch);
   const attempts = new Attempts(ctl, agentTerms);
-  const tasksView = vscode.window.createTreeView('worktreeGraph.tasks', { treeDataProvider: new TasksProvider(tasks) });
-  ctx.subscriptions.push(watch, tasks, tasksView);
+  ctx.subscriptions.push(watch);
 
-  // Estado do painel/árvore: "pronto para revisar" e resumo da fila, por worktree (só leitura de memória).
+  // Estado do painel/árvore: "pronto para revisar", por worktree (só leitura de memória).
   ctl.stateHooks.push(s => {
     const ready = watch.readyMap();
     for (const w of s.worktrees) {
       const r = ready[keyOf(w.path)];
       w.review = r ? { at: r.at, commits: r.commits } : undefined;
-      w.tasks = tasks.summary(w.path);
     }
   });
 
@@ -112,17 +99,6 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     };
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
 
-  reg('tasks.add', async (arg?: Arg, text?: string) => {
-    const wt = await resolveWorktree(ctl, arg, t('Add a task to which worktree?'));
-    if (wt) await tasks.add(wt.path, wt.branch, text);
-  });
-  reg('tasks.runNow', (it: TaskItem) => it && tasks.run(it.q.path, it.task.id));
-  reg('tasks.moveUp', (it: TaskItem) => it && tasks.move(it.q.path, it.task.id, -1));
-  reg('tasks.moveDown', (it: TaskItem) => it && tasks.move(it.q.path, it.task.id, 1));
-  reg('tasks.remove', (it: TaskItem) => it && tasks.remove(it.q.path, it.task.id));
-  reg('tasks.markDone', (it: TaskItem) => it && tasks.setStatus(it.q.path, it.task.id, 'done'));
-  reg('tasks.markFailed', (it: TaskItem) => it && tasks.setStatus(it.q.path, it.task.id, 'failed'));
-  reg('tasks.clearFinished', () => tasks.clearFinished());
   reg('agents.checkReady', async (arg?: Arg) => {
     const wt = typeof arg === 'object' || typeof arg === 'string' ? await resolveWorktree(ctl, arg, '') : undefined;
     const any = await watch.checkNow(wt?.path);
@@ -145,12 +121,6 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
 
   const handle = async (action: string, a: Record<string, string>): Promise<boolean> => {
     switch (action) {
-      case 'addTask':
-        await vscode.commands.executeCommand('worktreeGraph.tasks.add', { path: a.path, branch: a.branch });
-        return true;
-      case 'openTasks':
-        await vscode.commands.executeCommand('worktreeGraph.tasks.focus');
-        return true;
       case 'reviewReady': {
         const r = watch.readyFor(a.path);
         await watch.clearReady(a.path);
@@ -164,5 +134,5 @@ export function registerAgentFlow(ctx: vscode.ExtensionContext, ctl: Controller,
     return false;
   };
 
-  return { watch, tasks, attempts, handle };
+  return { watch, attempts, handle };
 }

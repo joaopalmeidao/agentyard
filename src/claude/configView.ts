@@ -7,8 +7,7 @@ import type { Controller } from '../controller';
 import { t } from '../i18n';
 import { featuresMenu } from './features';
 import { contextFile, mentionOf, pickClaude } from './sendContext';
-import type { ClaudeService, SessionItem } from './view';
-import { curateMemoryPrompt, hasLearningBlock, improveSkillPrompt, learningBlock, LearnTargets, learnPrompt, moveAllMemories, moveMemory, withLearningBlock, withoutLearningBlock } from './learn';
+import { curateMemoryPrompt, improveSkillPrompt, LearnTargets, moveAllMemories, moveMemory } from './learn';
 import {
   addIndexLine,
   addPermission,
@@ -126,32 +125,10 @@ class InfoNode extends vscode.TreeItem {
   }
 }
 
-/** "Aprender com o uso": liga/desliga o bloco no CLAUDE.md do usuário e dá acesso às ações de aprendizado. */
-export class LearnNode extends vscode.TreeItem {
-  readonly kind = 'learn';
-  constructor(on: boolean) {
-    super(t('Learn from use'), vscode.TreeItemCollapsibleState.None);
-    this.id = 'claudeConfig:learn';
-    this.description = on ? t('on · Claude saves memories and skills by itself') : t('off · click to turn on');
-    this.tooltip = new vscode.MarkdownString(
-      [
-        on ? t('**On**: your CLAUDE.md asks Claude to save corrections as memories and repeated procedures as skills while it works.') : t('**Off**: Claude only saves what you ask for.'),
-        '',
-        on ? t('Click to turn it off.') : t('Click to turn it on.'),
-        t('The buttons on the right make Claude learn from the current session or tidy up the memory.'),
-      ].join('\n\n'),
-    );
-    this.iconPath = new vscode.ThemeIcon('mortar-board', on ? new vscode.ThemeColor('charts.green') : undefined);
-    this.contextValue = 'claudeLearn';
-    this.command = { command: 'worktreeGraph.claudeConfig.toggleLearning', title: t('Learn from use') };
-  }
-}
-
-type Node = LearnNode | ScopeNode | GroupNode | SkillNode | ConfigNode | MemoryNode | InfoNode;
+type Node = ScopeNode | GroupNode | SkillNode | ConfigNode | MemoryNode | InfoNode;
 
 export interface ClaudeConfigDeps {
   agentTerms?: AgentTerminals;
-  claude?: ClaudeService;
 }
 
 /** View "Claude: configuração": skills, comandos, configurações e memória, do usuário e do projeto ativo. */
@@ -216,7 +193,7 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
     const proj = this.projectDir();
     try {
       if (!n) {
-        const out: Node[] = [new LearnNode(this.learningOn()), new ScopeNode('user', t('User'), dir.replace(os.homedir(), '~'))];
+        const out: Node[] = [new ScopeNode('user', t('User'), dir.replace(os.homedir(), '~'))];
         if (proj) out.push(new ScopeNode('project', t('Project: {0}', path.basename(proj)), proj));
         return out;
       }
@@ -497,49 +474,7 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
     this.refresh();
   }
 
-  // ------------------------------------------------------------ aprender com o uso
-
-  private userClaudeMd() {
-    return path.join(this.claudeDir(), 'CLAUDE.md');
-  }
-
-  learningOn(): boolean {
-    try {
-      return hasLearningBlock(fs.readFileSync(this.userClaudeMd(), 'utf8'));
-    } catch {
-      return false;
-    }
-  }
-
-  /** Liga/desliga o bloco "Aprender com o uso" no CLAUDE.md do usuário (vale para as próximas sessões). */
-  async toggleLearning() {
-    const file = this.userClaudeMd();
-    const cur = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-    const on = hasLearningBlock(cur);
-    const go = on ? t('Turn off') : t('Turn on');
-    const ok = await vscode.window.showInformationMessage(
-      on ? t('Stop asking Claude to learn from use?') : t('Ask Claude to learn from use?'),
-      {
-        modal: true,
-        detail: on
-          ? t('The block is removed from {0}. Memories and skills already saved stay.', file)
-          : t('This block goes into {0} and applies to new sessions in every project:', file) + '\n\n' + learningBlock().split('\n').slice(1, -1).join('\n'),
-      },
-      go,
-    );
-    if (ok !== go) return;
-    this.setLearning(!on);
-    vscode.window.showInformationMessage(on ? t('Learning from use turned off.') : t('Learning from use turned on: new Claude sessions will save memories and skills as they work.'));
-  }
-
-  setLearning(on: boolean) {
-    const file = this.userClaudeMd();
-    const cur = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-    if (hasLearningBlock(cur) === on) return;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, on ? withLearningBlock(cur) : withoutLearningBlock(cur));
-    this.refresh();
-  }
+  // ------------------------------------------------------------ memória e skills com o Claude
 
   /** Onde o Claude grava o que aprende, para um Claude aberto em `cwd`. */
   learnTargets(cwd: string): LearnTargets {
@@ -565,19 +500,6 @@ export class ClaudeConfigService implements vscode.TreeDataProvider<Node>, vscod
   private async ask(target: OpenAgent, name: string, prompt: string, lead: string) {
     const file = contextFile(name, prompt);
     await this.deps.agentTerms!.type(target, `${lead} ${mentionOf(file, target.path)}`, true);
-  }
-
-  /** "Aprender com esta sessão": a sessão do item (retomada se estiver fechada) ou um Claude aberto. */
-  async learn(item?: SessionItem) {
-    let target: OpenAgent | undefined;
-    if (item?.session) {
-      if (!this.deps.claude) throw new Error(t('Claude sessions are not available.'));
-      target = await this.deps.claude.resume(item.session);
-    } else {
-      target = await this.targetClaude(t('Which Claude should learn from its session?'));
-    }
-    if (!target) return;
-    await this.ask(target, 'learn.md', learnPrompt(this.learnTargets(target.path)), t('Learn from this session following'));
   }
 
   async curateMemory(arg?: GroupNode) {
@@ -756,8 +678,6 @@ export function registerClaudeConfig(ctx: vscode.ExtensionContext, ctl: Controll
       }
     }),
   );
-  reg('toggleLearning', () => svc.toggleLearning());
-  reg('learn', (item?: SessionItem) => svc.learn(item));
   reg('curateMemory', (n?: GroupNode) => svc.curateMemory(n));
   reg('improveSkill', (n: SkillNode) => svc.improveSkill(n));
   reg('moveMemoryToProject', (n: MemoryNode) => svc.moveMemoryToProject(n));

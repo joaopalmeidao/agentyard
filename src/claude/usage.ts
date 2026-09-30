@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { AgentTerminals } from '../agents';
-import type { UsagePause } from '../autopilot/core';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
 import { currentPct, emptyHistory, RateLimit, readStatuses, recordUsage, StatusSnapshot, UsageHistory } from './statusLine';
@@ -80,20 +79,6 @@ export class ClaudeUsage implements vscode.Disposable {
     if (!l) return undefined;
     const cur = (r?: RateLimit) => (r ? { ...r, pct: currentPct(r, now)!, resetsAt: r.resetsAt !== undefined && r.resetsAt <= now ? undefined : r.resetsAt } : undefined);
     return { at: l.at, fiveHour: cur(l.fiveHour), sevenDay: cur(l.sevenDay) };
-  }
-
-  /**
-   * A fila de tarefas deve esperar? Com os limites reais, eles decidem (`tasks.pauseAtUsage`);
-   * sem eles, `undefined` e quem chama usa a estimativa pelos logs.
-   */
-  pause(now = Date.now()): UsagePause | undefined | 'unknown' {
-    const l = this.limits(now);
-    if (!l || (!l.fiveHour && !l.sevenDay)) return 'unknown';
-    const limit = this.ctl.cfg().get<number>('tasks.pauseAtUsage', 90);
-    if (limit <= 0) return undefined;
-    if (l.sevenDay && l.sevenDay.pct >= limit) return { window: 'week', pct: Math.round(l.sevenDay.pct), until: l.sevenDay.resetsAt ?? now + 3600_000 };
-    if (l.fiveHour && l.fiveHour.pct >= limit) return { window: '5h', pct: Math.round(l.fiveHour.pct), until: l.fiveHour.resetsAt ?? now + 1800_000 };
-    return undefined;
   }
 
   dispose() {

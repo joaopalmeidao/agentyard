@@ -39,13 +39,13 @@ export class AutoReviewer implements vscode.Disposable {
     private readonly ctl: Controller,
     bridge: ClaudeBridge,
     private readonly integration: ClaudeIntegration,
-    private readonly flow: AgentFlow,
+    flow: AgentFlow,
     private readonly agentTerms: AgentTerminals,
   ) {
     flow.watch.gates.push(info => this.gate(info));
     flow.watch.describers.push(p => this.describe(p));
     // agente novo na worktree: as rodadas recomeçam
-    this.disposables.push(agentTerms.onDidLaunch(l => !l.project && this.rounds.delete(keyOf(l.path))));
+    this.disposables.push(agentTerms.onDidLaunch(l => this.rounds.delete(keyOf(l.path))));
     bridge.addTool('auto_review', async (_args, { cwd, open }) => {
       const w = bridge.worktreeAt(open?.path ?? cwd);
       const r = w && this.records.get(keyOf(w.path));
@@ -117,11 +117,9 @@ export class AutoReviewer implements vscode.Disposable {
     const base = w?.stack?.parent ?? s?.baseRef ?? (await this.ctl.base()).base;
     const mb = (await repo.run(['merge-base', base, 'HEAD'], info.path)).stdout.trim() || base;
     const [diff, log] = await Promise.all([repo.run(['diff', '--no-color', `${mb}..HEAD`], info.path), repo.run(['log', '--format=%s', `${mb}..HEAD`], info.path)]);
-    const task = this.flow.tasks.queue(info.path)?.tasks.find(x => x.status === 'running')?.text;
     const prompt = reviewPrompt({
       branch: info.branch ?? '',
       base,
-      task,
       subjects: log.stdout.split(/\r?\n/).filter(Boolean),
       diff: diff.stdout,
       focus: this.cfg().get<string>('agents.autoReview.focus', ''),

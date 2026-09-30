@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { agents } from '../agents';
 import type { AgentTerminals } from '../agents';
-import type { TaskQueue } from '../agentFlow/tasks';
 import type { Controller } from '../controller';
 import { describeTarget, nextRuns, parseWhen, relativeTime, Schedule, Target } from './core';
 import { Scheduler } from './service';
@@ -30,7 +29,7 @@ class ScheduleItem extends vscode.TreeItem {
     md.appendMarkdown(`**${schedule.name}**${schedule.scope === 'shared' ? t(' — shared ({0})', '.agentyard/schedules.json') : ''}\n\n`);
     md.appendMarkdown(t('When: {0}', `\`${schedule.when}\``) + '\n\n');
     md.appendMarkdown(
-      t('Target: {0} · {1}', describeTarget(schedule.target), schedule.delivery === 'queue' ? t('goes to the queue') : t('opens the agent')) +
+      t('Target: {0} · {1}', describeTarget(schedule.target), t('opens the agent')) +
         `${schedule.agent ? ` (${schedule.agent})` : ''}\n\n`,
     );
     const conds = [schedule.conditions.onlyClean ? t('clean worktree only') : '', schedule.conditions.onlyIfBaseMoved ? t('only if the base moved') : '', schedule.conditions.skipIfAgentOpen ? t('skips if an agent is open') : '']
@@ -182,15 +181,6 @@ async function wizard(ctl: Controller, base?: Schedule): Promise<Schedule | unde
     agent = a.label;
   }
 
-  const d = await vscode.window.showQuickPick(
-    [
-      { label: t('Open the agent with the task'), description: t('a new terminal in the worktree'), v: 'launch' as const },
-      { label: t('Add to the worktree\'s queue'), description: t('runs when the previous task is done'), v: 'queue' as const },
-    ],
-    { title: t('Schedule: how to deliver?'), placeHolder: base ? t('current: {0}', base.delivery === 'queue' ? t('queue') : t('open now')) : undefined },
-  );
-  if (!d) return undefined;
-
   const conds = await vscode.window.showQuickPick(
     [
       { label: t('Only if the worktree is clean'), k: 'onlyClean' as const, picked: base ? !!base.conditions.onlyClean : target.kind !== 'new' },
@@ -226,7 +216,6 @@ async function wizard(ctl: Controller, base?: Schedule): Promise<Schedule | unde
     target,
     prompt,
     agent,
-    delivery: d.v,
     conditions: Object.fromEntries(conds.map(c => [c.k, true])),
     missed: missed.v,
     enabled: base?.enabled ?? true,
@@ -235,8 +224,8 @@ async function wizard(ctl: Controller, base?: Schedule): Promise<Schedule | unde
   };
 }
 
-export function registerSchedule(ctx: vscode.ExtensionContext, ctl: Controller, agentTerms: AgentTerminals, tasks: TaskQueue): Scheduler {
-  const sch = new Scheduler(ctl, agentTerms, tasks);
+export function registerSchedule(ctx: vscode.ExtensionContext, ctl: Controller, agentTerms: AgentTerminals): Scheduler {
+  const sch = new Scheduler(ctl, agentTerms);
   const view = vscode.window.createTreeView('worktreeGraph.schedules', { treeDataProvider: new SchedulesProvider(sch) });
   ctx.subscriptions.push(sch, view);
 

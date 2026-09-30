@@ -59,6 +59,8 @@ export function registerAgentAttention(ctx: vscode.ExtensionContext, ctl: Contro
       // instante para não avisar duas vezes
       await new Promise(r => setTimeout(r, 1500));
       if (o.asking || o.state !== 'waiting') return;
+      // plano proposto agora há pouco: o aviso do plano já foi
+      if (o.planAt && Date.now() - o.planAt < 120_000) return;
       if (!vscode.window.state.focused) osNotify(ctl, t('{0} in {1} needs you', o.agent, where(o)), o.message ?? t('waiting for your answer'));
       // pedido de permissão: dá para responder daqui (Enter aceita a opção marcada, Esc recusa)
       const answer = o.notificationType === 'permission_prompt' && ctl.cfg().get<boolean>('claude.answerFromNotification', false);

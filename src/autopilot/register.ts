@@ -3,19 +3,16 @@ import type { AgentTerminals } from '../agents';
 import type { AgentFlow } from '../agentFlow/register';
 import type { ClaudeBridge } from '../bridge/register';
 import type { ClaudeIntegration } from '../claude/integration';
-import type { ClaudeService } from '../claude/view';
 import type { Controller } from '../controller';
 import type { Coord } from '../coord/register';
 import { keyOf } from '../agentFlow/head';
 import { t } from '../i18n';
 import type { WorktreeView } from '../model';
 import { AgentBoard } from './boardService';
-import { Lessons } from './lessons';
 import { Orchestrator } from './orchestrator';
 import type { TemplateService } from '../templates/register';
 import { TemplateStats } from './templateStats';
 import { AutoReviewer } from './reviewer';
-import { StopGate } from './stopGate';
 import { StuckWatch } from './stuck';
 
 interface Deps {
@@ -24,7 +21,6 @@ interface Deps {
   bridge: ClaudeBridge;
   integration: ClaudeIntegration;
   coord: Coord;
-  claude: ClaudeService;
 }
 
 type WtArg = { path?: string; wtPath?: string; branch?: string } | string | undefined;
@@ -44,7 +40,6 @@ export async function worktreeOf(ctl: Controller, arg: WtArg, placeHolder: strin
 }
 
 export interface Autopilot {
-  gate: StopGate;
   reviewer: AutoReviewer;
   board: AgentBoard;
   orchestrator: Orchestrator;
@@ -54,14 +49,10 @@ export interface Autopilot {
 
 /**
  * Piloto automático dos agentes: o que fecha o ciclo sem precisar de uma pessoa a cada passo
- * (portão no Stop, revisor automático), coordena os agentes entre si e os mantém rodando.
+ * (revisor automático), coordena os agentes entre si e os mantém rodando.
  */
 export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller, guard: <T extends unknown[]>(fn: (...a: T) => unknown) => (...a: T) => Promise<void>, d: Deps): Autopilot {
   const reg = (id: string, fn: (...a: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
-
-  const gate = new StopGate(ctl, d.bridge, d.integration, d.agentFlow, d.agentTerms);
-  ctx.subscriptions.push(gate);
-  reg('claude.configureStopGate', () => gate.configure());
 
   const reviewer = new AutoReviewer(ctl, d.bridge, d.integration, d.agentFlow, d.agentTerms);
   ctx.subscriptions.push(reviewer);
@@ -86,16 +77,10 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
     if (w) await board.releaseFor(w.path);
   });
 
-  const orchestrator = new Orchestrator(ctl, d.agentFlow, d.agentTerms, board, d.coord);
+  const orchestrator = new Orchestrator(ctl, d.agentFlow, d.agentTerms, board);
   ctx.subscriptions.push(orchestrator);
   reg('orchestrator.start', (task?: string) => orchestrator.start(typeof task === 'string' ? task : undefined));
   reg('orchestrator.show', () => orchestrator.show());
-
-  const lessons = new Lessons(ctl, d.claude, d.integration, reviewer);
-  reg('claude.lessons', async (arg?: WtArg) => {
-    const w = await worktreeOf(ctl, arg, t('Learn from the sessions of which worktree?'));
-    if (w) await lessons.run(w);
-  });
 
   const trackTemplates = (templates: TemplateService) => {
     const stats = new TemplateStats(ctl, templates, d.agentFlow, d.integration, reviewer);
@@ -103,5 +88,5 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
     reg('templates.stats', () => stats.report());
   };
 
-  return { gate, reviewer, board, orchestrator, trackTemplates };
+  return { reviewer, board, orchestrator, trackTemplates };
 }

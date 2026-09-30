@@ -58,9 +58,9 @@ exports.run = async () => {
 
   await check('comandos registrados', async () => {
     const all = await vscode.commands.getCommands(true);
-    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask', 'longProjects.new', 'longProjects.start']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
+    for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
     // o painel foca views pelos comandos <view>.focus que o VS Code cria para cada view declarada
-    for (const v of ['remote', 'schedules', 'mergeQueue', 'longProjects']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
+    for (const v of ['remote', 'schedules']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
   });
 
   await check('árvore: worktrees + branches sem worktree', async () => {
@@ -422,8 +422,7 @@ exports.run = async () => {
     const svc = api.claudeConfig;
     await vscode.commands.executeCommand('worktreeGraph.claudeConfig.focus');
     const root = svc.getChildren();
-    assert.strictEqual(root[0].kind, 'learn', 'nó "Aprender com o uso" no topo');
-    const scopes = root.slice(1);
+    const scopes = root;
     assert.deepStrictEqual(scopes.map(n => n.scope), ['user', 'project']);
     assert.strictEqual(svc.pathOf(scopes[0]), svc.claudeDir());
     const userGroups = svc.getChildren(scopes[0]);
@@ -466,7 +465,7 @@ exports.run = async () => {
     await ctl.refresh();
   });
 
-  await check('uso do Claude: statusline grava, limites reais pausam a fila e a tela abre', async () => {
+  await check('uso do Claude: statusline grava os limites reais e a tela abre', async () => {
     const ev = api.agentTerms.eventsDir();
     require('fs').mkdirSync(ev, { recursive: true });
     const soon = Math.floor(Date.now() / 1000) + 3600;
@@ -479,16 +478,8 @@ exports.run = async () => {
     };
     const file = require('path').join(ev, 'teste-uso.status.json');
     require('fs').writeFileSync(file, JSON.stringify(status));
-    // tudo síncrono até voltar a 5%: a fila de outros testes não chega a ver os 95% e pausar
     api.usage.poll();
     assert.strictEqual(api.usage.limits().fiveHour.pct, 95);
-    const pause = api.ctl.taskDeferred();
-    status.rate_limits.five_hour = { used_percentage: 5, resets_at: soon };
-    require('fs').writeFileSync(file, JSON.stringify(status));
-    require('fs').utimesSync(file, new Date(), new Date(Date.now() + 5000));
-    api.usage.poll();
-    assert.deepStrictEqual([pause.window, pause.pct, pause.until], ['5h', 95, soon * 1000], 'limite real acima de tasks.pauseAtUsage pausa a fila');
-    assert.strictEqual(api.ctl.taskDeferred(), undefined, 'abaixo do limite a fila anda, mesmo com a estimativa');
     assert.strictEqual(api.agentTerms.statusLineOptions().mode, 'keep');
     await vscode.commands.executeCommand('worktreeGraph.claude.usage');
     await until(() => vscode.window.tabGroups.activeTabGroup.activeTab?.label === 'Claude usage');
@@ -714,24 +705,6 @@ exports.run = async () => {
     assert.ok(!ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').review);
   });
 
-  await check('fila de tarefas: a próxima vai sozinha quando a atual fica pronta', async () => {
-    const fs = require('fs');
-    const { execSync } = require('child_process');
-    const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
-    const q = api.agentFlow.tasks;
-    await q.add(wt.path, wt.branch, 'tarefa 1: criar endpoint');
-    await until(() => fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8') === 'tarefa 1: criar endpoint');
-    await q.add(wt.path, wt.branch, 'tarefa 2: escrever testes');
-    assert.deepStrictEqual(q.queue(wt.path).tasks.map(t => t.status), ['running', 'waiting']);
-    execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m "tarefa 1"', { cwd: wt.path });
-    await api.agentFlow.watch.checkNow(wt.path);
-    await until(() => fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8') === 'tarefa 2: escrever testes');
-    await until(() => q.queue(wt.path).tasks.map(t => t.status).join() === 'done,running');
-    await ctl.refresh();
-    assert.deepStrictEqual(ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth').tasks, { waiting: 0, running: 'tarefa 2: escrever testes' });
-    await api.agentFlow.watch.clearReady(wt.path);
-  });
-
   await check('tentativas: cria worktrees try/* com agente em cada e abre o painel de comparação', async () => {
     const g = await api.agentFlow.attempts.tryApproaches({ prompt: 'Implementar cache de preços', n: 2, quiet: true });
     assert.deepStrictEqual(g.attempts.map(a => a.branch), ['try/implementar-cache-de-precos-a', 'try/implementar-cache-de-precos-b']);
@@ -953,7 +926,7 @@ exports.run = async () => {
     }
   });
 
-  await check('agendamentos: o relógio dispara o agente, a fila recebe a tarefa e "só se limpa" pula a suja', async () => {
+  await check('agendamentos: o relógio dispara o agente e "só se limpa" pula a suja', async () => {
     const path = require('path');
     const fs = require('fs');
     const { execSync } = require('child_process');
@@ -970,7 +943,7 @@ exports.run = async () => {
     // 1. "a cada minuto", criado há 5 min: o tick executa uma vez e abre o agente com o prompt montado
     const t0 = Date.now();
     sch.now = () => t0;
-    await sch.save({ ...base, id: 'teste-launch', name: 'Revisão diária', when: 'a cada minuto', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'Revise ${branch} contra ${base}', delivery: 'launch', createdAt: t0 - 5 * 60_000 });
+    await sch.save({ ...base, id: 'teste-launch', name: 'Revisão diária', when: 'a cada minuto', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'Revise ${branch} contra ${base}', createdAt: t0 - 5 * 60_000 });
     const before = vscode.window.terminals.length;
     await sch.tick();
     assert.ok(before >= 0);
@@ -986,15 +959,8 @@ exports.run = async () => {
     assert.strictEqual(vscode.window.terminals.length, n, 'não executa duas vezes no mesmo horário');
     await sch.remove('teste-launch');
 
-    // 2. modo fila: a tarefa entra na fila da worktree
-    await sch.save({ ...base, id: 'teste-fila', name: 'Fila', when: 'todo dia às 09:00', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'tarefa da fila', delivery: 'queue', createdAt: t0 });
-    const r = await sch.run(sch.get('teste-fila'), { manual: true });
-    assert.strictEqual(r[0].result, 'ok', JSON.stringify(r));
-    assert.ok(api.agentFlow.tasks.queue(limpa).tasks.some(t => t.text === 'tarefa da fila'));
-    await sch.remove('teste-fila');
-
-    // 3. "só se limpa" em ai/* e sched/*: a suja fica de fora e vai para o histórico
-    await sch.save({ ...base, id: 'teste-limpa', name: 'Só limpas', when: 'dias úteis às 08:30', target: { kind: 'pattern', pattern: 'sched/*' }, prompt: 'x', delivery: 'launch', conditions: { onlyClean: true, skipIfAgentOpen: true }, createdAt: t0 });
+    // 2. "só se limpa" em ai/* e sched/*: a suja fica de fora e vai para o histórico
+    await sch.save({ ...base, id: 'teste-limpa', name: 'Só limpas', when: 'dias úteis às 08:30', target: { kind: 'pattern', pattern: 'sched/*' }, prompt: 'x', conditions: { onlyClean: true, skipIfAgentOpen: true }, createdAt: t0 });
     const res = await sch.run(sch.get('teste-limpa'), { manual: true });
     const byBranch = Object.fromEntries(res.map(x => [x.target, x.result]));
     assert.strictEqual(byBranch['sched/suja'], 'skipped', JSON.stringify(res));
@@ -1002,8 +968,8 @@ exports.run = async () => {
     assert.ok(sch.history().some(h => h.scheduleId === 'teste-limpa' && /change/.test(h.message)), JSON.stringify(sch.history().filter(h => h.scheduleId === 'teste-limpa')));
     await sch.remove('teste-limpa');
 
-    // 4. horário perdido com política "pular": registra e não executa
-    await sch.save({ ...base, id: 'teste-perdido', name: 'Perdido', when: 'todo dia às 03:00', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'x', delivery: 'launch', missed: 'skip', createdAt: t0 - 3 * 86400_000 });
+    // 3. horário perdido com política "pular": registra e não executa
+    await sch.save({ ...base, id: 'teste-perdido', name: 'Perdido', when: 'todo dia às 03:00', target: { kind: 'branch', branch: 'sched/limpa' }, prompt: 'x', missed: 'skip', createdAt: t0 - 3 * 86400_000 });
     const n2 = vscode.window.terminals.length;
     await sch.tick();
     assert.strictEqual(vscode.window.terminals.length, n2);
@@ -1013,7 +979,7 @@ exports.run = async () => {
     execSync(`git worktree remove --force "${suja}"`, { cwd: root });
   });
 
-  await check('coordenação: sobreposição, fila de merge numa base descartável e tarefa em lote', async () => {
+  await check('coordenação: sobreposição e tarefa em lote', async () => {
     const path = require('path');
     const fs = require('fs');
     const { execSync } = require('child_process');
@@ -1037,31 +1003,15 @@ exports.run = async () => {
     await ctl.refresh();
     assert.ok(ctl.state.worktrees.find(w => w.branch === 'coord/x').overlap, 'chip no estado');
 
-    // fila de merge: duas branches limpas entram em fila/base, uma por vez
-    git('branch fila/base master');
-    for (const n of ['a', 'b']) {
-      const d = path.join(root, '..', `fila-${n}`);
-      git(`worktree add -q -b fila/${n} "${d}" master`);
-      fs.writeFileSync(path.join(d, `fila-${n}.txt`), n);
-      git('add -A', d);
-      git(`commit -qm "fila ${n}"`, d);
-    }
-    await coord.enqueue('fila/a', 'fila/base');
-    await coord.enqueue('fila/b', 'fila/base');
-    await coord.runQueue();
-    await until(() => coord.queue().filter(i => i.target === 'fila/base').every(i => i.status === 'done'), 60000);
-    assert.strictEqual(git('merge-base --is-ancestor fila/a fila/base && echo sim'), 'sim');
-    assert.strictEqual(git('merge-base --is-ancestor fila/b fila/base && echo sim'), 'sim');
-    assert.notStrictEqual(git('rev-parse master'), git('rev-parse fila/base'), 'master intacta');
-    await coord.clearFinished();
-
     // tarefa em lote: 3 worktrees, 2 vagas → 2 terminais agora e 1 esperando
+    for (const n of ['a', 'b']) git(`worktree add -q -b lote/${n} "${path.join(root, '..', `lote-${n}`)}" master`);
+    await ctl.refresh();
     await cfg.update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], G);
     const running = [...api.agentTerms.running().values()].reduce((n, l) => n + l.length, 0);
     await cfg.update('batch.maxParallel', running + 2, G);
-    const targets = ['coord/x', 'fila/a', 'fila/b'].map(b => ctl.state.worktrees.find(w => w.branch === b).path);
+    const targets = ['coord/x', 'lote/a', 'lote/b'].map(b => ctl.state.worktrees.find(w => w.branch === b).path);
     const before = vscode.window.terminals.length;
-    await coord.batch({ paths: targets, prompt: 'rode os testes em ${branch}', mode: 'now' });
+    await coord.batch({ paths: targets, prompt: 'rode os testes em ${branch}' });
     await until(() => vscode.window.terminals.length === before + 2);
     assert.strictEqual(coord.batchPending, 1, 'um esperando vaga');
     assert.ok(require('fs').readFileSync(api.agentTerms.lastPromptFile, 'utf8').startsWith('rode os testes em '));
@@ -1094,20 +1044,16 @@ exports.run = async () => {
     }
   });
 
-  await check('modelo de tarefa: prompt renderizado vai para o agente e para a fila', async () => {
+  await check('modelo de tarefa: prompt renderizado vai para o agente', async () => {
     const fs = require('fs');
     await vscode.workspace.getConfiguration('worktreeGraph').update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], vscode.ConfigurationTarget.Global);
     const wt = ctl.state.worktrees.find(w => w.branch === 'ai/login-oauth');
     const all = await api.templates.list();
     const t = all.find(x => x.id === 'simplify-diff');
     assert.ok(t && all.length >= 6);
-    await api.templates.send({ path: wt.path, branch: wt.branch }, t, 'now');
+    await api.templates.send({ path: wt.path, branch: wt.branch }, t);
     const text = fs.readFileSync(api.agentTerms.lastPromptFile, 'utf8');
     assert.ok(text.includes('ai/login-oauth') && text.includes('master') && !text.includes('${'), text);
-    const wt2 = ctl.state.worktrees.find(w => w.branch === 'ai/precos-promo');
-    await api.templates.send({ path: wt2.path, branch: wt2.branch }, all.find(x => x.id === 'fix-tests'), 'queue');
-    const q = api.agentFlow.tasks.queue(wt2.path);
-    assert.ok(q && q.tasks.some(x => x.text.includes('ai/precos-promo')), 'tarefa na fila');
   });
 
   await check('integração Claude: MCP e hooks falam com a janela pela ponte local', async () => {
@@ -1123,9 +1069,6 @@ exports.run = async () => {
     const all = await core.callBridge(info, 'tool', { name: 'list_worktrees', args: {}, cwd: wt.path });
     assert.ok(all.text.includes('ai/precos-promo'), all.text);
     assert.ok((await core.callBridge(info, 'tool', { name: 'status', args: { worktree: 'nao/existe' }, cwd: wt.path })).isError);
-    await core.callBridge(info, 'tool', { name: 'queue_task', args: { text: 'tarefa via MCP', worktree: 'ai/refatorar-api' }, cwd: wt.path });
-    const wt3 = ctl.state.worktrees.find(w => w.branch === 'ai/refatorar-api');
-    assert.ok(api.agentFlow.tasks.queue(wt3.path).tasks.some(x => x.text === 'tarefa via MCP'));
     // sem travas: editar arquivo de outra worktree ou rodar git em outra branch passa
     const edit = await core.callBridge(info, 'hook', { hook_event_name: 'PreToolUse', cwd: wt.path, tool_name: 'Edit', tool_input: { file_path: path.join(other.path, 'x.ts') } });
     assert.ok(!edit.stdout, edit.stdout);
@@ -1328,7 +1271,7 @@ async function videoScene(api) {
   caption('Cada card mostra se está limpa, quanto está atrás da master e se vai conflitar');
   await wait(4500);
 
-  caption('Botão direito: merge, fila de merge, tarefas para o agente e revisão');
+  caption('Botão direito: merge, tarefas para o agente e revisão');
   GraphPanel.demo({ scene: 'menu', branch: 'ai/refatorar-api' });
   await wait(4500);
   GraphPanel.demo({ scene: 'hide' });

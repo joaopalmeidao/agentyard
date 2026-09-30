@@ -112,6 +112,7 @@ export class ClaudeIntegration implements vscode.Disposable {
     if (!plan.trim()) return;
     const w = e.worktree;
     if (w) void this.bump(w.path, 'plans');
+    if (e.open) e.open.planAt = Date.now();
     const where = w?.branch ?? w?.name ?? path.basename(e.cwd);
     const view = t('View plan');
     const msg = t('Claude in {0} proposed a plan and is waiting for your approval in the terminal.', where);
@@ -130,6 +131,8 @@ export class ClaudeIntegration implements vscode.Disposable {
     const w = e.worktree;
     if (w) void this.bump(w.path, 'permissions');
     if (!this.cfg().get<boolean>('claude.approveInVsCode', true)) return undefined;
+    // o plano já tem o aviso dele; aprovar o plano é no terminal
+    if (e.tool_name === 'ExitPlanMode') return undefined;
     const o = e.open;
     // olhando para o terminal: o pedido aparece lá, como sempre
     if (o && vscode.window.state.focused && vscode.window.activeTerminal === o.terminal) return undefined;
@@ -244,12 +247,6 @@ export class ClaudeIntegration implements vscode.Disposable {
     const w = e.worktree;
     if (!w) return undefined;
     void this.bump(w.path, 'turns');
-    // orçamento: com budget.action = block-prompts, o Claude não começa outro turno
-    if (this.cfg().get<string>('budget.action', 'warn') === 'block-prompts' && w.budget?.level === 'over') {
-      void this.bump(w.path, 'budgetBlocks');
-      const reason = t('AgentYard: {0} went over its budget ({1}%). Raise worktreeGraph.budget.* or change budget.action to continue.', w.branch ?? w.name, w.budget.pct);
-      return hookJson({ decision: 'block', reason });
-    }
     const key = this.logKey(e);
     if (!key || !this.cfg().get<boolean>('claude.checkpoints', true)) return undefined;
     const job = (async () => {

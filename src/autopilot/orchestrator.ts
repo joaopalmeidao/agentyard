@@ -6,7 +6,6 @@ import type { AgentFlow } from '../agentFlow/register';
 import { keyOf } from '../agentFlow/head';
 import { runHeadless } from '../claude/headless';
 import type { Controller } from '../controller';
-import type { Coord } from '../coord/register';
 import { t } from '../i18n';
 import { setParent } from '../stack/core';
 import { askTask } from '../taskInput';
@@ -19,7 +18,7 @@ const PREFIX = 'ai/';
  * ✦ Dividir tarefa entre agentes: um Claude sem terminal lê o código e divide a tarefa em subtarefas
  * com dependências; cada uma ganha a sua worktree e o seu agente (as independentes em paralelo, até
  * `batch.maxParallel`; as dependentes empilhadas sobre o que precisam, quando ficam prontas). No fim,
- * as branches vão para a fila de merge na ordem das dependências.
+ * avisa que as partes estão prontas para revisar.
  */
 export class Orchestrator implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -31,7 +30,6 @@ export class Orchestrator implements vscode.Disposable {
     flow: AgentFlow,
     private readonly agentTerms: AgentTerminals,
     private readonly board: AgentBoard,
-    private readonly coord: Coord,
   ) {
     this.disposables.push(this.changed, flow.watch.onDidFinish(f => void this.onFinished(f.path, f.ready)));
   }
@@ -148,14 +146,14 @@ export class Orchestrator implements vscode.Disposable {
     return this.list().find(o => o.id === id);
   }
 
-  /** Começa o que pode começar; no fim, oferece a fila de merge. */
+  /** Começa o que pode começar; no fim, avisa. */
   async advance(id: string) {
     const o = this.get(id);
     if (!o) return;
     for (const s of blockedBy(o)) s.status = 'skipped';
     for (const s of startable(o, this.maxParallel())) await this.launch(o, s);
     await this.save(o);
-    if (finished(o) && !o.queued) await this.offerQueue(o);
+    if (finished(o) && !o.queued) await this.notifyDone(o);
   }
 
   private async launch(o: Orchestration, s: Subtask) {
@@ -206,23 +204,20 @@ export class Orchestrator implements vscode.Disposable {
     }
   }
 
-  private async offerQueue(o: Orchestration) {
+  private async notifyDone(o: Orchestration) {
     const ready = topoOrder(o.subtasks).filter(s => s.status === 'ready');
     if (!ready.length) return;
     o.queued = true;
     await this.save(o);
     const failed = o.subtasks.length - ready.length;
-    const queue = t('Add all to the merge queue');
     const show = t('Show');
     const pick = await vscode.window.showInformationMessage(
       failed
         ? t('Orchestration "{0}": {1} part(s) ready, {2} did not finish.', o.title, ready.length, failed)
         : t('Orchestration "{0}": all {1} part(s) are ready for review.', o.title, ready.length),
-      queue,
       show,
     );
-    if (pick === queue) await this.coord.enqueue(ready.map(s => s.branch));
-    else if (pick === show) await this.show(o.id);
+    if (pick === show) await this.show(o.id);
   }
 
   async retry(id: string, subId: string) {
@@ -265,7 +260,6 @@ export class Orchestrator implements vscode.Disposable {
     await vscode.commands.executeCommand('markdown.showPreview', doc.uri).then(undefined, () => vscode.window.showTextDocument(doc, { preview: true }));
     const actionsList = [
       ...o.subtasks.filter(s => s.status === 'failed' || s.status === 'skipped').map(s => ({ label: t('Try {0} again', s.id), run: () => this.retry(o!.id, s.id) })),
-      ...(o.subtasks.some(s => s.status === 'ready') ? [{ label: t('Add the ready parts to the merge queue'), run: () => this.coord.enqueue(topoOrder(o!.subtasks).filter(s => s.status === 'ready').map(s => s.branch)) }] : []),
       { label: t('Start what can start now'), run: () => this.advance(o!.id) },
       { label: t('Forget this plan (worktrees stay)'), run: () => this.remove(o!.id) },
     ];

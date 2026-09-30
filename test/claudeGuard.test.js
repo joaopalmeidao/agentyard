@@ -30,7 +30,7 @@ const wt = path.join(root, 'loja.worktrees', 'ai-login');
 check('describeToolRequest', () => {
   assert.strictEqual(describeToolRequest('Bash', { command: 'npm   test' }), 'Bash: npm test');
   assert.strictEqual(describeToolRequest('Edit', { file_path: path.join(wt, 'src', 'a.ts') }), 'Edit: a.ts');
-  assert.strictEqual(describeToolRequest('mcp__agentyard__queue_task', {}), 'agentyard · queue_task');
+  assert.strictEqual(describeToolRequest('mcp__agentyard__mark_ready', {}), 'agentyard · mark_ready');
   assert.ok(describeToolRequest('Bash', { command: 'x'.repeat(500) }).length < 200);
 });
 

@@ -218,17 +218,6 @@ export const TOOLS: ToolDef[] = [
     readOnly: true,
   },
   {
-    name: 'list_tasks',
-    description: 'Fila de tarefas do agente numa worktree (aguardando, rodando, feitas).',
-    inputSchema: { type: 'object', properties: { worktree: wtArg } },
-    readOnly: true,
-  },
-  {
-    name: 'queue_task',
-    description: 'Põe uma tarefa na fila do agente de uma worktree. Se nada estiver rodando lá, o AgentYard já abre um agente com ela.',
-    inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'O que o agente deve fazer.' }, worktree: wtArg }, required: ['text'] },
-  },
-  {
     name: 'create_worktree',
     description:
       'Cria uma worktree nova (branch nova a partir da base ou de `from`). Com `task`, abre um agente nela já com essa tarefa — útil para delegar trabalho paralelo.',
@@ -352,8 +341,7 @@ export const HOOK_EVENTS: { event: string; matcher?: string; timeout: number }[]
   { event: 'PreToolUse', matcher: GUARDED_TOOLS, timeout: 20 },
   // espera você responder no VS Code; sem resposta, o Claude mostra o pedido no terminal
   { event: 'PermissionRequest', timeout: 600 },
-  // o portão do Stop roda as checagens do projeto: pode demorar (src/autopilot/stopGate.ts)
-  { event: 'Stop', timeout: 1800 },
+  { event: 'Stop', timeout: 20 },
 ];
 
 /** Quanto o hook espera a janela responder, por evento (um pouco menos que o timeout do Claude). */

@@ -1,7 +1,6 @@
 /**
- * "Aprender com o uso": os pedidos que fazem o Claude transformar uma sessão em memórias e skills,
- * o bloco de aprendizado contínuo do CLAUDE.md do usuário e a mudança de memória de uma worktree
- * para a do projeto. Sem VS Code (testado em test/claudeConfig.test.js).
+ * Pedidos que fazem o Claude arrumar a memória ou melhorar uma skill, e a mudança de memória de
+ * uma worktree para a do projeto. Sem VS Code (testado em test/claudeConfig.test.js).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -31,29 +30,6 @@ function where(x: LearnTargets): string[] {
     `- User skills (all projects): ${x.userSkillsDir}`,
     x.projectSkillsDir ? `- Project skills (versioned with this branch; commit them): ${x.projectSkillsDir}` : '',
   ].filter(Boolean);
-}
-
-/** Pedido de "aprender com esta sessão": revisar a conversa e gravar o que vale para as próximas. */
-export function learnPrompt(x: LearnTargets): string {
-  return [
-    '# Learn from this session',
-    '',
-    'Review this whole conversation and keep what will help future sessions. Do not redo the work; only record lessons.',
-    '',
-    '1. Corrections and preferences the user expressed (how they like things done, what to avoid) → `feedback` or `user` memories.',
-    '2. Non-obvious facts about the project (constraints, decisions, where things live, gotchas that cost time) → `project` or `reference` memories. Skip what the code, git history or CLAUDE.md already say.',
-    '3. Procedures that took several attempts or will repeat (a build/test/release recipe, a workaround, a checklist) → a skill: create one, or improve the skill that should have covered it.',
-    '4. A skill that was used but was wrong, incomplete or loaded when it should not have been → fix its steps or its description.',
-    '',
-    'Where to write:',
-    ...where(x),
-    '',
-    ...MEMORY_FORMAT,
-    SKILL_FORMAT,
-    '',
-    'Keep each item short and specific. If nothing is worth keeping, say so and change nothing.',
-    'Finish with a list of what you created, updated or deleted (one line each, with the file), in the language of the conversation.',
-  ].join('\n');
 }
 
 /** Pedido de revisar a memória: juntar duplicadas, apagar o que ficou velho, arrumar o índice. */
@@ -91,45 +67,6 @@ export function improveSkillPrompt(skillFile: string): string {
     '',
     'Show what changed in a few lines, in the language of the conversation.',
   ].join('\n');
-}
-
-// ---------------------------------------------------------------- aprendizado contínuo (CLAUDE.md)
-
-const BEGIN = '<!-- agentyard:learning -->';
-const END = '<!-- /agentyard:learning -->';
-
-export function learningBlock(): string {
-  return [
-    BEGIN,
-    t('## Learn from use'),
-    '',
-    t('- When I correct you or state a preference, save it as a `feedback` memory right away (with the reason), without waiting to be asked.'),
-    t('- When you discover something non-obvious about the project that cost time (a constraint, a gotcha, where something lives), save it as a `project` or `reference` memory.'),
-    t('- When a procedure took several attempts or is likely to repeat, create a skill for it (or improve the existing one) and tell me in one line.'),
-    t('- When a skill turns out to be wrong or incomplete, fix it in the same session.'),
-    t('- Do not save what the code, the git history or CLAUDE.md already say.'),
-    END,
-  ].join('\n');
-}
-
-export function hasLearningBlock(text: string): boolean {
-  return text.includes(BEGIN);
-}
-
-/** Acrescenta (ou atualiza) o bloco no fim do texto. */
-export function withLearningBlock(text: string): string {
-  const base = withoutLearningBlock(text).replace(/\s+$/, '');
-  return `${base ? `${base}\n\n` : ''}${learningBlock()}\n`;
-}
-
-export function withoutLearningBlock(text: string): string {
-  const i = text.indexOf(BEGIN);
-  if (i < 0) return text;
-  const j = text.indexOf(END, i);
-  const before = text.slice(0, i).replace(/\s+$/, '');
-  const after = j < 0 ? '' : text.slice(j + END.length).replace(/^\s+/, '');
-  if (!after) return before ? `${before}\n` : '';
-  return before ? `${before}\n\n${after}` : after;
 }
 
 // ---------------------------------------------------------------- memória de worktree → projeto

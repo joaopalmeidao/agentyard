@@ -49,7 +49,7 @@ export function sessionContext(f: SessionFacts): string {
   if (f.migrations) lines.push(f.migrations);
   if (f.mcp) {
     lines.push(
-      'The `agentyard` MCP tools are available: `status`, `overlaps`, `pr_feedback`, `ci_status`, `review_comments`, `turn_diff`, `queue_task`, `create_worktree`, and `mark_ready` (call it after committing, when the work is done and ready for review).',
+      'The `agentyard` MCP tools are available: `status`, `overlaps`, `pr_feedback`, `ci_status`, `review_comments`, `turn_diff`, `create_worktree`, and `mark_ready` (call it after committing, when the work is done and ready for review).',
     );
   }
   if (f.extra?.trim()) lines.push(f.extra.trim());

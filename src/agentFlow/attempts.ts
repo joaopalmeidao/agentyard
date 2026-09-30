@@ -294,7 +294,7 @@ export class ComparePanel {
   /** Comandos de teste das tentativas: os do portão do Stop, os de antes do merge ou o testCommand. */
   private testCommands(): string[] {
     const c = this.ctl.cfg();
-    return gateCommands(c.get<string[]>('claude.stopGate.commands', []), c.get<string[]>('checks.beforeMerge', []), c.get<string>('autoSync.testCommand', ''));
+    return gateCommands([], c.get<string[]>('checks.beforeMerge', []), c.get<string>('autoSync.testCommand', ''));
   }
 
   private async askTestCommand() {

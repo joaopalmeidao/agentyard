@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Controller } from './controller';
-import { AGENT_FILE_SUFFIXES, AgentState, EventTail, HookEvent, insertArgs, instrumentCommand, isClaudeCommand, nextState, pruneEvents, withIdeFlag, withoutPermissionArgs, writeHookSettings, StatusLineOptions } from './claude/hooks';
+import { AGENT_FILE_SUFFIXES, AgentState, EventTail, insertArgs, instrumentCommand, isClaudeCommand, nextState, pruneEvents, withIdeFlag, withoutPermissionArgs, writeHookSettings, StatusLineOptions } from './claude/hooks';
 import { describeToolRequest } from './claude/guard';
 import { StatusLineMode, userStatusLineCommand } from './claude/statusLine';
 import { t } from './i18n';
@@ -73,8 +73,6 @@ export interface AgentLaunch {
   terminal: vscode.Terminal;
   agent: string;
   prompt?: string;
-  /** Aberto por um projeto longo (chave do projeto): o projeto cuida do "terminou". */
-  project?: string;
 }
 
 /** Um terminal de agente aberto pela extensão. */
@@ -103,13 +101,8 @@ export interface OpenAgent {
   bridged?: boolean;
   /** O pedido de permissão está sendo perguntado no VS Code (src/claude/integration.ts). */
   asking?: boolean;
-  /** Projeto longo que abriu este terminal (chave do projeto). */
-  project?: string;
-}
-
-export interface AgentHookEvent {
-  open: OpenAgent;
-  event: HookEvent;
+  /** Quando o Claude propôs o último plano (o aviso do plano cobre o "precisa de você" que vem junto). */
+  planAt?: number;
 }
 
 export interface AgentStateChange {
@@ -123,10 +116,6 @@ export interface StartOptions {
   name?: string;
   /** Não acrescenta `claude.extraArgs` (o comando já traz os argumentos escolhidos). */
   noExtraArgs?: boolean;
-  /** Id do terminal (nome dos arquivos dos hooks), quando quem abre precisa gravar algo antes. */
-  id?: string;
-  /** Projeto longo que abre o terminal. */
-  project?: string;
   /** Modo de permissão do Claude (`--permission-mode`); vale sobre o de `claude.extraArgs`. */
   permissionMode?: string;
 }
@@ -235,10 +224,7 @@ export class AgentTerminals implements vscode.Disposable {
   private readonly stateChanged = new vscode.EventEmitter<AgentStateChange>();
   /** Um Claude mudou de estado. */
   readonly onDidChangeState = this.stateChanged.event;
-  private readonly hookEvent = new vscode.EventEmitter<AgentHookEvent>();
-  /** Cada evento dos hooks de um Claude, na ordem em que chegou. */
-  readonly onDidHookEvent = this.hookEvent.event;
-  private readonly disposables: vscode.Disposable[] = [this.launched, this.changed, this.stateChanged, this.hookEvent];
+  private readonly disposables: vscode.Disposable[] = [this.launched, this.changed, this.stateChanged];
   private readonly tails = new Map<string, EventTail>();
   private readonly pending = new Map<string, { text: string; submit: boolean }>();
   private watcher?: fs.FSWatcher;
@@ -293,7 +279,6 @@ export class AgentTerminals implements vscode.Disposable {
       task: env.WTGRAPH_TASK === '1',
       claude: env.WTGRAPH_CLAUDE === '1',
       bridged: env.WTGRAPH_BRIDGE === '1',
-      project: env.WTGRAPH_PROJECT || undefined,
     };
     this.open.push(o);
     if (env.WTGRAPH_HOOKS === '1') {
@@ -388,7 +373,6 @@ export class AgentTerminals implements vscode.Disposable {
         o.message = t('Permission: {0}', describeToolRequest(e.tool_name, e.tool_input));
         o.notificationType = 'permission_prompt';
       }
-      this.hookEvent.fire({ open: o, event: e });
     }
     if (o.state !== 'waiting') o.message = o.notificationType = undefined;
     if (o.state === previous) {
@@ -583,7 +567,7 @@ export class AgentTerminals implements vscode.Disposable {
    * Code ganham os hooks de estado (`claude.trackState`).
    */
   async start(worktreePath: string, branch: string | undefined, agent: string, command: string, opts: StartOptions = {}): Promise<OpenAgent> {
-    const id = opts.id ?? newAgentId();
+    const id = newAgentId();
     const claude = isClaudeCommand(command);
     if (claude && !opts.noExtraArgs) {
       const extra = this.ctl.cfg().get<string>('claude.extraArgs', '');
@@ -613,15 +597,14 @@ export class AgentTerminals implements vscode.Disposable {
       WTGRAPH_CLAUDE: claude ? '1' : '',
       WTGRAPH_HOOKS: hooks ? '1' : '',
       WTGRAPH_BRIDGE: bridged ? '1' : '',
-      WTGRAPH_PROJECT: opts.project ?? '',
     }, !!opts.task, preserveFocus);
-    const o: OpenAgent = { terminal, path: worktreePath, branch, agent, started: Date.now(), id, task: opts.task, claude, bridged, state: hooks ? 'starting' : undefined, project: opts.project };
+    const o: OpenAgent = { terminal, path: worktreePath, branch, agent, started: Date.now(), id, task: opts.task, claude, bridged, state: hooks ? 'starting' : undefined };
     this.open.push(o);
     if (hooks) this.watchEvents(o);
     this.changed.fire();
     terminal.show(preserveFocus);
     terminal.sendText(command);
-    this.launched.fire({ path: worktreePath, branch, terminal, agent, prompt: opts.prompt, project: opts.project });
+    this.launched.fire({ path: worktreePath, branch, terminal, agent, prompt: opts.prompt });
     this.ctl.scheduleRefresh(50);
     return o;
   }

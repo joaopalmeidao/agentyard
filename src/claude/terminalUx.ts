@@ -70,7 +70,7 @@ export function registerTerminalUx(ctx: vscode.ExtensionContext, ctl: Controller
 
   // ---------- fim da sessão ----------
   const sessionEnded = async (o: OpenAgent) => {
-    const mode = ctl.cfg().get<string>('claude.onSessionEnd', 'ask');
+    const mode = ctl.cfg().get<string>('claude.onSessionEnd', 'keep');
     if (mode === 'close') return o.terminal.dispose();
     // quem saiu com /exit está olhando para o terminal: não precisa perguntar
     if (mode !== 'ask' || (vscode.window.state.focused && vscode.window.activeTerminal === o.terminal)) return;

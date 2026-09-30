@@ -1,40 +1,20 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import * as actions from '../actions';
 import type { AgentFlow } from '../agentFlow/register';
 import type { AgentTerminals } from '../agents';
 import type { Controller } from '../controller';
-import { resolverName } from '../conflicts';
-import { gitUri } from '../diff';
-import { pickMergeTarget } from '../flow';
 import { branchMatches } from '../git';
-import { guardChecks } from '../guards';
 import { t } from '../i18n';
 import type { WorktreeView } from '../model';
-import { pushBranch } from '../push';
 import { askTask } from '../taskInput';
-import {
-  agentFinished,
-  batchPlan,
-  budgetLevel,
-  findOverlaps,
-  isActive,
-  MergeItem,
-  Overlap,
-  overlapKey,
-  overlapSummary,
-  processNext,
-  resolveAwaiting,
-} from './core';
+import { batchPlan, budgetLevel, findOverlaps, isActive, Overlap, overlapKey, overlapSummary } from './core';
 import { OverlapPanel } from './panel';
 
 const key = (p: string) => path.normalize(p).toLowerCase();
-/** Itens que ainda estão na fila (não saíram por merge nem falha). */
-const QUEUED: MergeItem['status'][] = ['waiting', 'running', 'agent', 'awaiting-pr'];
 
 /**
- * Coordenação de vários agentes: sobreposição de arquivos entre worktrees ativas, fila de merge,
- * tarefa em lote e orçamento por worktree.
+ * Coordenação de vários agentes: sobreposição de arquivos entre worktrees ativas, tarefa em lote e
+ * orçamento por worktree.
  */
 export class Coord implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -45,18 +25,13 @@ export class Coord implements vscode.Disposable {
   private readonly notified = new Set<string>();
   private readonly budgetNotified = new Set<string>();
   private computing?: Promise<void>;
-  private processing = false;
-  /** Pedido de rodar a fila enquanto ela já rodava (ex.: o agente terminou no meio): roda de novo no fim. */
-  private runAgain = false;
   private readonly overlapsChanged = new vscode.EventEmitter<void>();
   readonly onDidChangeOverlaps = this.overlapsChanged.event;
-  private readonly queueChanged = new vscode.EventEmitter<void>();
-  readonly onDidChangeQueue = this.queueChanged.event;
   /** Worktrees "em espera" da tarefa em lote: abrem quando um agente termina. */
   private readonly batchWaiting: { path: string; branch?: string; prompt: string }[] = [];
 
-  constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals, private readonly agentFlow?: AgentFlow) {
-    this.disposables.push(this.queueChanged, this.overlapsChanged);
+  constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals, agentFlow?: AgentFlow) {
+    this.disposables.push(this.overlapsChanged);
     ctl.stateHooks.push(s => {
       for (const w of s.worktrees) {
         const o = this.summary.get(key(w.path));
@@ -65,21 +40,17 @@ export class Coord implements vscode.Disposable {
         w.budget = b.level === 'ok' ? undefined : { level: b.level, pct: Math.round(b.ratio * 100), by: b.by };
       }
     });
-    // detalhe terminado: recalcula sobreposições, confere PRs esperando e orçamento
+    // detalhe terminado: recalcula sobreposições e confere o orçamento
     this.disposables.push(
       ctl.onDidChange(s => {
         if (!s || s.pending > 0) return;
         void this.recompute();
-        void this.checkAwaiting();
         this.checkBudget();
       }),
     );
     if (agentFlow) {
       this.disposables.push(
-        agentFlow.watch.onDidFinish(e => {
-          void this.drainBatch();
-          void this.onAgentFinished(e.path, e.branch, e.ready);
-        }),
+        agentFlow.watch.onDidFinish(() => void this.drainBatch()),
       );
     }
     this.disposables.push(vscode.window.onDidCloseTerminal(() => setTimeout(() => void this.drainBatch(), 500)));
@@ -181,247 +152,6 @@ export class Coord implements vscode.Disposable {
     await this.agentTerms.launchWithPrompt(me.path, me.branch, prompt);
   }
 
-  // ---------- fila de merge ----------
-
-  private queueKey() {
-    return `coord.mergeQueue:${this.ctl.repo?.commonDir.toLowerCase() ?? ''}`;
-  }
-
-  queue(): MergeItem[] {
-    return this.ctl.ctx.workspaceState.get<MergeItem[]>(this.queueKey(), []);
-  }
-
-  private async saveQueue(items: MergeItem[]) {
-    await this.ctl.ctx.workspaceState.update(this.queueKey(), items);
-    this.queueChanged.fire();
-  }
-
-  paused(): boolean {
-    return this.ctl.ctx.workspaceState.get<boolean>(`${this.queueKey()}:paused`, false);
-  }
-
-  async setPaused(v: boolean) {
-    await this.ctl.ctx.workspaceState.update(`${this.queueKey()}:paused`, v);
-    this.queueChanged.fire();
-    if (!v) void this.runQueue();
-  }
-
-  /**
-   * Põe uma ou várias branches no fim da fila, na ordem dada; elas entram no destino uma por vez.
-   * `authorized`: o agente que resolver conflitos delas já abre autorizado (vale também para quem já estava na fila).
-   */
-  async enqueue(branches: string | string[], target?: string, opts: { authorized?: boolean } = {}) {
-    const tgt = target ?? (await this.ctl.base()).base;
-    const items = this.queue();
-    const already: string[] = [];
-    for (const branch of typeof branches === 'string' ? [branches] : branches) {
-      if (branch === tgt) continue;
-      const queued = items.find(i => i.branch === branch && QUEUED.includes(i.status));
-      if (queued) {
-        if (opts.authorized && !queued.authorized) queued.authorized = true;
-        else already.push(branch);
-        continue;
-      }
-      items.push({ branch, target: tgt, status: 'waiting', added: Date.now(), authorized: opts.authorized || undefined });
-    }
-    if (already.length) vscode.window.showInformationMessage(t('{0} is already in the merge queue.', already.join(', ')));
-    await this.saveQueue(items);
-    void this.runQueue();
-  }
-
-  /** Branches locais que ainda não estão na fila (para escolher várias de uma vez), rumo a `target` (padrão: a base). */
-  async pickForQueue(authorized = false, target?: string): Promise<string[]> {
-    const repo = this.ctl.repo;
-    if (!repo) return [];
-    const tgt = target ?? (await this.ctl.base()).base;
-    const queued = new Set(this.queue().filter(i => QUEUED.includes(i.status)).map(i => i.branch));
-    const items = (await repo.refs())
-      .filter(r => r.kind === 'head' && r.name !== tgt && !queued.has(r.name))
-      .map(r => ({ label: r.name, description: r.subject }));
-    const picks = await vscode.window.showQuickPick(items, {
-      canPickMany: true,
-      title: authorized ? t('Add to merge queue → {0} (Claude authorized to resolve conflicts)', tgt) : t('Add to merge queue → {0}', tgt),
-      placeHolder: t('Pick the branches; they go into {0} one at a time, in this order', tgt),
-    });
-    return picks?.map(p => p.label) ?? [];
-  }
-
-  /** Para qual branch a fila leva `sources`: segue o fluxo configurado (próximo estágio primeiro), depois a base e as outras locais. */
-  async pickTarget(sources: string[]): Promise<string | undefined> {
-    if (!this.ctl.repo) return (await this.ctl.base()).base;
-    return pickMergeTarget(this.ctl, sources, {
-      title: t('Merge queue: destination'),
-      placeHolder: sources.length ? t('Which branch should {0} go into?', sources.join(', ')) : t('Which branch should the queue merge into?'),
-    });
-  }
-
-  /** O agente que cuidava de um item terminou: volta para a fila (ou sai) e a fila segue. */
-  private async onAgentFinished(p: string, branch: string | undefined, ready: boolean) {
-    const items = this.queue();
-    const b = items.find(i => i.status === 'agent' && (i.agentPath ? key(i.agentPath) === key(p) : i.branch === branch))?.branch;
-    if (!b) return;
-    const item = agentFinished(items, b, ready);
-    if (!item) return;
-    await this.saveQueue(items);
-    this.ctl.log(t('Merge queue: {0} → {1}: {2}', item.branch, item.target, item.status) + (item.reason ? ` (${item.reason})` : ''));
-    if (item.status === 'failed') void vscode.window.showWarningMessage(t('Merge queue: {0} left the queue — {1}.', item.branch, item.reason ?? ''));
-    void this.runQueue();
-  }
-
-  /** Liga/desliga a autorização do agente para um item que ainda está na fila. */
-  async toggleAuthorized(branch: string) {
-    const items = this.queue();
-    const item = items.find(i => i.branch === branch && QUEUED.includes(i.status));
-    if (!item) return;
-    item.authorized = !item.authorized || undefined;
-    await this.saveQueue(items);
-  }
-
-  async remove(branch: string) {
-    await this.saveQueue(this.queue().filter(i => i.branch !== branch || i.status === 'done'));
-  }
-
-  async move(branch: string, delta: number) {
-    const items = this.queue();
-    const i = items.findIndex(x => x.branch === branch && x.status === 'waiting');
-    const j = i + delta;
-    if (i < 0 || j < 0 || j >= items.length || items[j].status !== 'waiting') return;
-    [items[i], items[j]] = [items[j], items[i]];
-    await this.saveQueue(items);
-  }
-
-  async clearFinished() {
-    await this.saveQueue(this.queue().filter(i => !['done', 'failed'].includes(i.status)));
-  }
-
-  private requiresPr(target: string) {
-    const c = this.ctl.cfg();
-    const mode = c.get<string>('protection.mode', 'confirm');
-    return mode === 'require-pr' && !!this.ctl.state?.protectedBranches?.includes(target);
-  }
-
-  /**
-   * Processa a fila até acabar ou parar (PR pendente, agente resolvendo, pausa).
-   * `retryAgent`: pedido manual — itens que esperavam o agente voltam a ser tentados.
-   */
-  async runQueue(opts: { retryAgent?: boolean } = {}): Promise<void> {
-    if (this.processing) {
-      this.runAgain = true;
-      return;
-    }
-    if (this.paused() || !this.ctl.repo) return;
-    this.processing = true;
-    try {
-      if (opts.retryAgent) {
-        const items = this.queue();
-        const stuck = items.filter(i => i.status === 'agent');
-        stuck.forEach(i => (i.status = 'waiting'));
-        if (stuck.length) await this.saveQueue(items);
-      }
-      for (;;) {
-        const items = this.queue();
-        const done = await processNext(items, {
-          syncTarget: i => this.syncTarget(i),
-          checks: i => guardChecks('merge', i.branch),
-          requiresPr: i => this.requiresPr(i.target),
-          merge: async i => ((await actions.mergeBranches(this.ctl, i.branch, i.target, { confirm: false, quiet: true })) ? undefined : t('the merge didn\'t happen (conflict or declined)')),
-          pushTarget: this.ctl.cfg().get<boolean>('mergeQueue.pushBase', false) ? async i => void (await pushBranch(this.ctl, i.target, { quiet: true })) : undefined,
-          handoff: this.agentFlow && this.ctl.cfg().get<boolean>('mergeQueue.resolveWithAgent', true) ? (i, reason) => this.handoff(i, reason) : undefined,
-        });
-        if (!done) break;
-        await this.saveQueue(items);
-        this.ctl.log(t('Merge queue: {0} → {1}: {2}', done.branch, done.target, done.status) + (done.reason ? ` (${done.reason})` : ''));
-        if (done.status === 'failed') {
-          void vscode.window.showWarningMessage(t('Merge queue: {0} left the queue — {1}.', done.branch, done.reason ?? ''), t('✦ Fix with the agent')).then(p => {
-            if (p) void vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', {
-              branch: done.branch,
-              prompt: t(
-                'Branch {0} did not get into {1} through the merge queue: {2}. Bring in {1} ({3}), fix whatever is needed, run the tests and commit.',
-                done.branch,
-                done.target,
-                done.reason ?? '',
-                `git merge ${done.target}`,
-              ),
-            });
-          });
-        }
-        if (done.status === 'awaiting-pr') {
-          await this.ctl.requests.publish(done.branch, done.target);
-          break;
-        }
-      }
-    } finally {
-      this.processing = false;
-      if (this.runAgain) {
-        this.runAgain = false;
-        void this.runQueue();
-      }
-      this.ctl.scheduleRefresh(50);
-    }
-  }
-
-  /** Abre o agente na worktree da branch para resolver o que tirou o item da fila. */
-  private async handoff(i: MergeItem, reason: string): Promise<boolean> {
-    const repo = this.ctl.repo!;
-    const wt = (await repo.worktreesFast()).find(w => w.branch === i.branch && !w.prunable);
-    if (!wt) return false;
-    const st = await repo.status(wt.path);
-    // Worktree suja ou com operação no meio: é trabalho de alguém, não do agente da fila.
-    if (st.operation || st.changes) return false;
-    const files = (await repo.mergePreview(i.branch, i.target))?.files ?? [];
-    const prompt = t(
-      'Branch {0} is in the merge queue to go into {1}, and it stopped: {2}. In this worktree, bring in {1} ({3}), resolve the conflicts{4} preserving the intent of both changes, make the checks and tests pass and commit. Do not merge into {1} yourself: when you finish and commit, the queue merges {0} and moves on to the next branch.',
-      i.branch,
-      i.target,
-      reason,
-      `git merge ${i.target}`,
-      files.length ? ` (${files.join(', ')})` : '',
-    ) +
-      ' ' +
-      (i.authorized
-        ? t('Nobody is watching this terminal: do not stop to ask; when something is ambiguous, pick what best keeps both changes and explain the choice in the commit message.')
-        : t('If anything is ambiguous, ask before deciding.'));
-    i.agentPath = wt.path;
-    const permissionMode = i.authorized ? this.ctl.cfg().get<string>('mergeQueue.authorizedPermissionMode', 'auto') : undefined;
-    await this.agentTerms.launchWithPrompt(wt.path, i.branch, prompt, resolverName(this.ctl), { permissionMode });
-    void vscode.window.showInformationMessage(t('Merge queue: {0} stopped ({1}); {2} is resolving it and the queue continues when it finishes.', i.branch, reason, resolverName(this.ctl)));
-    return true;
-  }
-
-  /** Traz o destino para a branch na worktree dela (cria se preciso). */
-  private async syncTarget(i: MergeItem): Promise<string | undefined> {
-    const repo = this.ctl.repo!;
-    let wt = (await repo.worktreesFast()).find(w => w.branch === i.branch);
-    if (!wt) {
-      const dir = await actions.createWorktree(this.ctl, { existing: i.branch, quiet: true });
-      if (!dir) return t('couldn\'t create the branch\'s worktree');
-      wt = (await repo.worktreesFast()).find(w => w.branch === i.branch);
-      if (!wt) return t('branch\'s worktree not found');
-    }
-    const st = await repo.status(wt.path);
-    if (st.operation) return t('{0} in progress in the worktree', st.operation);
-    if (st.changes) return t('the worktree has uncommitted changes');
-    const [behind] = await repo.aheadBehind(i.target, i.branch);
-    if (!behind) return undefined;
-    const r = await repo.run(['merge', '--no-edit', i.target], wt.path, 300_000);
-    if (r.code === 0) return undefined;
-    await repo.run(['merge', '--abort'], wt.path);
-    return t('conflict bringing in {0}', i.target);
-  }
-
-  private async checkAwaiting() {
-    const items = this.queue();
-    if (!items.some(i => i.status === 'awaiting-pr')) return;
-    const repo = this.ctl.repo;
-    if (!repo) return;
-    const merged = new Map<string, boolean>();
-    for (const i of items.filter(x => x.status === 'awaiting-pr')) merged.set(i.branch, (await repo.aheadBehind(i.target, i.branch))[1] === 0);
-    if (resolveAwaiting(items, i => !!merged.get(i.branch))) {
-      await this.saveQueue(items);
-      void this.runQueue();
-    }
-  }
-
   // ---------- tarefa em lote ----------
 
   private maxParallel() {
@@ -432,7 +162,7 @@ export class Coord implements vscode.Disposable {
     return [...this.agentTerms.running().values()].reduce((n, l) => n + l.length, 0);
   }
 
-  async batch(opts?: { paths?: string[]; prompt?: string; mode?: 'now' | 'queue' }) {
+  async batch(opts?: { paths?: string[]; prompt?: string }) {
     const s = this.ctl.state;
     if (!s) return;
     let targets = s.worktrees.filter(w => !w.prunable && !w.bare && !w.isBase);
@@ -457,31 +187,12 @@ export class Coord implements vscode.Disposable {
       opts?.prompt ??
       (await askTask({ title: t('Task for {0} worktree(s)', targets.length), prompt: t('What each agent should do; {0} becomes the branch name', '${branch}') }));
     if (!prompt?.trim()) return;
-    const mode =
-      opts?.mode ??
-      (
-        await vscode.window.showQuickPick(
-          [
-            { label: t('Open the agent in each one now'), detail: t('At most {0} at a time ({1}); the others wait', this.maxParallel(), 'worktreeGraph.batch.maxParallel'), v: 'now' as const },
-            { label: t('Add to each one\'s task queue'), detail: t('Runs when that worktree\'s current task is done'), v: 'queue' as const },
-          ],
-          { title: t('Batch task') },
-        )
-      )?.v;
-    if (!mode) return;
     const text = (w: WorktreeView) => prompt.replace(/\$\{branch\}/g, w.branch ?? w.name);
-    if (mode === 'queue') {
-      for (const w of targets) {
-        if (this.agentFlow) await this.agentFlow.tasks.add(w.path, w.branch, text(w));
-        else await vscode.commands.executeCommand('worktreeGraph.tasks.add', { path: w.path, branch: w.branch }, text(w));
-      }
-    } else {
-      const plan = batchPlan(targets, this.maxParallel(), this.runningAgents());
-      this.batchWaiting.push(...plan.later.map(w => ({ path: w.path, branch: w.branch, prompt: text(w) })));
-      for (const w of plan.now) await this.agentTerms.launchWithPrompt(w.path, w.branch, text(w));
-    }
+    const plan = batchPlan(targets, this.maxParallel(), this.runningAgents());
+    this.batchWaiting.push(...plan.later.map(w => ({ path: w.path, branch: w.branch, prompt: text(w) })));
+    for (const w of plan.now) await this.agentTerms.launchWithPrompt(w.path, w.branch, text(w));
     const msg =
-      mode === 'now' && this.batchWaiting.length
+      this.batchWaiting.length
         ? t('Task sent to {0} worktree(s); {1} waiting for a slot.', targets.length, this.batchWaiting.length)
         : t('Task sent to {0} worktree(s).', targets.length);
     vscode.window.showInformationMessage(skipped.length ? `${msg} ${t('{0} skipped for going over budget.', skipped.length)}` : msg);
@@ -506,16 +217,12 @@ export class Coord implements vscode.Disposable {
     return { tokens: c.get<number>('budget.perWorktreeTokens', 0) || undefined, usd: c.get<number>('budget.perWorktreeUsd', 0) || undefined };
   }
 
-  /** Worktrees que não recebem mais tarefas automáticas (budget.action = pause-queue e limite estourado). */
+  /** Worktrees que ficam fora das tarefas em lote (budget.action = pause-queue, ou o antigo block-prompts, e limite estourado). */
   budgetBlocked(): Set<string> {
     const out = new Set<string>();
     if (!['pause-queue', 'block-prompts'].includes(this.ctl.cfg().get<string>('budget.action', 'warn'))) return out;
     for (const w of this.ctl.state?.worktrees ?? []) if (budgetLevel(w.claude, this.limits()).level === 'over') out.add(key(w.path));
     return out;
-  }
-
-  isBlocked(p: string): boolean {
-    return this.budgetBlocked().has(key(p));
   }
 
   private checkBudget() {
@@ -542,49 +249,8 @@ export class Coord implements vscode.Disposable {
   }
 }
 
-// ---------- view da fila de merge ----------
-
-const ICON: Record<MergeItem['status'], [string, string]> = {
-  waiting: ['circle-large-outline', 'descriptionForeground'],
-  running: ['sync~spin', 'charts.blue'],
-  agent: ['sparkle', 'charts.purple'],
-  'awaiting-pr': ['git-pull-request', 'charts.yellow'],
-  done: ['pass', 'testing.iconPassed'],
-  failed: ['error', 'testing.iconFailed'],
-};
-const label = (st: MergeItem['status']): string =>
-  ({ waiting: t('queued'), running: t('processing'), agent: t('with the agent'), 'awaiting-pr': t('waiting for PR/MR'), done: t('merged'), failed: t('failed') })[st];
-
-class MergeQueueItem extends vscode.TreeItem {
-  constructor(readonly item: MergeItem) {
-    super(item.branch, vscode.TreeItemCollapsibleState.None);
-    this.description = `→ ${item.target} · ${label(item.status)}${item.authorized ? ` · ✦ ${t('authorized')}` : ''}`;
-    this.tooltip = item.reason ?? `${item.branch} → ${item.target}`;
-    this.iconPath = new vscode.ThemeIcon(ICON[item.status][0], new vscode.ThemeColor(ICON[item.status][1]));
-    this.contextValue = `mergeQueue-${item.status}`;
-  }
-}
-
-class MergeQueueProvider implements vscode.TreeDataProvider<MergeQueueItem> {
-  private readonly emitter = new vscode.EventEmitter<void>();
-  readonly onDidChangeTreeData = this.emitter.event;
-  constructor(private readonly coord: Coord) {
-    coord.onDidChangeQueue(() => this.emitter.fire());
-  }
-  getTreeItem(e: MergeQueueItem) {
-    return e;
-  }
-  getChildren() {
-    return this.coord.queue().map(i => new MergeQueueItem(i));
-  }
-}
-
 export function registerCoord(ctx: vscode.ExtensionContext, ctl: Controller, agentTerms: AgentTerminals, agentFlow?: AgentFlow): Coord {
   const coord = new Coord(ctl, agentTerms, agentFlow);
-  const view = vscode.window.createTreeView('worktreeGraph.mergeQueue', { treeDataProvider: new MergeQueueProvider(coord) });
-  const setDesc = () => (view.description = coord.paused() ? t('queue paused') : undefined);
-  coord.onDidChangeQueue(setDesc);
-  setDesc();
   const reg = (id: string, fn: (...a: any[]) => unknown) =>
     ctx.subscriptions.push(
       vscode.commands.registerCommand(`worktreeGraph.${id}`, async (...a: any[]) => {
@@ -595,41 +261,9 @@ export function registerCoord(ctx: vscode.ExtensionContext, ctl: Controller, age
         }
       }),
     );
-  const branchOf = async (arg: any) => (typeof arg === 'string' ? arg : arg?.branch ?? (await actions.pickBranch(ctl, undefined, t('Which branch?'))));
   reg('coord.showOverlaps', (arg?: unknown) => coord.showOverlap(arg));
   reg('showOverlaps', (a?: { path?: string }) => coord.showOverlap(a?.path ? { path: a.path } : undefined));
-  // Árvore com várias selecionadas: (clicada, selecionadas[]); sem argumento: escolhe várias.
-  // Destino: o que veio no argumento (painel de merge) ou pergunta, com a base em primeiro.
-  const add = (authorized: boolean) => async (arg?: any, second?: any) => {
-    let target = typeof second === 'string' ? second : undefined;
-    let bs: string[] = [];
-    if (Array.isArray(second) && second.length) bs = second.map(x => (typeof x === 'string' ? x : x?.branch)).filter((b): b is string => !!b);
-    else if (arg !== undefined) {
-      const b = await branchOf(arg);
-      if (!b) return;
-      bs = [b];
-    }
-    if (!target) target = await coord.pickTarget(bs);
-    if (!target) return;
-    if (!bs.length) bs = await coord.pickForQueue(authorized, target);
-    if (bs.length) await coord.enqueue(bs, target, { authorized });
-  };
-  reg('mergeQueue.add', add(false));
-  // Mesma coisa, mas o Claude que resolver os conflitos já abre autorizado e a fila segue sozinha.
-  reg('mergeQueue.addAuthorized', add(true));
-  reg('mergeQueueAdd', (a?: { branch?: string }) => a?.branch && add(false)(a.branch));
-  reg('mergeQueueAddAuthorized', (a?: { branch?: string }) => a?.branch && add(true)(a.branch));
-  reg('mergeQueue.toggleAuthorized', (it?: MergeQueueItem) => it && coord.toggleAuthorized(it.item.branch));
-  reg('mergeQueue.remove', (it?: MergeQueueItem) => it && coord.remove(it.item.branch));
-  reg('mergeQueue.moveUp', (it?: MergeQueueItem) => it && coord.move(it.item.branch, -1));
-  reg('mergeQueue.moveDown', (it?: MergeQueueItem) => it && coord.move(it.item.branch, 1));
-  reg('mergeQueue.pause', () => coord.setPaused(true));
-  reg('mergeQueue.resume', () => coord.setPaused(false));
-  reg('mergeQueue.run', () => coord.runQueue({ retryAgent: true }));
-  reg('mergeQueue.clearFinished', () => coord.clearFinished());
   reg('batchTask', (opts?: any) => coord.batch(opts && typeof opts === 'object' && !opts.path ? opts : undefined));
-  ctx.subscriptions.push(coord, view);
-  // se a janela fechou no meio de um item, continua ao abrir
-  setTimeout(() => void coord.runQueue(), 5000);
+  ctx.subscriptions.push(coord);
   return coord;
 }

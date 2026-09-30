@@ -7,6 +7,37 @@
   filtrar PRs, atualizar) agora ficam na linha da seção e no botão direito dela; o título tem um
   **Atualizar** para as três e o menu "…" mantém as conexões (remoto, Jira, Redmine). O badge de PRs
   aguardando revisão e o chip de PR do painel passam a apontar para esta view.
+- **Menos notificações**: o plano proposto pelo Claude gera um aviso só (antes vinham também o pedido
+  de permissão do `ExitPlanMode` e o "precisa de você"); sobreposição de arquivos avisa uma vez por
+  par de worktrees, não a cada arquivo novo em comum; o resumo de pronto para revisar não abre mais
+  sozinho (`readySummary.enabled` agora é `false`); sessão do Claude encerrada não pergunta mais
+  o que fazer com o terminal (`claude.onSessionEnd` agora é `keep`).
+- **Hooks do Claude só notificam**: sai o portão no Stop (`claude.stopGate`, `.commands`,
+  `.maxRetries` e **Checagens antes de o Claude parar…**), que rodava as checagens e não deixava o
+  agente parar, e o `budget.action: block-prompts`, que recusava o prompt da worktree fora do
+  orçamento (quem usava passa a ter o efeito de `pause-queue`). O hook `Stop` volta a ter timeout
+  curto. Ficam o contexto da sessão, o aviso do plano, a permissão respondida no VS Code, o estado
+  e o "pronto para revisar". As tentativas usam `checks.beforeMerge` ou o `autoSync.testCommand`.
+- **Saem Aprender com o uso, Projetos longos e a Fila de tarefas**:
+  - *Aprender com o uso*: o nó no topo de **Claude: configuração** e a caixa em **Ligar/desligar
+    recursos** (o bloco no CLAUDE.md do usuário), **Aprender com esta sessão** e **Aprender com as
+    sessões da worktree** (`claude.lessons`). Um bloco já gravado no seu CLAUDE.md fica lá até você
+    apagar. Continuam **Organizar a memória**, **Melhorar a skill** e mover memórias de worktrees para o projeto.
+  - *Projetos longos*: a view, os comandos `longProjects.*`, as settings `longProjects.*` e o script
+    do portão nos hooks do Claude (o hook `PreCompact` também sai). Os arquivos em
+    `.agentyard/projects/` ficam no repositório e podem ser apagados.
+  - *Fila de tarefas*: a view, os comandos `tasks.*`, as settings `tasks.autoAdvance` e
+    `tasks.pauseAtUsage` (a pausa pelo uso do Claude só valia para ela), o chip ☰ no painel e na
+    árvore e as ferramentas MCP `list_tasks` e `queue_task`. Agendamentos, modelos de tarefa e a
+    tarefa em lote sempre abrem o agente na hora (a tarefa em lote segue respeitando
+    `batch.maxParallel`); agendamentos gravados como "fila" passam a abrir o agente.
+    **Tentar abordagens** e **Comparar tentativas** vão para o título da view Agentes.
+- **Sai a Fila de merge**: a view, os comandos `mergeQueue.*` (inclusive "Pôr na fila de merge" com o
+  Claude autorizado), as settings `mergeQueue.pushBase`, `.resolveWithAgent` e
+  `.authorizedPermissionMode`, e os botões de pôr na fila no aviso de pronto para revisar, no painel
+  **Analisar merge** e no menu do grafo. A tarefa dividida entre agentes só avisa quando as partes
+  ficam prontas. Para mesclar, continuam **Mesclar em…**, o painel **Analisar merge** e o
+  **✦ Resolver com Claude**.
 - **Sem travas nos agentes**: saíram a guarda da worktree (`claude.guard`: bloqueio de edições e
   comandos em outras worktrees, troca de branch, force push, push na base, remover worktrees), a
   recusa de edição em arquivo reservado (`claude.claims`) e a negação de ação repetida
