@@ -83,7 +83,7 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
     if (w) await board.releaseFor(w.path);
   });
 
-  const orchestrator = new Orchestrator(ctl, d.agentFlow, d.agentTerms, board, d.coord);
+  const orchestrator = new Orchestrator(ctl, d.agentFlow, d.agentTerms, board);
   ctx.subscriptions.push(orchestrator);
   reg('orchestrator.start', (task?: string) => orchestrator.start(typeof task === 'string' ? task : undefined));
   reg('orchestrator.show', () => orchestrator.show());

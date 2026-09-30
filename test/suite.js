@@ -60,7 +60,7 @@ exports.run = async () => {
     const all = await vscode.commands.getCommands(true);
     for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
     // o painel foca views pelos comandos <view>.focus que o VS Code cria para cada view declarada
-    for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules', 'mergeQueue']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
+    for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
   });
 
   await check('árvore: worktrees + branches sem worktree', async () => {
@@ -970,7 +970,7 @@ exports.run = async () => {
     execSync(`git worktree remove --force "${suja}"`, { cwd: root });
   });
 
-  await check('coordenação: sobreposição, fila de merge numa base descartável e tarefa em lote', async () => {
+  await check('coordenação: sobreposição e tarefa em lote', async () => {
     const path = require('path');
     const fs = require('fs');
     const { execSync } = require('child_process');
@@ -994,31 +994,15 @@ exports.run = async () => {
     await ctl.refresh();
     assert.ok(ctl.state.worktrees.find(w => w.branch === 'coord/x').overlap, 'chip no estado');
 
-    // fila de merge: duas branches limpas entram em fila/base, uma por vez
-    git('branch fila/base master');
-    for (const n of ['a', 'b']) {
-      const d = path.join(root, '..', `fila-${n}`);
-      git(`worktree add -q -b fila/${n} "${d}" master`);
-      fs.writeFileSync(path.join(d, `fila-${n}.txt`), n);
-      git('add -A', d);
-      git(`commit -qm "fila ${n}"`, d);
-    }
-    await coord.enqueue('fila/a', 'fila/base');
-    await coord.enqueue('fila/b', 'fila/base');
-    await coord.runQueue();
-    await until(() => coord.queue().filter(i => i.target === 'fila/base').every(i => i.status === 'done'), 60000);
-    assert.strictEqual(git('merge-base --is-ancestor fila/a fila/base && echo sim'), 'sim');
-    assert.strictEqual(git('merge-base --is-ancestor fila/b fila/base && echo sim'), 'sim');
-    assert.notStrictEqual(git('rev-parse master'), git('rev-parse fila/base'), 'master intacta');
-    await coord.clearFinished();
-
     // tarefa em lote: 3 worktrees, 2 vagas → 2 terminais agora e 1 esperando
+    for (const n of ['a', 'b']) git(`worktree add -q -b lote/${n} "${path.join(root, '..', `lote-${n}`)}" master`);
+    await ctl.refresh();
     await cfg.update('agents', [{ name: 'Eco', command: 'echo', promptCommand: 'echo {prompt}' }], G);
     const running = [...api.agentTerms.running().values()].reduce((n, l) => n + l.length, 0);
     await cfg.update('batch.maxParallel', running + 2, G);
-    const targets = ['coord/x', 'fila/a', 'fila/b'].map(b => ctl.state.worktrees.find(w => w.branch === b).path);
+    const targets = ['coord/x', 'lote/a', 'lote/b'].map(b => ctl.state.worktrees.find(w => w.branch === b).path);
     const before = vscode.window.terminals.length;
-    await coord.batch({ paths: targets, prompt: 'rode os testes em ${branch}', mode: 'now' });
+    await coord.batch({ paths: targets, prompt: 'rode os testes em ${branch}' });
     await until(() => vscode.window.terminals.length === before + 2);
     assert.strictEqual(coord.batchPending, 1, 'um esperando vaga');
     assert.ok(require('fs').readFileSync(api.agentTerms.lastPromptFile, 'utf8').startsWith('rode os testes em '));
@@ -1278,7 +1262,7 @@ async function videoScene(api) {
   caption('Cada card mostra se está limpa, quanto está atrás da master e se vai conflitar');
   await wait(4500);
 
-  caption('Botão direito: merge, fila de merge, tarefas para o agente e revisão');
+  caption('Botão direito: merge, tarefas para o agente e revisão');
   GraphPanel.demo({ scene: 'menu', branch: 'ai/refatorar-api' });
   await wait(4500);
   GraphPanel.demo({ scene: 'hide' });

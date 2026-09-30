@@ -121,7 +121,6 @@ conversas abertas.
 | **Claude: configuração** | skills, comandos, permissões, modelo, hooks e memória |
 | **Pipelines** | GitHub Actions, GitLab CI, Bitbucket Pipelines, Azure Pipelines |
 | **Agendamentos** | tarefas recorrentes para os agentes |
-| **Fila de merge** | branches esperando para entrar na base, uma por vez |
 | **Pull requests** | PRs/MRs do remoto agrupados |
 
 Na barra de status: uso estimado do Claude Code (janela de 5 h e semana) e atalho para o sync.
@@ -409,35 +408,6 @@ Em worktrees com conflito previsto aparece **✦ Resolver com Claude**: o agente
 trazer a base, resolver, rodar os testes e commitar. Se a branch não tem worktree, ela é criada
 antes. O texto da tarefa está em `worktreeGraph.prompts.resolveConflict` e
 `worktreeGraph.prompts.mergeIntoBase`.
-
-### Fila de merge
-
-Para várias branches prontas ao mesmo tempo: **Pôr na fila de merge**. A fila mescla uma por vez,
-trazendo a base antes e rodando as checagens. Dá para pôr várias de uma vez: selecione as
-worktrees na árvore (Ctrl/Shift+clique) e use **Pôr na fila de merge**, ou clique no **+** da view
-e marque as branches na lista (entram na ordem em que aparecem). O painel **Analisar merge** também
-tem **Pôr na fila de merge**, e o aviso "✓ Pronto para revisar" de um agente tem **Pôr na fila de
-merge → base**.
-
-Se uma branch conflitar com a base ou falhar nas checagens, a fila abre o Claude Code (o primeiro
-agente configurado) na worktree dela com a tarefa de trazer a base, resolver e commitar; o item
-fica **com o agente** e a fila espera. Quando ele termina e commita, a fila tenta de novo a mesma
-branch, mescla e segue para a próxima. Se o terminal for fechado sem commit, ou se a mesma branch
-precisar do agente mais de duas vezes, ela sai da fila com o motivo. Worktree com mudanças não
-commitadas não é entregue ao agente. **Processar a fila agora** volta a tentar os itens que estavam
-com o agente (útil depois de recarregar a janela). Desligue com
-`worktreeGraph.mergeQueue.resolveWithAgent` para a fila só parar no conflito, como antes.
-
-Para a fila andar sozinha, use **Pôr na fila de merge (Claude resolve os conflitos)** (menu da
-worktree, do grafo, **…** da view **Fila de merge**, painel **Analisar merge** ou o aviso de
-pronto para revisar). Quando essa branch parar, o Claude já abre autorizado — no modo de
-`worktreeGraph.mergeQueue.authorizedPermissionMode` (padrão `auto`; `acceptEdits` ainda pergunta
-antes de comandos; `bypassPermissions` aprova tudo) — e com a instrução de não parar para
-perguntar, decidindo e explicando no commit. Na view, o item aparece com **✦ autorizado**; clique
-com o botão direito para autorizar ou desautorizar um item que já está na fila.
-
-Na view **Fila de merge**: subir/descer, tirar, pausar/retomar, processar agora e limpar.
-`worktreeGraph.mergeQueue.pushBase` faz push da base depois de cada merge.
 
 ### Achar o commit que quebrou (bisect)
 

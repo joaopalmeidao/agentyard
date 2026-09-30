@@ -1,6 +1,6 @@
 # AgentYard
 
-Extensão do VS Code para quem desenvolve com vários agentes de IA em paralelo, cada um na sua `git worktree`. O AgentYard junta num lugar só o grafo de worktrees e branches, merge e análise de merge, PR/MR com o status da revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira e Redmine), o Claude Code (ou outro agente) aberto em cada worktree com sessões e uso de tokens, fila e agendamento de tarefas, e o sync da base local ou no CI.
+Extensão do VS Code para quem desenvolve com vários agentes de IA em paralelo, cada um na sua `git worktree`. O AgentYard junta num lugar só o grafo de worktrees e branches, merge e análise de merge, PR/MR com o status da revisão, pipelines, issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira e Redmine), o Claude Code (ou outro agente) aberto em cada worktree com sessões e uso de tokens, agendamento de tarefas, e o sync da base local ou no CI.
 
 > Antes se chamava **Worktree Graph**. Os IDs de comandos e configurações (`worktreeGraph.*`) continuam os mesmos.
 

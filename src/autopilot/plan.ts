@@ -4,7 +4,7 @@
  *
  * As independentes começam juntas a partir da base; uma subtarefa com dependências começa quando
  * todas ficam prontas, empilhada sobre a primeira (as outras são mescladas nela). No fim, as branches
- * entram na fila de merge na ordem das dependências.
+ * ficam prontas para revisar.
  */
 
 export type SubtaskStatus = 'waiting' | 'running' | 'ready' | 'failed' | 'skipped';
@@ -30,7 +30,7 @@ export interface Orchestration {
   base: string;
   created: number;
   subtasks: Subtask[];
-  /** Todas prontas e na fila de merge. */
+  /** Fim já avisado (todas prontas ou paradas). */
   queued?: boolean;
 }
 

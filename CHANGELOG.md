@@ -15,6 +15,12 @@
     tarefa em lote sempre abrem o agente na hora (a tarefa em lote segue respeitando
     `batch.maxParallel`); agendamentos gravados como "fila" passam a abrir o agente.
     **Tentar abordagens** e **Comparar tentativas** vão para o título da view Agentes.
+- **Sai a Fila de merge**: a view, os comandos `mergeQueue.*` (inclusive "Pôr na fila de merge" com o
+  Claude autorizado), as settings `mergeQueue.pushBase`, `.resolveWithAgent` e
+  `.authorizedPermissionMode`, e os botões de pôr na fila no aviso de pronto para revisar, no painel
+  **Analisar merge** e no menu do grafo. A tarefa dividida entre agentes só avisa quando as partes
+  ficam prontas. Para mesclar, continuam **Mesclar em…**, o painel **Analisar merge** e o
+  **✦ Resolver com Claude**.
 - **Sem travas nos agentes**: saíram a guarda da worktree (`claude.guard`: bloqueio de edições e
   comandos em outras worktrees, troca de branch, force push, push na base, remover worktrees), a
   recusa de edição em arquivo reservado (`claude.claims`) e a negação de ação repetida

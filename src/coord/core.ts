@@ -1,9 +1,7 @@
 /**
- * Coordenação de vários agentes: regras puras (sem VS Code) para sobreposição de arquivos, fila de
- * merge, tarefa em lote e orçamento. Testadas em test/coord.test.js.
+ * Coordenação de vários agentes: regras puras (sem VS Code) para sobreposição de arquivos, tarefa
+ * em lote e orçamento. Testadas em test/coord.test.js.
  */
-
-import { t } from '../i18n';
 
 export interface ActiveInput {
   agents: string[];
@@ -71,117 +69,6 @@ export function overlapSummary(overlaps: Overlap[]): Map<string, { with: string[
 
 /** Chave estável do conjunto de sobreposições de um par (para avisar uma vez por conjunto novo). */
 export const overlapKey = (o: Overlap) => `${o.a}|${o.b}|${o.files.join(',')}`;
-
-// ---------- fila de merge ----------
-
-export type MergeItemStatus = 'waiting' | 'running' | 'agent' | 'awaiting-pr' | 'done' | 'failed';
-
-/** Quantas vezes a fila entrega o mesmo item ao agente antes de desistir dele. */
-export const MAX_AGENT_TRIES = 2;
-
-export interface MergeItem {
-  branch: string;
-  target: string;
-  status: MergeItemStatus;
-  reason?: string;
-  added: number;
-  finished?: number;
-  /** Vezes que o item já foi entregue ao agente (conflito ou checagem falhando). */
-  agentTries?: number;
-  /** Worktree onde o agente está resolvendo o item. */
-  agentPath?: string;
-  /** O agente que resolver este item já abre autorizado (`mergeQueue.authorizedPermissionMode`), sem parar para perguntar. */
-  authorized?: boolean;
-}
-
-/** Passos da fila; injetados para a regra ser testável sem git nem VS Code. */
-export interface MergeSteps {
-  /** Traz o destino atual para a branch; devolve o motivo se não der (conflito etc.). */
-  syncTarget(item: MergeItem): Promise<string | undefined>;
-  /** Checagens/testes da branch; false = falharam. */
-  checks(item: MergeItem): Promise<boolean>;
-  /** O destino exige PR/MR (branch protegida com require-pr)? */
-  requiresPr(item: MergeItem): boolean;
-  /** Mescla de verdade; devolve o motivo se não der. */
-  merge(item: MergeItem): Promise<string | undefined>;
-  /** Push do destino depois de mesclar (se configurado). */
-  pushTarget?(item: MergeItem): Promise<void>;
-  /** Entrega o problema ao agente na worktree da branch; true = ele assumiu e a fila espera. */
-  handoff?(item: MergeItem, reason: string): Promise<boolean>;
-}
-
-/**
- * Processa o próximo item "waiting" (ou o que estava "running", se a janela fechou no meio).
- * Um por vez: devolve o item processado com o novo status, ou undefined se não há o que fazer.
- */
-export async function processNext(items: MergeItem[], steps: MergeSteps, now = Date.now()): Promise<MergeItem | undefined> {
-  if (items.some(i => i.status === 'awaiting-pr' || i.status === 'agent')) return undefined; // espera o PR/MR ou o agente antes de seguir
-  const item = items.find(i => i.status === 'running') ?? items.find(i => i.status === 'waiting');
-  if (!item) return undefined;
-  item.status = 'running';
-  item.reason = undefined;
-  const fail = (reason: string) => {
-    item.status = 'failed';
-    item.reason = reason;
-    item.finished = now;
-    return item;
-  };
-  // Conflito ou checagem falhando: o agente resolve e a fila espera por ele (até MAX_AGENT_TRIES).
-  const fix = async (reason: string) => {
-    if (steps.handoff && (item.agentTries ?? 0) < MAX_AGENT_TRIES && (await steps.handoff(item, reason))) {
-      item.status = 'agent';
-      item.reason = reason;
-      item.agentTries = (item.agentTries ?? 0) + 1;
-      return item;
-    }
-    return fail(reason);
-  };
-  const sync = await steps.syncTarget(item);
-  if (sync) return fix(sync);
-  if (!(await steps.checks(item))) return fix(t('checks failed'));
-  if (steps.requiresPr(item)) {
-    item.status = 'awaiting-pr';
-    item.reason = t('{0} requires a PR/MR: the queue waits for it to be merged', item.target);
-    return item;
-  }
-  const merged = await steps.merge(item);
-  if (merged) return fail(merged);
-  if (steps.pushTarget) await steps.pushTarget(item);
-  item.status = 'done';
-  item.finished = now;
-  return item;
-}
-
-/**
- * O agente com o item da `branch` terminou: se deixou commits, o item volta para a fila na mesma
- * posição (é o próximo a ser tentado); se parou sem resolver, sai da fila. Devolve o item, se havia.
- */
-export function agentFinished(items: MergeItem[], branch: string, ready: boolean, now = Date.now()): MergeItem | undefined {
-  const item = items.find(i => i.branch === branch && i.status === 'agent');
-  if (!item) return undefined;
-  if (ready) {
-    item.status = 'waiting';
-  } else {
-    item.status = 'failed';
-    item.reason = t('the agent stopped without resolving: {0}', item.reason ?? '');
-    item.finished = now;
-  }
-  return item;
-}
-
-/** Item esperando PR/MR que já entrou no destino (a branch deixou de ter commits fora dele). */
-export function resolveAwaiting(items: MergeItem[], isMerged: (i: MergeItem) => boolean, now = Date.now()): boolean {
-  let changed = false;
-  for (const i of items) {
-    if (i.status === 'awaiting-pr' && isMerged(i)) {
-      i.status = 'done';
-      i.reason = undefined;
-      i.finished = now;
-      changed = true;
-    }
-  }
-  return changed;
-}
 
 // ---------- tarefa em lote ----------
 
