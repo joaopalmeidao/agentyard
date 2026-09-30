@@ -23,6 +23,7 @@ import { registerMigrations } from './migrations/register';
 import { registerTemplates } from './templates/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
+import { RemoteView } from './hosting/remoteView';
 import { registerActivity } from './activityPanel';
 import { registerDelivery } from './delivery/register';
 import { registerPromotion } from './promotion/register';
@@ -271,7 +272,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
         if (a.modifier) return void (await vscode.env.openExternal(vscode.Uri.parse(a.url)));
         return void (await vscode.commands.executeCommand('worktreeGraph.pullRequests.reveal', a.ref));
       case 'focusPrs':
-        return focusView('worktreeGraph.pullRequests', 'Pull requests');
+        return focusView('worktreeGraph.remote', 'Issues, Pipelines & PRs');
       case 'setGraphOptions':
         // seletor "Branches:" e "Mostrar branches remotas" do histórico
         if (a.branches !== undefined) await ctx.workspaceState.update('graphBranches', a.branches ? a.branches.split('\n').filter(Boolean) : []);
@@ -552,10 +553,13 @@ export async function activate(ctx: vscode.ExtensionContext) {
     vscode.workspace.updateWorkspaceFolders(n, 0, { uri: vscode.Uri.file(p), name: `wt: ${item.branch ?? require('path').basename(p)}` });
   });
 
-  const issues = registerIssues(ctx, ctl, guard);
-  const pipelines = registerPipelines(ctx, ctl, guard);
+  // issues, pipelines e PRs/MRs numa view só, uma seção para cada
+  const remote = new RemoteView();
+  const issues = registerIssues(ctx, ctl, guard, remote);
+  const pipelines = registerPipelines(ctx, ctl, guard, remote);
   const review = registerReview(ctx, ctl, guard);
-  const prs = registerPullRequests(ctx, ctl, guard);
+  const prs = registerPullRequests(ctx, ctl, guard, remote);
+  remote.create(ctx);
   registerPrFeedback(ctx, ctl, guard, { prs, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration, agentFlow, pipelines });
   const stack = registerStack(ctx, ctl, guard, { prs, agentTerms });
   registerGitExtras(ctx, ctl, guard, { agentTerms });
@@ -591,7 +595,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const guards = registerGuards(ctx, ctl);
   registerMigrations(ctx, ctl);
 
-  return { ctl, tree, treeView, agentTerms, actions, panelAction: handler, sync, GraphPanel, ready, decorations, projects, issues, claude, usage, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, promotion, bridge: claudeIntegration.bridge, claudeIntegration: claudeIntegration.integration, stack };
+  return { ctl, tree, treeView, agentTerms, actions, panelAction: handler, sync, GraphPanel, ready, decorations, projects, issues, claude, usage, claudeConfig, pipelines, guards, review, activity, agentFlow, gitOps, schedules, coord, env, templates, readySummary, delivery, prs, remote, promotion, bridge: claudeIntegration.bridge, claudeIntegration: claudeIntegration.integration, stack };
 }
 
 export function deactivate() {}

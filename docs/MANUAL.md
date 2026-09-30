@@ -90,7 +90,7 @@ Barra do topo, da esquerda para a direita:
 | **☁↓ Trazer n** | pull em lote das branches com novidades no remoto |
 | **☁↑ Enviar n** | push em lote das branches com commits não enviados |
 | **Atividade** | commits, sessões, tokens e custo do dia |
-| **PRs/MRs** | abre a view Pull requests |
+| **PRs/MRs** | abre a view Issues, pipelines e PRs |
 | **Linha do tempo** | nascimento, PR e merge de cada branch |
 | **Gerar CI** | gera o workflow de sync para GitHub Actions ou GitLab CI |
 | **Conectar** | login no GitHub/GitLab/etc. do remoto |
@@ -116,12 +116,10 @@ conversas abertas.
 |---|---|
 | **Projetos** | repositórios adicionados; troca o ativo |
 | **Worktrees** | cada worktree expande em *Alterações × base*, árvore de pastas e *Stashes*; branches sem worktree também |
-| **Issues** | issues do GitHub, GitLab, Bitbucket, Azure DevOps, Jira e Redmine |
+| **Issues, pipelines e PRs** | tudo do remoto numa view só, uma seção para cada: issues (GitHub, GitLab, Bitbucket, Azure DevOps, Jira e Redmine), pipelines (GitHub Actions, GitLab CI, Bitbucket Pipelines, Azure Pipelines) e PRs/MRs agrupados. Os botões de cada seção (criar, filtrar, escopo, atualizar) ficam na linha dela |
 | **Sessões Claude** | sessões do Claude Code agrupadas por worktree |
 | **Claude: configuração** | skills, comandos, permissões, modelo, hooks e memória |
-| **Pipelines** | GitHub Actions, GitLab CI, Bitbucket Pipelines, Azure Pipelines |
 | **Agendamentos** | tarefas recorrentes para os agentes |
-| **Pull requests** | PRs/MRs do remoto agrupados |
 
 Na barra de status: uso estimado do Claude Code (janela de 5 h e semana) e atalho para o sync.
 
@@ -459,9 +457,9 @@ O remoto usado é `worktreeGraph.remote` (padrão `origin`).
 como rascunho. `PR #12` / `MR !5` aparece no card, na tabela e na árvore. Se a branch veio de uma
 issue, a descrição ganha `Closes #N` ou `Refs #N`.
 
-### View Pull requests
+### Pull requests (view Issues, pipelines e PRs)
 
-Grupos **Meus**, **Pedem minha revisão**, **Abertos** e **Mesclados (7 dias)**, com revisão, CI,
+Na seção **Pull requests**: grupos **Meus**, **Pedem minha revisão**, **Abertos** e **Mesclados (7 dias)**, com revisão, CI,
 conflitos, rascunho e se já existe worktree local. Ao expandir: comentários recentes e checks.
 
 Ações: abrir no navegador, **Trazer para uma worktree** (inclusive PR de fork no GitHub, como
@@ -475,7 +473,7 @@ GitHub e GitLab têm todas as ações; Bitbucket e Azure DevOps, a listagem.
 
 ### Comentários da revisão → agente
 
-No PR/MR (view Pull requests), na worktree ou no painel (Agente → **Mandar os comentários da revisão
+No PR/MR (seção Pull requests), na worktree ou no painel (Agente → **Mandar os comentários da revisão
 ao agente**): as conversas não resolvidas e as revisões com texto vão como tarefa para o Claude da
 worktree — que traz a branch, se preciso. Quando o agente termina, o AgentYard oferece **Enviar e
 resolver**: faz o push, responde "resolvido em <commit>" em cada conversa e marca como resolvida.

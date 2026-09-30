@@ -60,7 +60,7 @@ exports.run = async () => {
     const all = await vscode.commands.getCommands(true);
     for (const c of ['openGraph', 'launchAgent', 'openFileInWorktree', 'mergeBaseInto', 'generateCiWorkflow', 'branchSummary', 'askAgentAboutBranch', 'copyBranchContext', 'showUncommitted', 'showUncommittedPatch', 'newWorktreeWithTask']) assert.ok(all.includes(`worktreeGraph.${c}`), c);
     // o painel foca views pelos comandos <view>.focus que o VS Code cria para cada view declarada
-    for (const v of ['pullRequests', 'issues', 'pipelines', 'schedules']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
+    for (const v of ['remote', 'schedules']) assert.ok(all.includes(`worktreeGraph.${v}.focus`), `${v}.focus`);
   });
 
   await check('árvore: worktrees + branches sem worktree', async () => {
@@ -369,7 +369,7 @@ exports.run = async () => {
 
   await check('issues: a view abre sem rede nem credenciais', async () => {
     await vscode.commands.executeCommand('workbench.view.extension.worktreeGraph');
-    await vscode.commands.executeCommand('worktreeGraph.issues.focus');
+    await vscode.commands.executeCommand('worktreeGraph.remote.focus');
     await api.issues.refresh(true);
     assert.deepStrictEqual(api.issues.groups, [], 'demo sem remoto e sem Redmine: nenhum grupo');
   });
@@ -444,7 +444,7 @@ exports.run = async () => {
   });
 
   await check('pipelines: a view abre sem rede e o último pipeline de cada branch chega ao estado', async () => {
-    await vscode.commands.executeCommand('worktreeGraph.pipelines.focus');
+    await vscode.commands.executeCommand('worktreeGraph.remote.focus');
     await api.pipelines.refresh(true);
     assert.strictEqual(api.pipelines.unavailable, 'noRemote', 'demo sem remoto');
     const { PipelineTreeProvider } = require('../out/hosting/pipelinesView');
@@ -866,6 +866,15 @@ exports.run = async () => {
     const wt = ctl.state.worktrees.find(w => w.branch === 'prs/feature');
     assert.ok(wt, 'worktree da branch do PR criada');
     assert.ok((await prs.tree.getChildren(root[0]))[0].contextValue.includes('-wt'), 'item passa a indicar a worktree');
+
+    // issues, pipelines e PRs ficam na mesma view, uma seção para cada
+    const sections = await api.remote.getChildren();
+    assert.deepStrictEqual(sections.map(s => s.contextValue), ['remoteSection-issues', 'remoteSection-pipelines', 'remoteSection-prs']);
+    const prGroups = await api.remote.getChildren(sections[2]);
+    assert.strictEqual(String(prGroups[0].label), 'Mine');
+    const firstPr = (await api.remote.getChildren(prGroups[0]))[0];
+    assert.ok(String(firstPr.label).startsWith('#1'), 'a seção delega os filhos para a árvore de PRs');
+    assert.strictEqual((await api.remote.getParent(prGroups[0])).id, 'remote:prs', 'o grupo tem a seção como pai (reveal)');
     await ctl.repo.removeWorktree(wt.path, true);
     prs.svc.setBrowser(undefined);
   });

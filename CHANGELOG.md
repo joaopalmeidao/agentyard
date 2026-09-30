@@ -1,6 +1,12 @@
 # Changelog
 
 ## Não lançado
+- **Issues, pipelines e PRs numa view só**: as três views da barra lateral viraram a view **Issues,
+  pipelines e PRs**, com uma seção para cada (com contagens ao lado: falhas de CI e PRs aguardando sua
+  revisão). Os botões que ficavam no título de cada view (nova issue, escopo, disparar pipeline,
+  filtrar PRs, atualizar) agora ficam na linha da seção e no botão direito dela; o título tem um
+  **Atualizar** para as três e o menu "…" mantém as conexões (remoto, Jira, Redmine). O badge de PRs
+  aguardando revisão e o chip de PR do painel passam a apontar para esta view.
 - **Menos notificações**: o plano proposto pelo Claude gera um aviso só (antes vinham também o pedido
   de permissão do `ExitPlanMode` e o "precisa de você"); sobreposição de arquivos avisa uma vez por
   par de worktrees, não a cada arquivo novo em comum; o resumo de pronto para revisar não abre mais
