@@ -218,17 +218,6 @@ export const TOOLS: ToolDef[] = [
     readOnly: true,
   },
   {
-    name: 'list_tasks',
-    description: 'Fila de tarefas do agente numa worktree (aguardando, rodando, feitas).',
-    inputSchema: { type: 'object', properties: { worktree: wtArg } },
-    readOnly: true,
-  },
-  {
-    name: 'queue_task',
-    description: 'Põe uma tarefa na fila do agente de uma worktree. Se nada estiver rodando lá, o AgentYard já abre um agente com ela.',
-    inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'O que o agente deve fazer.' }, worktree: wtArg }, required: ['text'] },
-  },
-  {
     name: 'create_worktree',
     description:
       'Cria uma worktree nova (branch nova a partir da base ou de `from`). Com `task`, abre um agente nela já com essa tarefa — útil para delegar trabalho paralelo.',

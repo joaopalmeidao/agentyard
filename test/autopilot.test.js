@@ -28,12 +28,11 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.deepStrictEqual(A.gateCommands([], [], ''), []);
   });
 
-  await check('gateVerdict: desligado, sem comando, projeto longo, headless e turno sem mudança pulam', () => {
+  await check('gateVerdict: desligado, sem comando, headless e turno sem mudança pulam', () => {
     const base = { mode: 'changes', commands: ['npm test'], changed: true };
     assert.deepStrictEqual(A.gateVerdict(base), { action: 'run' });
     assert.strictEqual(A.gateVerdict({ ...base, mode: 'off' }).why, 'off');
     assert.strictEqual(A.gateVerdict({ ...base, commands: [] }).why, 'no-commands');
-    assert.strictEqual(A.gateVerdict({ ...base, project: true }).why, 'project');
     assert.strictEqual(A.gateVerdict({ ...base, headless: true }).why, 'headless');
     assert.strictEqual(A.gateVerdict({ ...base, changed: false }).why, 'unchanged');
     assert.deepStrictEqual(A.gateVerdict({ ...base, mode: 'always', changed: false }), { action: 'run' });
@@ -95,23 +94,6 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.match(A.stuckNudge(sig, 5), /npm test/);
   });
 
-  await check('usageBlocks', () => {
-    assert.strictEqual(A.usageBlocks(95, 90), true);
-    assert.strictEqual(A.usageBlocks(50, 90), false);
-    assert.strictEqual(A.usageBlocks(95, 0), false);
-    assert.strictEqual(A.usageBlocks(undefined, 90), false);
-  });
-
-  await check('usagePause: semana antes da janela de 5 h, sem orçamento não pausa', () => {
-    const base = { limitPct: 90, sessionBudget: 1000, weekBudget: 10000, weekRolling: false, now: 100, block: { tokens: 950, end: 5000 }, week: { tokens: 100, end: 90000 } };
-    assert.deepStrictEqual(A.usagePause(base), { window: '5h', pct: 95, until: 5000 });
-    assert.deepStrictEqual(A.usagePause({ ...base, week: { tokens: 9500, end: 90000 } }), { window: 'week', pct: 95, until: 90000 });
-    assert.strictEqual(A.usagePause({ ...base, week: { tokens: 9500, end: 90000 }, weekRolling: true }).until, 100 + 3600_000);
-    assert.strictEqual(A.usagePause({ ...base, sessionBudget: 0 }), undefined);
-    assert.strictEqual(A.usagePause({ ...base, limitPct: 0 }), undefined);
-    assert.strictEqual(A.usagePause({ ...base, block: undefined }), undefined);
-  });
-
   await check('juiz: prompt com todas as tentativas e leitura do ranking', () => {
     const at = l => ({ letter: l, branch: `try/x-${l.toLowerCase()}`, variation: '', commits: 1, files: 2, added: 3, deleted: 1, testsOk: l !== 'B', testTail: 'erro X', diff: 'd'.repeat(200_000) });
     const p = A.judgePrompt('fazer login', [at('A'), at('B')]);
@@ -166,26 +148,6 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.match(prompt, /YOUR PART \(ui\)/);
     assert.match(prompt, /already contains the work of: ai\/api/);
     assert.match(prompt, /post_note/);
-  });
-
-  await check('lições: mensagens da pessoa na transcrição e leitura da resposta', () => {
-    const lines = [
-      { type: 'user', message: { role: 'user', content: 'Implemente o login' } },
-      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'feito' }] } },
-      { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'saída' }] } },
-      { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'não use any, use os tipos do zod' }] } },
-      { type: 'user', isMeta: true, message: { role: 'user', content: 'meta' } },
-      { type: 'user', message: { role: 'user', content: '<command-name>/clear</command-name>' } },
-      'linha quebrada {',
-    ].map(x => (typeof x === 'string' ? x : JSON.stringify(x)));
-    assert.deepStrictEqual(A.userMessages(lines.join('\n')), ['Implemente o login', 'não use any, use os tipos do zod']);
-    const p = A.lessonsPrompt({ branch: 'ai/x', sessions: [['a', 'b']], interventions: ['1 negado'], review: ['bug'], claudeMd: '# Regras', diffStat: 'x | 1 +' });
-    assert.match(p, /\[2\] b/);
-    assert.match(p, /# Regras/);
-    const r = A.parseLessons('LESSONS:\n- use zod\n- rode npm test\nCLAUDE_MD:\n```markdown\n- Use zod.\n```');
-    assert.deepStrictEqual(r.lessons, ['use zod', 'rode npm test']);
-    assert.strictEqual(r.append, '- Use zod.');
-    assert.deepStrictEqual(A.parseLessons('LESSONS:\n- (none)\nCLAUDE_MD:\nqualquer'), { lessons: [], append: '' });
   });
 
   await check('qualidade por modelo: médias só das que ficaram prontas', () => {

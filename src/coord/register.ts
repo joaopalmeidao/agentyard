@@ -432,7 +432,7 @@ export class Coord implements vscode.Disposable {
     return [...this.agentTerms.running().values()].reduce((n, l) => n + l.length, 0);
   }
 
-  async batch(opts?: { paths?: string[]; prompt?: string; mode?: 'now' | 'queue' }) {
+  async batch(opts?: { paths?: string[]; prompt?: string }) {
     const s = this.ctl.state;
     if (!s) return;
     let targets = s.worktrees.filter(w => !w.prunable && !w.bare && !w.isBase);
@@ -457,31 +457,12 @@ export class Coord implements vscode.Disposable {
       opts?.prompt ??
       (await askTask({ title: t('Task for {0} worktree(s)', targets.length), prompt: t('What each agent should do; {0} becomes the branch name', '${branch}') }));
     if (!prompt?.trim()) return;
-    const mode =
-      opts?.mode ??
-      (
-        await vscode.window.showQuickPick(
-          [
-            { label: t('Open the agent in each one now'), detail: t('At most {0} at a time ({1}); the others wait', this.maxParallel(), 'worktreeGraph.batch.maxParallel'), v: 'now' as const },
-            { label: t('Add to each one\'s task queue'), detail: t('Runs when that worktree\'s current task is done'), v: 'queue' as const },
-          ],
-          { title: t('Batch task') },
-        )
-      )?.v;
-    if (!mode) return;
     const text = (w: WorktreeView) => prompt.replace(/\$\{branch\}/g, w.branch ?? w.name);
-    if (mode === 'queue') {
-      for (const w of targets) {
-        if (this.agentFlow) await this.agentFlow.tasks.add(w.path, w.branch, text(w));
-        else await vscode.commands.executeCommand('worktreeGraph.tasks.add', { path: w.path, branch: w.branch }, text(w));
-      }
-    } else {
-      const plan = batchPlan(targets, this.maxParallel(), this.runningAgents());
-      this.batchWaiting.push(...plan.later.map(w => ({ path: w.path, branch: w.branch, prompt: text(w) })));
-      for (const w of plan.now) await this.agentTerms.launchWithPrompt(w.path, w.branch, text(w));
-    }
+    const plan = batchPlan(targets, this.maxParallel(), this.runningAgents());
+    this.batchWaiting.push(...plan.later.map(w => ({ path: w.path, branch: w.branch, prompt: text(w) })));
+    for (const w of plan.now) await this.agentTerms.launchWithPrompt(w.path, w.branch, text(w));
     const msg =
-      mode === 'now' && this.batchWaiting.length
+      this.batchWaiting.length
         ? t('Task sent to {0} worktree(s); {1} waiting for a slot.', targets.length, this.batchWaiting.length)
         : t('Task sent to {0} worktree(s).', targets.length);
     vscode.window.showInformationMessage(skipped.length ? `${msg} ${t('{0} skipped for going over budget.', skipped.length)}` : msg);
@@ -506,16 +487,12 @@ export class Coord implements vscode.Disposable {
     return { tokens: c.get<number>('budget.perWorktreeTokens', 0) || undefined, usd: c.get<number>('budget.perWorktreeUsd', 0) || undefined };
   }
 
-  /** Worktrees que não recebem mais tarefas automáticas (budget.action = pause-queue e limite estourado). */
+  /** Worktrees que ficam fora das tarefas em lote (budget.action = pause-queue e limite estourado). */
   budgetBlocked(): Set<string> {
     const out = new Set<string>();
     if (!['pause-queue', 'block-prompts'].includes(this.ctl.cfg().get<string>('budget.action', 'warn'))) return out;
     for (const w of this.ctl.state?.worktrees ?? []) if (budgetLevel(w.claude, this.limits()).level === 'over') out.add(key(w.path));
     return out;
-  }
-
-  isBlocked(p: string): boolean {
-    return this.budgetBlocked().has(key(p));
   }
 
   private checkBudget() {

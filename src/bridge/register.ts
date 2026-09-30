@@ -293,7 +293,6 @@ export class ClaudeBridge implements vscode.Disposable {
       w.agents.length ? `  open agents: ${w.agents.join(', ')}` : '',
       w.request ? `  ${w.request.ref} ${w.request.state}: ${w.request.title} (${w.request.url})` : '',
       w.review ? `  ready for review (${w.review.commits} commit(s))` : '',
-      w.tasks ? `  queue: ${w.tasks.waiting} waiting${w.tasks.running ? `; running: ${w.tasks.running}` : ''}` : '',
       w.overlap ? `  touches the same ${w.overlap.files} file(s) as: ${w.overlap.with.join(', ')}` : '',
     ];
     return parts.filter(Boolean).join('\n');
@@ -365,20 +364,6 @@ export class ClaudeBridge implements vscode.Disposable {
           return `With ${this.nameOf(other)} (${other}):\n${o.files.map(f => `  ${f}`).join('\n')}`;
         })
         .join('\n\n');
-    });
-    this.addTool('list_tasks', async (args, { cwd }) => {
-      const w = this.resolve(args.worktree, cwd);
-      const q = flow().tasks.queue(w.path);
-      if (!q?.tasks.length) return `Empty queue in ${w.branch ?? w.name}.`;
-      return q.tasks.map((x, i) => `${i + 1}. [${x.status}] ${x.text}`).join('\n');
-    });
-    this.addTool('queue_task', async (args, { cwd }) => {
-      const text = String(args.text ?? '').trim();
-      if (!text) throw new Error('Give the task text.');
-      const w = this.resolve(args.worktree, cwd);
-      const task = await flow().tasks.add(w.path, w.branch, text);
-      const q = flow().tasks.queue(w.path);
-      return `Task queued for ${w.branch ?? w.name} (${task?.status === 'running' ? 'already sent to an agent' : `${q?.tasks.filter(x => x.status === 'waiting').length ?? 0} waiting`}).`;
     });
     this.addTool('create_worktree', async args => {
       const branch = String(args.branch ?? '').trim();

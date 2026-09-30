@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { createWorktree } from '../actions';
 import type { AgentTerminals } from '../agents';
-import type { TaskQueue } from '../agentFlow/tasks';
 import type { Controller } from '../controller';
 import { branchMatches } from '../git';
 import { t } from '../i18n';
@@ -34,7 +33,7 @@ export class Scheduler implements vscode.Disposable {
   /** Relógio (os testes trocam). */
   now: () => number = () => Date.now();
 
-  constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals, private readonly tasks: TaskQueue) {
+  constructor(private readonly ctl: Controller, private readonly agentTerms: AgentTerminals) {
     this.disposables.push(ctl.onDidChangeRepo(() => void this.start()));
   }
 
@@ -283,13 +282,8 @@ export class Scheduler implements vscode.Disposable {
           }
         }
         const prompt = renderTemplate(s.prompt, { date, branch: tg.branch, base, repo: this.ctl.state?.repoName ?? path.basename(repo.root) });
-        if (s.delivery === 'queue') {
-          await this.tasks.add(tg.path, tg.branch, prompt);
-          await rec(tg.branch, 'ok', t('task added to the queue'));
-        } else {
-          await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: tg.path, branch: tg.branch, prompt, agent: s.agent });
-          await rec(tg.branch, 'ok', s.agent ? t('agent opened ({0})', s.agent) : t('agent opened'));
-        }
+        await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: tg.path, branch: tg.branch, prompt, agent: s.agent });
+        await rec(tg.branch, 'ok', s.agent ? t('agent opened ({0})', s.agent) : t('agent opened'));
       }
       await this.setRuntime(s.id, { lastRun: nowMs, lastBaseSha: baseSha });
     } catch (e) {

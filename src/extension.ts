@@ -21,7 +21,6 @@ import { ReadySummaryService } from './env/readySummary';
 import { registerEnv } from './env/register';
 import { registerMigrations } from './migrations/register';
 import { registerTemplates } from './templates/register';
-import { registerLongProjects } from './longProject/register';
 import { registerIssues } from './issues/register';
 import { registerPipelines } from './hosting/pipelinesView';
 import { registerActivity } from './activityPanel';
@@ -66,9 +65,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
   };
   ctx.subscriptions.push(agentsTree, agentsView, agentTerms.onDidChange(agentsBadge));
   const agentFlow = registerAgentFlow(ctx, ctl, agentTerms);
-  const schedules = registerSchedule(ctx, ctl, agentTerms, agentFlow.tasks);
+  const schedules = registerSchedule(ctx, ctl, agentTerms);
   const coord = registerCoord(ctx, ctl, agentTerms, agentFlow);
-  ctl.taskBlocked = p => coord.isBlocked(p);
 
   /** Worktree por caminho (webview/árvore) ou por branch; sem nada, pergunta. */
   const launchAgent = async (arg: { path?: string; branch?: string } | undefined, agent?: string, mode?: 'reuse' | 'new') => {
@@ -94,15 +92,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const usagePanel = new UsagePanel(ctx, ctl, agentTerms, usage, claude);
   claude.liveLimits = () => usage.limits();
   ctx.subscriptions.push(usage, usagePanel, usage.onDidChange(() => claude.updateStatus()));
-  // com os limites reais da statusline, eles decidem; sem eles, a estimativa pelos logs
-  ctl.taskDeferred = () => {
-    const real = usage.pause();
-    return real === 'unknown' ? claude.usagePause() : real;
-  };
   const claudeTree = vscode.window.createTreeView('worktreeGraph.claudeSessions', { treeDataProvider: new ClaudeSessionsProvider(claude, ctl), showCollapseAll: true });
   ctx.subscriptions.push(claude, claudeTree, vscode.workspace.registerTextDocumentContentProvider(TRANSCRIPT_SCHEME, new TranscriptProvider(claude)));
   registerAgentAttention(ctx, ctl, agentTerms);
-  registerLongProjects(ctx, ctl, agentTerms, claude);
   registerSendToClaude(ctx, ctl, agentTerms);
   registerTaskDraft(ctx);
   registerClaudeVoice(ctx, ctl, agentTerms);
@@ -354,7 +346,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // o Claude de um projeto da lista continua falando com a janela depois de trocar o projeto ativo
   claudeIntegration.bridge.setProjects(() => projects.list().filter(p => !p.missing).map(p => p.path), projects.onDidChange);
   registerRemoteAccess(ctx, ctl, guard);
-  const autopilot = registerAutopilot(ctx, ctl, guard, { agentTerms, agentFlow, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration, coord, claude });
+  const autopilot = registerAutopilot(ctx, ctl, guard, { agentTerms, agentFlow, bridge: claudeIntegration.bridge, integration: claudeIntegration.integration, coord });
 
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
   reg('openGraph', () => GraphPanel.show(ctl, handler));
@@ -594,7 +586,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   });
 
   // Usado pelos testes de integração (test/).
-  const claudeConfig = registerClaudeConfig(ctx, ctl, { agentTerms, claude });
+  const claudeConfig = registerClaudeConfig(ctx, ctl, { agentTerms });
 
   const guards = registerGuards(ctx, ctl);
   registerMigrations(ctx, ctl);

@@ -47,7 +47,7 @@ function extensionFeatures(ctx: vscode.ExtensionContext): Feature[] {
 
 /**
  * "Ligar/desligar recursos": uma lista com caixas de seleção de tudo que dá para ligar e desligar —
- * aprender com o uso, hooks do usuário, servidores MCP (o do AgentYard e os do .mcp.json), plugins
+ * hooks do usuário, servidores MCP (o do AgentYard e os do .mcp.json), plugins
  * do Claude e todas as opções liga/desliga do AgentYard. Aplica só o que mudou.
  */
 export async function featuresMenu(ctx: vscode.ExtensionContext, svc: ClaudeConfigService) {
@@ -58,12 +58,6 @@ export async function featuresMenu(ctx: vscode.ExtensionContext, svc: ClaudeConf
   const sep = (label: string) => ({ label, kind: vscode.QuickPickItemKind.Separator }) as Feature;
 
   const claude: Feature[] = [
-    {
-      label: '$(mortar-board) ' + t('Learn from use'),
-      description: t('memories and skills saved by Claude itself (user CLAUDE.md)'),
-      on: svc.learningOn(),
-      apply: on => svc.setLearning(on),
-    },
     {
       label: '$(zap) ' + t('Your Claude Code hooks'),
       description: t('disableAllHooks in {0}', userSettings.replace(dir, '~/.claude')),

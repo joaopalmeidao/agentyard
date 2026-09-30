@@ -86,12 +86,11 @@ export class TemplateService {
     return { branch: wt.branch ?? path.basename(wt.path), base, file, selection, issue: (wt.branch && this.issueOf(wt.branch)) || '' };
   }
 
-  /** Envia o modelo pronto: agente agora (terminal novo) ou fila de tarefas da worktree. */
-  async send(wt: { path: string; branch?: string }, tpl: TaskTemplate, how: 'now' | 'queue', extra: Record<string, string> = {}) {
+  /** Envia o modelo pronto ao agente, num terminal novo da worktree. */
+  async send(wt: { path: string; branch?: string }, tpl: TaskTemplate, extra: Record<string, string> = {}) {
     const prompt = renderTemplate(tpl.prompt, { ...(await this.vars(wt)), ...extra });
-    if (how === 'queue') await vscode.commands.executeCommand('worktreeGraph.tasks.add', { path: wt.path, branch: wt.branch }, prompt);
-    else await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: wt.path, branch: wt.branch, prompt });
-    this.ctl.log(how === 'queue' ? t('Template "{0}" sent to {1} (queue)', tpl.name, wt.branch ?? wt.path) : t('Template "{0}" sent to {1} (agent)', tpl.name, wt.branch ?? wt.path));
+    await vscode.commands.executeCommand('worktreeGraph.launchAgentWithPrompt', { path: wt.path, branch: wt.branch, prompt });
+    this.ctl.log(t('Template "{0}" sent to {1} (agent)', tpl.name, wt.branch ?? wt.path));
     this.sent.fire({ template: tpl.name, path: wt.path, branch: wt.branch });
     return prompt;
   }
@@ -118,14 +117,7 @@ export class TemplateService {
       if (!typed) return;
       extra.selection = typed;
     }
-    const how = await vscode.window.showQuickPick(
-      [
-        { label: t('Open the agent now'), description: t('in a new terminal of the worktree'), v: 'now' as const },
-        { label: t('Add to the worktree\'s queue'), description: t('runs when the current task is ready'), v: 'queue' as const },
-      ],
-      { title: tpl.name },
-    );
-    if (how) await this.send(wt, tpl, how.v, extra);
+    await this.send(wt, tpl, extra);
   }
 
   async create() {

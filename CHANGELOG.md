@@ -1,6 +1,20 @@
 # Changelog
 
 ## Não lançado
+- **Saem Aprender com o uso, Projetos longos e a Fila de tarefas**:
+  - *Aprender com o uso*: o nó no topo de **Claude: configuração** e a caixa em **Ligar/desligar
+    recursos** (o bloco no CLAUDE.md do usuário), **Aprender com esta sessão** e **Aprender com as
+    sessões da worktree** (`claude.lessons`). Um bloco já gravado no seu CLAUDE.md fica lá até você
+    apagar. Continuam **Organizar a memória**, **Melhorar a skill** e mover memórias de worktrees para o projeto.
+  - *Projetos longos*: a view, os comandos `longProjects.*`, as settings `longProjects.*` e o script
+    do portão nos hooks do Claude (o hook `PreCompact` também sai). Os arquivos em
+    `.agentyard/projects/` ficam no repositório e podem ser apagados.
+  - *Fila de tarefas*: a view, os comandos `tasks.*`, as settings `tasks.autoAdvance` e
+    `tasks.pauseAtUsage` (a pausa pelo uso do Claude só valia para ela), o chip ☰ no painel e na
+    árvore e as ferramentas MCP `list_tasks` e `queue_task`. Agendamentos, modelos de tarefa e a
+    tarefa em lote sempre abrem o agente na hora (a tarefa em lote segue respeitando
+    `batch.maxParallel`); agendamentos gravados como "fila" passam a abrir o agente.
+    **Tentar abordagens** e **Comparar tentativas** vão para o título da view Agentes.
 - **Sem travas nos agentes**: saíram a guarda da worktree (`claude.guard`: bloqueio de edições e
   comandos em outras worktrees, troca de branch, force push, push na base, remover worktrees), a
   recusa de edição em arquivo reservado (`claude.claims`) e a negação de ação repetida

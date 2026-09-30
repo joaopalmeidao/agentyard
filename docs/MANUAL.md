@@ -13,7 +13,7 @@ veja o [README](../README.md); para o que mudou em cada versão, o [CHANGELOG](.
 3. [Onde fica cada coisa](#3-onde-fica-cada-coisa)
 4. [Worktrees](#4-worktrees)
 5. [Agentes (Claude Code, Codex, Gemini…)](#5-agentes-claude-code-codex-gemini)
-6. [Tarefas: fila, lote, modelos, agendamentos e projetos longos](#6-tarefas-fila-lote-modelos-agendamentos-e-projetos-longos)
+6. [Tarefas: lote, modelos e agendamentos](#6-tarefas-lote-modelos-e-agendamentos)
 7. [Revisar o que o agente fez](#7-revisar-o-que-o-agente-fez)
 8. [Merge](#8-merge)
 9. [Remoto: push, pull, PR/MR e pipelines](#9-remoto-push-pull-prmr-e-pipelines)
@@ -105,7 +105,7 @@ Barra do topo, da esquerda para a direita:
 
 Cada card mostra: branch, pasta, alterações não commitadas, `↓atrás ↑à frente` da base, previsão de
 conflito, situação no remoto (`☁`), PR/MR com o status da revisão, último pipeline, sessões e tokens
-do Claude, porta, orçamento, fila de tarefas e estado do sync (`⟳`).
+do Claude, porta, orçamento e estado do sync (`⟳`).
 
 Chips de revisão do PR/MR: **✓** aprovado, **✎** mudanças pedidas, **◷** aguardando, **💬**
 conversas abertas.
@@ -120,7 +120,6 @@ conversas abertas.
 | **Sessões Claude** | sessões do Claude Code agrupadas por worktree |
 | **Claude: configuração** | skills, comandos, permissões, modelo, hooks e memória |
 | **Pipelines** | GitHub Actions, GitLab CI, Bitbucket Pipelines, Azure Pipelines |
-| **Fila de tarefas** | tarefas esperando cada worktree |
 | **Agendamentos** | tarefas recorrentes para os agentes |
 | **Fila de merge** | branches esperando para entrar na base, uma por vez |
 | **Pull requests** | PRs/MRs do remoto agrupados |
@@ -262,7 +261,7 @@ Claude aberto pela extensão; `worktreeGraph.claude.appendSystemPrompt` vai como
 ```
 
 - `command`: o que roda ao clicar. Com `{prompt}`, a extensão pede a tarefa antes.
-- `promptCommand`: usado quando a extensão já tem a tarefa pronta (resolver conflito, issue, fila…).
+- `promptCommand`: usado quando a extensão já tem a tarefa pronta (resolver conflito, issue, agendamento…).
 - O terminal recebe as variáveis `WTGRAPH_BRANCH`, `WTGRAPH_BASE` e `WTGRAPH_WORKTREE`.
 - A tarefa vai por arquivo e entra como um único argumento, então aspas e quebras de linha
   funcionam em PowerShell, bash e cmd.
@@ -293,16 +292,10 @@ O card avisa quando duas worktrees mexem nos mesmos arquivos (risco de conflito 
 ### Orçamento por worktree
 
 `worktreeGraph.budget.perWorktreeTokens` e/ou `perWorktreeUsd` definem um limite. O aviso sai aos
-80% e aos 100%. Com `worktreeGraph.budget.action: "pause-queue"`, a worktree que estourou deixa de
-receber tarefas da fila e dos agendamentos.
+80% e aos 100%. Com `worktreeGraph.budget.action: "pause-queue"`, a worktree que estourou fica de
+fora das tarefas em lote.
 
-## 6. Tarefas: fila, lote, modelos, agendamentos e projetos longos
-
-### Fila de tarefas
-
-**Adicionar tarefa para o agente…** enfileira uma tarefa numa worktree. Quando o agente termina a
-atual, a próxima vai sozinha (`worktreeGraph.tasks.autoAdvance`). Na view **Fila de tarefas**:
-rodar agora, subir/descer, remover, marcar como pronta/falhou e limpar as terminadas.
+## 6. Tarefas: lote, modelos e agendamentos
 
 ### Tarefa em lote
 
@@ -351,36 +344,6 @@ Code fechado: executar uma vez ao abrir, ou pular.
 
 Com várias janelas abertas, só uma executa os agendamentos de cada repositório. Na view: editar,
 duplicar, pausar/retomar, executar agora, histórico e excluir.
-
-### Projetos longos
-
-Para o que não cabe numa sessão do agente. **Novo projeto longo…** (view **Projetos longos**, ou
-no menu da worktree) pede o objetivo, o comando de verificação (vem de `autoSync.testCommand` ou
-do projeto: `npm test`, `cargo test`, `pytest`…) e se para para revisão a cada marco ou avança sozinho.
-
-1. **Planejamento.** O Claude abre só para planejar: explora o código, pergunta o necessário e
-   escreve `.agentyard/projects/<projeto>/PLAN.md`. Cada marco é um título `## [M1] Título` com
-   um checklist `- [ ]`. Quando o plano tem marcos, aparece **Iniciar marco [M1]**.
-2. **Um marco por sessão.** Cada marco abre uma sessão nova do Claude, com contexto limpo. A
-   memória está nos arquivos: o hook `SessionStart` injeta o objetivo, os marcos, o checklist do
-   marco atual, as últimas entradas do `PROGRESS.md` e as regras, também depois de compactar ou retomar.
-3. **Portão no Stop.** O agente só consegue parar quando: o checklist do marco está todo marcado
-   no PLAN.md, o PROGRESS.md ganhou uma entrada neste turno, não há nada sem commit e a verificação
-   passa. Se faltar algo, o motivo (com as últimas linhas da verificação que falhou) volta para o
-   agente, que continua. Se ele depende de uma pessoa, escreve `BLOCKED.md` na pasta do projeto e para.
-4. **Próximo marco.** Com o portão liberado, o marco fica feito e o próximo começa numa sessão
-   nova, ou espera sua revisão ("Revisar alterações" / "Iniciar [M2]").
-
-O projeto pausa e avisa quando: o portão barrou `longProjects.gateRetries` vezes seguidas, o marco
-já teve `longProjects.maxSessionsPerMilestone` sessões sem terminar, o orçamento da worktree
-acabou (`budget.action: pause-queue`), o terminal do marco foi fechado ou o agente escreveu o
-BLOCKED.md. Um marco rodando há mais de `longProjects.milestoneMinutes` gera um aviso.
-
-Na view: marcos com o checklist, tempo e tokens de cada um; iniciar/continuar, pausar, ir para o
-terminal, rodar a verificação, abrir plano e diário, planejar de novo, refazer um marco numa
-sessão nova e marcar como feito. PLAN.md, PROGRESS.md e project.json são commitados na branch; o
-estado de execução fica na extensão. O projeto só aparece na worktree da branch que o criou.
-Precisa do Claude Code com `claude.trackState` ligado (usa os hooks dele).
 
 ## 7. Revisar o que o agente fez
 
@@ -736,7 +699,7 @@ executável do VS Code como node: não precisa de Node.js. Cada janela abre um s
 - **Orçamento**: com `worktreeGraph.budget.action` = `block-prompts`, uma worktree que estourou o
   orçamento não começa outro turno.
 - **Ferramentas MCP**: `status`, `list_worktrees`, `overlaps`, `pr_feedback`, `ci_status`,
-  `review_comments`, `turn_diff`, `list_tasks`, `queue_task`, `create_worktree`, `mark_ready` (o
+  `review_comments`, `turn_diff`, `create_worktree`, `mark_ready` (o
   agente avisa que terminou) e `notify`.
 
 Para o Claude aberto fora do AgentYard, **Integrar o Claude Code com o AgentYard no projeto…** grava
@@ -876,8 +839,6 @@ Todas começam com `worktreeGraph.`. As mais usadas:
 | `protectedBranches`, `protection.mode` | automático, `confirm` | ver seção 14 |
 | `checks.*` | | ver seção 14 |
 | `agents.idleMinutes` | `3` | minutos parado para considerar que o agente terminou |
-| `tasks.autoAdvance` | `true` | próxima tarefa da fila vai sozinha |
-| `longProjects.*` | `3`, `120`, `3` | projetos longos: tentativas do portão, aviso de tempo, sessões por marco |
 | `batch.maxParallel` | `3` | agentes simultâneos na tarefa em lote |
 | `budget.*` | `0` | orçamento por worktree |
 | `fetch.intervalMinutes` | `0` | fetch automático |

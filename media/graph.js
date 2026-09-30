@@ -418,12 +418,6 @@
     return `<span class="chip ok link" data-action="reviewReady" data-path="${esc(w.path)}" data-branch="${esc(w.branch || '')}" title="${w.review.commits ? t('The agent finished with {0} new commit(s). Click to review.', w.review.commits) : t('The agent finished. Click to review.')}">✓ ${t('ready for review')}</span>`;
   }
 
-  function tasksChip(w) {
-    const tk = w.tasks;
-    const n = tk.waiting + (tk.running ? 1 : 0);
-    return `<span class="chip info link" data-action="openTasks" title="${tk.running ? `${t('Running: {0}', esc(tk.running))}\n` : ''}${t('{0} queued', tk.waiting)}">☰ ${t('{0} task(s)', n)}</span>`;
-  }
-
   const arrows = (behind, ahead) => [behind ? `↓${behind}` : '', ahead ? `↑${ahead}` : ''].filter(Boolean).join(' ');
 
   /** Branch empilhada: o pai; ↻ quando precisa de restack (clique faz o restack, ou mostra a pilha). */
@@ -553,7 +547,7 @@
       return `<tr class="${w.changes ? 'dirty' : ''}" draggable="true" data-drag="${b}" data-drop="${b}" data-menu="${b}">
         <td class="c-star">${starBtn(w)}</td>
         <td class="c-name"><span class="branch">${esc(w.name)}</span><div class="path" title="${esc(w.path)}">${esc(w.path)}</div></td>
-        <td class="c-chips">${w.size ? sizeChip(w.size) : ''}${w.review ? reviewChip(w) : ''}${w.tasks ? tasksChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.overlap ? overlapChip(w) : ''}${w.budget ? budgetChip(w) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
+        <td class="c-chips">${w.size ? sizeChip(w.size) : ''}${w.review ? reviewChip(w) : ''}${st}${cmp}${conf}${w.remote.ahead || !w.remote.published ? remoteChip(w) : ''}${w.request ? requestChip(w.request) : ''}${w.overlap ? overlapChip(w) : ''}${w.budget ? budgetChip(w) : ''}${w.branch && pipelineFor(w.branch) ? pipelineChip(pipelineFor(w.branch), true) : ''}${w.sync && state.autoSync.enabled ? syncChip(w) : ''}</td>
         <td class="subject" title="${esc(w.subject)}">${esc(w.subject)}</td>
         <td class="c-when">${lastChange(w)}</td>
         <td class="row-actions">
@@ -598,7 +592,6 @@
           chips.push(`<span class="chip ${waiting ? 'warn' : 'agent'} link" data-action="agents.pick" data-path="${esc(w.path)}" title="${esc(tip)}">${waiting ? '●' : '✦'} ${esc(agentsLabel(w.agents))}${status}</span>`);
         }
         if (w.review) chips.push(reviewChip(w));
-        if (w.tasks) chips.push(tasksChip(w));
         if (w.request) chips.push(requestChip(w.request));
         if (w.stack) chips.push(stackChip(w));
         if (w.overlap) chips.push(overlapChip(w));
@@ -1231,7 +1224,6 @@
         if (wt.agents && wt.agents.length) agent.push(item('agents.pick', t('Agents open here ({0})…', wt.agents.length), { path: wt.path }, 'agent'));
         if (agent.length) agent.push('<hr>');
         agent.push(item('claude.launchWithOptions', `✦ ${t('Claude Code with options (model, permission mode)…')}`, { path: wt.path, branch: b }, 'agent'));
-        agent.push(item('addTask', `☰ ${t('Add task for the agent…')}`, { path: wt.path, branch: b }));
         agent.push(item('templates.use', `✦ ${t('Use task template…')}`, { path: wt.path, branch: b }, 'agent'));
         if (req) agent.push(item('sendPrFeedback', `✦ ${t('Send the {0} review feedback to the agent', esc(req.ref))}`, { path: wt.path, branch: b }, 'agent'));
         agent.push(item('turns.pick', t('Agent turns (checkpoints)…'), { path: wt.path, branch: b }));

@@ -71,8 +71,6 @@ export interface WorktreeView extends Worktree {
   };
   /** O agente terminou e deixou commits: "pronto para revisar" (src/agentFlow). */
   review?: { at: number; commits: number };
-  /** Fila de tarefas do agente nesta worktree. */
-  tasks?: { waiting: number; running?: string };
   /** Arquivos em comum com outras worktrees ativas (src/coord). */
   overlap?: { with: string[]; files: number };
   /** Orçamento de tokens/US$ perto do fim ou estourado (src/coord). */

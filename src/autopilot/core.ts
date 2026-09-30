@@ -55,11 +55,10 @@ export function gateCommands(own: string[], beforeMerge: string[], testCommand: 
 export type GateVerdict = { action: 'skip'; why: string } | { action: 'run' };
 
 /** Roda o portão neste Stop? */
-export function gateVerdict(o: { mode: StopGateMode; commands: string[]; changed: boolean; project?: boolean; headless?: boolean }): GateVerdict {
+export function gateVerdict(o: { mode: StopGateMode; commands: string[]; changed: boolean; headless?: boolean }): GateVerdict {
   if (o.mode === 'off') return { action: 'skip', why: 'off' };
   if (!o.commands.length) return { action: 'skip', why: 'no-commands' };
-  // projeto longo tem o portão dele; `claude -p` da extensão não é um agente trabalhando
-  if (o.project) return { action: 'skip', why: 'project' };
+  // `claude -p` da extensão não é um agente trabalhando
   if (o.headless) return { action: 'skip', why: 'headless' };
   if (o.mode === 'changes' && !o.changed) return { action: 'skip', why: 'unchanged' };
   return { action: 'run' };
@@ -193,74 +192,6 @@ export function parseJudge(text: string, letters: string[]): JudgeResult | undef
   return { ranking, reasons, recommendation };
 }
 
-// ---------------------------------------------------------------- lições
-
-/** Mensagens que a pessoa digitou numa transcrição do Claude Code (JSONL), sem resultados de ferramenta. */
-export function userMessages(jsonl: string, max = 40): string[] {
-  const out: string[] = [];
-  for (const line of jsonl.split(/\r?\n/)) {
-    if (!line.includes('"user"')) continue;
-    let e: any;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (e?.type !== 'user' || e.isMeta || e.isSidechain) continue;
-    const c = e.message?.content;
-    const text = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((p: any) => p?.type === 'text').map((p: any) => String(p.text ?? '')).join('\n') : '';
-    const clean = text.trim();
-    // comandos internos e avisos do próprio Claude Code não são o que a pessoa pediu
-    if (!clean || /^<(command-|local-command|system-reminder|user-memory)/.test(clean) || clean.startsWith('Caveat:')) continue;
-    out.push(clean.length > 1500 ? `${clean.slice(0, 1500)}…` : clean);
-  }
-  return out.slice(-max);
-}
-
-export interface LessonsInput {
-  branch: string;
-  /** Mensagens da pessoa, por sessão (a primeira costuma ser a tarefa; as outras, correções). */
-  sessions: string[][];
-  interventions: string[];
-  review?: string[];
-  claudeMd: string;
-  diffStat: string;
-}
-
-export function lessonsPrompt(o: LessonsInput): string {
-  return [
-    `A coding agent worked on branch ${o.branch}. Find what should be written down for the next agents working on this repository, so the same corrections are not needed again.`,
-    'Look at what the person had to tell the agent after the initial task (corrections, rules, preferences, things the agent got wrong), the interventions and the review findings.',
-    'Only keep lessons that are durable and general for this repository (conventions, commands, architecture rules, pitfalls). Skip one-off details of this task and anything already in CLAUDE.md.',
-    ...o.sessions.map((msgs, i) => `=== Session ${i + 1}: messages from the person\n${msgs.map((m, j) => `[${j + 1}] ${m}`).join('\n')}`),
-    o.interventions.length ? `=== Interventions\n${o.interventions.map(x => `- ${x}`).join('\n')}` : '',
-    o.review?.length ? `=== Automatic review findings\n${o.review.map(x => `- ${x}`).join('\n')}` : '',
-    `=== Files changed\n${o.diffStat || '(none)'}`,
-    `=== Current CLAUDE.md\n${o.claudeMd.trim() || '(does not exist)'}`,
-    'Answer in this exact format and nothing else:',
-    'LESSONS:',
-    '- <lesson, one line each; "(none)" if there is nothing worth keeping>',
-    'CLAUDE_MD:',
-    '<the markdown to APPEND to CLAUDE.md, short and imperative, matching its style and language; empty if nothing>',
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-}
-
-export function parseLessons(text: string): { lessons: string[]; append: string } {
-  const [head, tailPart = ''] = text.split(/^CLAUDE_MD:\s*$/m);
-  const lessons = (head.split(/LESSONS:\s*/i)[1] ?? '')
-    .split(/\r?\n/)
-    .map(l => l.trim())
-    .filter(l => /^[-*]\s+\S/.test(l))
-    .map(l => l.replace(/^[-*]\s+/, ''))
-    .filter(l => !/^\(?none\)?\.?$/i.test(l));
-  let append = tailPart.trim();
-  const fence = append.match(/^```(?:markdown|md)?\n([\s\S]*?)\n```$/);
-  if (fence) append = fence[1].trim();
-  return { lessons, append: lessons.length ? append : '' };
-}
-
 // ---------------------------------------------------------------- qualidade por modelo de tarefa
 
 export interface TemplateRun {
@@ -369,39 +300,3 @@ export function stuckNudge(sig: string, repeats: number): string {
   return `AgentYard: you have repeated ${what} ${repeats} times in a row in this turn without getting anywhere. Stop and rethink: read the error carefully, check your assumptions, try a different approach. If you are blocked by something only a person can solve, explain it to the user and stop.`;
 }
 
-// ---------------------------------------------------------------- limite de uso
-
-/** Pausar a fila? `pct` é o uso estimado da janela (0–100+); `limit` 0 desliga. */
-export function usageBlocks(pct: number | undefined, limit: number): boolean {
-  return limit > 0 && typeof pct === 'number' && pct >= limit;
-}
-
-export interface UsagePause {
-  /** Quando tentar de novo. */
-  until: number;
-  window: '5h' | 'week';
-  pct: number;
-}
-
-/**
- * A fila deve esperar? Compara o uso estimado da janela de 5 h e da semana com os orçamentos
- * (`claude.sessionBudgetTokens`, `weeklyBudgetTokens`); sem orçamento, nunca pausa. Na semana
- * corrida não há hora de virada: tenta de novo em 1 h.
- */
-export function usagePause(o: {
-  limitPct: number;
-  block?: { tokens: number; end: number };
-  sessionBudget: number;
-  week: { tokens: number; end: number };
-  weekBudget: number;
-  weekRolling: boolean;
-  now: number;
-}): UsagePause | undefined {
-  if (o.limitPct <= 0) return undefined;
-  const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : undefined);
-  const w = pct(o.week.tokens, o.weekBudget);
-  if (usageBlocks(w, o.limitPct)) return { window: 'week', pct: w!, until: o.weekRolling ? o.now + 3600_000 : o.week.end };
-  const b = o.block ? pct(o.block.tokens, o.sessionBudget) : undefined;
-  if (o.block && usageBlocks(b, o.limitPct)) return { window: '5h', pct: b!, until: o.block.end };
-  return undefined;
-}

@@ -19,7 +19,6 @@ export interface Schedule {
   target: Target;
   prompt: string;
   agent?: string;
-  delivery: 'launch' | 'queue';
   conditions: { onlyClean?: boolean; onlyIfBaseMoved?: boolean; skipIfAgentOpen?: boolean };
   /** Horário que passou com o VS Code fechado: executar uma vez ao abrir, ou pular. */
   missed: 'run' | 'skip';

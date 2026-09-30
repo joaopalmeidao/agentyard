@@ -88,7 +88,7 @@ export class StopGate implements vscode.Disposable {
     const mode = this.mode();
     const commands = this.commands();
     const changed = mode === 'changes' && commands.length ? await this.integration.turnChanged(e) : true;
-    const verdict = gateVerdict({ mode, commands, changed, project: !!e.open?.project, headless: e.headless === true });
+    const verdict = gateVerdict({ mode, commands, changed, headless: e.headless === true });
     if (verdict.action === 'skip') return undefined;
 
     const where = w.branch ?? w.name;
