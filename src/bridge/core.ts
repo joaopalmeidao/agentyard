@@ -341,8 +341,7 @@ export const HOOK_EVENTS: { event: string; matcher?: string; timeout: number }[]
   { event: 'PreToolUse', matcher: GUARDED_TOOLS, timeout: 20 },
   // espera você responder no VS Code; sem resposta, o Claude mostra o pedido no terminal
   { event: 'PermissionRequest', timeout: 600 },
-  // o portão do Stop roda as checagens do projeto: pode demorar (src/autopilot/stopGate.ts)
-  { event: 'Stop', timeout: 1800 },
+  { event: 'Stop', timeout: 20 },
 ];
 
 /** Quanto o hook espera a janela responder, por evento (um pouco menos que o timeout do Claude). */

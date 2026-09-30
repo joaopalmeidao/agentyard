@@ -39,11 +39,9 @@ export function tail(text: string, n: number): string {
   return lines.length > n ? `…\n${lines.slice(-n).join('\n')}` : lines.join('\n');
 }
 
-// ---------------------------------------------------------------- portão no Stop
+// ---------------------------------------------------------------- checagens
 
-export type StopGateMode = 'off' | 'changes' | 'always';
-
-/** Comandos do portão: os próprios; vazio cai nas checagens antes do merge e depois no testCommand. */
+/** Comandos das checagens: os próprios; vazio cai nas checagens antes do merge e depois no testCommand. */
 export function gateCommands(own: string[], beforeMerge: string[], testCommand: string): string[] {
   for (const list of [own, beforeMerge, [testCommand]]) {
     const clean = list.map(c => (c ?? '').trim()).filter(Boolean);
@@ -52,27 +50,6 @@ export function gateCommands(own: string[], beforeMerge: string[], testCommand: 
   return [];
 }
 
-export type GateVerdict = { action: 'skip'; why: string } | { action: 'run' };
-
-/** Roda o portão neste Stop? */
-export function gateVerdict(o: { mode: StopGateMode; commands: string[]; changed: boolean; headless?: boolean }): GateVerdict {
-  if (o.mode === 'off') return { action: 'skip', why: 'off' };
-  if (!o.commands.length) return { action: 'skip', why: 'no-commands' };
-  // `claude -p` da extensão não é um agente trabalhando
-  if (o.headless) return { action: 'skip', why: 'headless' };
-  if (o.mode === 'changes' && !o.changed) return { action: 'skip', why: 'unchanged' };
-  return { action: 'run' };
-}
-
-/** Motivo que o Claude recebe quando o portão não deixa parar. */
-export function gateBlockReason(failed: string, output: string, attempt: number, max: number): string {
-  return [
-    `AgentYard: the checks failed (${failed}). Fix the problem before finishing; do not disable or skip the checks.`,
-    `Attempt ${attempt} of ${max}. If the failure is not caused by your change (environment, flaky test) or you cannot fix it, explain why to the user and stop.`,
-    '',
-    tail(output, 60),
-  ].join('\n');
-}
 
 // ---------------------------------------------------------------- revisor automático
 

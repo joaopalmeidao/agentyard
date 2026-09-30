@@ -13,7 +13,6 @@ import { Orchestrator } from './orchestrator';
 import type { TemplateService } from '../templates/register';
 import { TemplateStats } from './templateStats';
 import { AutoReviewer } from './reviewer';
-import { StopGate } from './stopGate';
 import { StuckWatch } from './stuck';
 
 interface Deps {
@@ -41,7 +40,6 @@ export async function worktreeOf(ctl: Controller, arg: WtArg, placeHolder: strin
 }
 
 export interface Autopilot {
-  gate: StopGate;
   reviewer: AutoReviewer;
   board: AgentBoard;
   orchestrator: Orchestrator;
@@ -51,14 +49,10 @@ export interface Autopilot {
 
 /**
  * Piloto automático dos agentes: o que fecha o ciclo sem precisar de uma pessoa a cada passo
- * (portão no Stop, revisor automático), coordena os agentes entre si e os mantém rodando.
+ * (revisor automático), coordena os agentes entre si e os mantém rodando.
  */
 export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller, guard: <T extends unknown[]>(fn: (...a: T) => unknown) => (...a: T) => Promise<void>, d: Deps): Autopilot {
   const reg = (id: string, fn: (...a: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
-
-  const gate = new StopGate(ctl, d.bridge, d.integration, d.agentFlow, d.agentTerms);
-  ctx.subscriptions.push(gate);
-  reg('claude.configureStopGate', () => gate.configure());
 
   const reviewer = new AutoReviewer(ctl, d.bridge, d.integration, d.agentFlow, d.agentTerms);
   ctx.subscriptions.push(reviewer);
@@ -94,5 +88,5 @@ export function registerAutopilot(ctx: vscode.ExtensionContext, ctl: Controller,
     reg('templates.stats', () => stats.report());
   };
 
-  return { gate, reviewer, board, orchestrator, trackTemplates };
+  return { reviewer, board, orchestrator, trackTemplates };
 }

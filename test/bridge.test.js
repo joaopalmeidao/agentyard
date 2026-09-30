@@ -263,7 +263,7 @@ fs.mkdirSync(path.join(wt, 'src'), { recursive: true });
     assert.deepStrictEqual(Object.keys(h).sort(), ['PermissionRequest', 'PreToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit']);
     assert.strictEqual(h.PreToolUse[0].matcher, C.GUARDED_TOOLS);
     assert.strictEqual(h.PermissionRequest[0].hooks[0].timeout, 600);
-    assert.ok(C.hookWaitMs('PermissionRequest') > 500_000 && C.hookWaitMs('Stop') > 1_000_000 && C.hookWaitMs('SessionStart') < 30_000);
+    assert.ok(C.hookWaitMs('PermissionRequest') > 500_000 && C.hookWaitMs('Stop') < 30_000 && C.hookWaitMs('SessionStart') < 30_000);
     const m = C.launchMcpConfig('/x/Code.exe', '/home/u/.agentyard');
     assert.strictEqual(m.mcpServers.agentyard.command, '/x/Code.exe');
     assert.strictEqual(m.mcpServers.agentyard.env.ELECTRON_RUN_AS_NODE, '1');

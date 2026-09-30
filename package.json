@@ -1487,12 +1487,6 @@
         "category": "AgentYard"
       },
       {
-        "command": "worktreeGraph.claude.configureStopGate",
-        "title": "%command.claude.configureStopGate.title%",
-        "category": "AgentYard",
-        "icon": "$(shield)"
-      },
-      {
         "command": "worktreeGraph.agents.configureAutoReview",
         "title": "%command.agents.configureAutoReview.title%",
         "category": "AgentYard",
@@ -1931,11 +1925,6 @@
           "command": "missionControl",
           "when": "view == worktreeGraph.agents",
           "group": "navigation@4"
-        },
-        {
-          "command": "worktreeGraph.claude.configureStopGate",
-          "when": "view == worktreeGraph.agents",
-          "group": "7_autopilot@1"
         },
         {
           "command": "worktreeGraph.agents.configureAutoReview",
@@ -4168,13 +4157,11 @@
           "type": "string",
           "enum": [
             "warn",
-            "pause-queue",
-            "block-prompts"
+            "pause-queue"
           ],
           "enumDescriptions": [
             "%config.budget.action.enumDescriptions.0%",
-            "%config.budget.action.enumDescriptions.1%",
-            "%config.budget.action.enumDescriptions.2%"
+            "%config.budget.action.enumDescriptions.1%"
           ],
           "default": "warn",
           "description": "%config.budget.action.description%"
@@ -4283,35 +4270,6 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "%config.pullRequests.describeWithClaude.markdownDescription%"
-        },
-        "worktreeGraph.claude.stopGate": {
-          "type": "string",
-          "default": "changes",
-          "enum": [
-            "changes",
-            "always",
-            "off"
-          ],
-          "enumDescriptions": [
-            "%config.claude.stopGate.enumDescriptions.0%",
-            "%config.claude.stopGate.enumDescriptions.1%",
-            "%config.claude.stopGate.enumDescriptions.2%"
-          ],
-          "description": "%config.claude.stopGate.description%"
-        },
-        "worktreeGraph.claude.stopGate.commands": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "%config.claude.stopGate.commands.description%"
-        },
-        "worktreeGraph.claude.stopGate.maxRetries": {
-          "type": "number",
-          "default": 3,
-          "minimum": 1,
-          "description": "%config.claude.stopGate.maxRetries.description%"
         },
         "worktreeGraph.agents.autoReview": {
           "type": "string",

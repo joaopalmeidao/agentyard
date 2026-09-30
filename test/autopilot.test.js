@@ -28,16 +28,6 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.deepStrictEqual(A.gateCommands([], [], ''), []);
   });
 
-  await check('gateVerdict: desligado, sem comando, headless e turno sem mudança pulam', () => {
-    const base = { mode: 'changes', commands: ['npm test'], changed: true };
-    assert.deepStrictEqual(A.gateVerdict(base), { action: 'run' });
-    assert.strictEqual(A.gateVerdict({ ...base, mode: 'off' }).why, 'off');
-    assert.strictEqual(A.gateVerdict({ ...base, commands: [] }).why, 'no-commands');
-    assert.strictEqual(A.gateVerdict({ ...base, headless: true }).why, 'headless');
-    assert.strictEqual(A.gateVerdict({ ...base, changed: false }).why, 'unchanged');
-    assert.deepStrictEqual(A.gateVerdict({ ...base, mode: 'always', changed: false }), { action: 'run' });
-  });
-
   await check('runCommands para no primeiro que falha e junta a saída', async () => {
     const ok = await A.runCommands(['node -e "console.log(1)"', 'node -e "console.log(2)"'], root, 30000);
     assert.ok(ok.ok);
@@ -47,15 +37,6 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wtg-autopilot-'));
     assert.match(bad.failed, /quebrou/);
     assert.match(bad.output, /quebrou/);
     assert.doesNotMatch(bad.output, /nunca/);
-  });
-
-  await check('gateBlockReason traz a tentativa e só o fim do log', () => {
-    const log = Array.from({ length: 200 }, (_, i) => `linha ${i}`).join('\n');
-    const r = A.gateBlockReason('npm test', log, 2, 3);
-    assert.match(r, /npm test/);
-    assert.match(r, /Attempt 2 of 3/);
-    assert.match(r, /linha 199/);
-    assert.doesNotMatch(r, /linha 100\n/);
   });
 
   await check('parseReview: OK, CHANGES com itens e resposta sem formato', () => {

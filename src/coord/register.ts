@@ -217,7 +217,7 @@ export class Coord implements vscode.Disposable {
     return { tokens: c.get<number>('budget.perWorktreeTokens', 0) || undefined, usd: c.get<number>('budget.perWorktreeUsd', 0) || undefined };
   }
 
-  /** Worktrees que ficam fora das tarefas em lote (budget.action = pause-queue e limite estourado). */
+  /** Worktrees que ficam fora das tarefas em lote (budget.action = pause-queue, ou o antigo block-prompts, e limite estourado). */
   budgetBlocked(): Set<string> {
     const out = new Set<string>();
     if (!['pause-queue', 'block-prompts'].includes(this.ctl.cfg().get<string>('budget.action', 'warn'))) return out;

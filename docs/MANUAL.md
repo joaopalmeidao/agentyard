@@ -666,8 +666,6 @@ executável do VS Code como node: não precisa de Node.js. Cada janela abre um s
   worktree, a branch, a base, à frente/atrás, conflito previsto, arquivos que outras worktrees estão
   mexendo, PR/MR e o último CI. Instruções a mais em `worktreeGraph.claude.extraContext`.
 - **Plano**: no modo `plan`, quando o Claude propõe o plano, a notificação oferece **Ver plano**.
-- **Orçamento**: com `worktreeGraph.budget.action` = `block-prompts`, uma worktree que estourou o
-  orçamento não começa outro turno.
 - **Ferramentas MCP**: `status`, `list_worktrees`, `overlaps`, `pr_feedback`, `ci_status`,
   `review_comments`, `turn_diff`, `create_worktree`, `mark_ready` (o
   agente avisa que terminou) e `notify`.

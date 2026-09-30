@@ -1,6 +1,12 @@
 # Changelog
 
 ## Não lançado
+- **Hooks do Claude só notificam**: sai o portão no Stop (`claude.stopGate`, `.commands`,
+  `.maxRetries` e **Checagens antes de o Claude parar…**), que rodava as checagens e não deixava o
+  agente parar, e o `budget.action: block-prompts`, que recusava o prompt da worktree fora do
+  orçamento (quem usava passa a ter o efeito de `pause-queue`). O hook `Stop` volta a ter timeout
+  curto. Ficam o contexto da sessão, o aviso do plano, a permissão respondida no VS Code, o estado
+  e o "pronto para revisar". As tentativas usam `checks.beforeMerge` ou o `autoSync.testCommand`.
 - **Saem Aprender com o uso, Projetos longos e a Fila de tarefas**:
   - *Aprender com o uso*: o nó no topo de **Claude: configuração** e a caixa em **Ligar/desligar
     recursos** (o bloco no CLAUDE.md do usuário), **Aprender com esta sessão** e **Aprender com as
