@@ -1,6 +1,12 @@
 # Changelog
 
 ## Não lançado
+- **Issues, pipelines e PRs numa view só**: as três views da barra lateral viraram a view **Issues,
+  pipelines e PRs**, com uma seção para cada (com contagens ao lado: falhas de CI e PRs aguardando sua
+  revisão). Os botões que ficavam no título de cada view (nova issue, escopo, disparar pipeline,
+  filtrar PRs, atualizar) agora ficam na linha da seção e no botão direito dela; o título tem um
+  **Atualizar** para as três e o menu "…" mantém as conexões (remoto, Jira, Redmine). O badge de PRs
+  aguardando revisão e o chip de PR do painel passam a apontar para esta view.
 - **Sem travas nos agentes**: saíram a guarda da worktree (`claude.guard`: bloqueio de edições e
   comandos em outras worktrees, troca de branch, force push, push na base, remover worktrees), a
   recusa de edição em arquivo reservado (`claude.claims`) e a negação de ação repetida

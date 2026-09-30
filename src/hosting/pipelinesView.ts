@@ -3,6 +3,7 @@ import { createWorktree } from '../actions';
 import { fillTemplate } from '../agents';
 import type { Controller } from '../controller';
 import { t } from '../i18n';
+import type { RemoteView } from './remoteView';
 import { formatDuration, Pipeline, PipelineClient, pipelineClient, PipelineJob, PipelineStatus, tailLog } from './pipelines';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
@@ -397,6 +398,8 @@ class InfoItem extends vscode.TreeItem {
 
 type Node = PipelineItem | JobItem | InfoItem;
 
+const isPipelineNode = (n: unknown): n is Node => n instanceof PipelineItem || n instanceof JobItem || n instanceof InfoItem;
+
 export class PipelineTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.emitter.event;
@@ -418,7 +421,7 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<Node> {
       if (!list.length) {
         return [
           new InfoItem(
-            this.svc.scope === 'worktrees' ? t('No pipelines on branches with a worktree (show all from the title bar)') : t('No pipelines'),
+            this.svc.scope === 'worktrees' ? t('No pipelines on branches with a worktree (show all with the button on this section)') : t('No pipelines'),
             'worktreeGraph.pipelines.refresh',
             'check',
           ),
@@ -438,11 +441,20 @@ export class PipelineTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 }
 
-/** View "Pipelines" e seus comandos. */
-export function registerPipelines(ctx: vscode.ExtensionContext, ctl: Controller, guard: Guard): PipelineService {
+/** Seção "Pipelines" da view do remoto e seus comandos. */
+export function registerPipelines(ctx: vscode.ExtensionContext, ctl: Controller, guard: Guard, remote: RemoteView): PipelineService {
   const svc = new PipelineService(ctl);
-  const view = vscode.window.createTreeView('worktreeGraph.pipelines', { treeDataProvider: new PipelineTreeProvider(svc), showCollapseAll: true });
-  ctx.subscriptions.push(svc, view, view.onDidChangeVisibility(e => e.visible && svc.refresh()));
+  remote.add('pipelines', {
+    provider: new PipelineTreeProvider(svc),
+    owns: isPipelineNode,
+    describe: () => {
+      const list = svc.visible();
+      const failed = list.filter(p => p.status === 'failed').length;
+      return [String(list.length), failed ? `✗ ${failed}` : ''].filter(Boolean).join(' · ');
+    },
+    onVisible: v => v && void svc.refresh(),
+  });
+  ctx.subscriptions.push(svc);
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
 
   /** Aceita item da view, id numérico (painel) ou nada (pergunta). */

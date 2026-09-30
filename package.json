@@ -81,8 +81,8 @@
           "name": "%view.worktrees.name%"
         },
         {
-          "id": "worktreeGraph.issues",
-          "name": "%view.issues.name%"
+          "id": "worktreeGraph.remote",
+          "name": "%view.remote.name%"
         },
         {
           "id": "worktreeGraph.agents",
@@ -95,10 +95,6 @@
         {
           "id": "worktreeGraph.claudeConfig",
           "name": "%view.claudeConfig.name%"
-        },
-        {
-          "id": "worktreeGraph.pipelines",
-          "name": "%view.pipelines.name%"
         },
         {
           "id": "worktreeGraph.longProjects",
@@ -115,10 +111,6 @@
         {
           "id": "worktreeGraph.mergeQueue",
           "name": "%view.mergeQueue.name%"
-        },
-        {
-          "id": "worktreeGraph.pullRequests",
-          "name": "%view.pullRequests.name%"
         }
       ]
     },
@@ -136,10 +128,6 @@
       {
         "view": "worktreeGraph.projects",
         "contents": "%welcome.projects.1%"
-      },
-      {
-        "view": "worktreeGraph.issues",
-        "contents": "%welcome.issues.1%"
       },
       {
         "view": "worktreeGraph.tasks",
@@ -577,6 +565,12 @@
         "title": "%command.openProjectWindow.title%",
         "category": "AgentYard",
         "icon": "$(empty-window)"
+      },
+      {
+        "command": "worktreeGraph.remote.refresh",
+        "title": "%command.remote.refresh.title%",
+        "category": "AgentYard",
+        "icon": "$(refresh)"
       },
       {
         "command": "worktreeGraph.issues.refresh",
@@ -1902,38 +1896,23 @@
           "group": "navigation@3"
         },
         {
-          "command": "worktreeGraph.issues.scopeAll",
-          "when": "view == worktreeGraph.issues && worktreeGraph.issuesScope != all",
-          "group": "navigation@1"
-        },
-        {
-          "command": "worktreeGraph.issues.scopeMine",
-          "when": "view == worktreeGraph.issues && worktreeGraph.issuesScope == all",
-          "group": "navigation@1"
-        },
-        {
-          "command": "worktreeGraph.issues.refresh",
-          "when": "view == worktreeGraph.issues",
-          "group": "navigation@2"
-        },
-        {
           "command": "worktreeGraph.connectRedmine",
-          "when": "view == worktreeGraph.issues",
+          "when": "view == worktreeGraph.remote",
           "group": "1_connect"
         },
         {
           "command": "worktreeGraph.connectHosting",
-          "when": "view == worktreeGraph.issues",
+          "when": "view == worktreeGraph.remote",
           "group": "1_connect"
         },
         {
           "command": "worktreeGraph.redmine.navigate",
-          "when": "view == worktreeGraph.issues && config.worktreeGraph.redmine.url",
+          "when": "view == worktreeGraph.remote && config.worktreeGraph.redmine.url",
           "group": "0_redmine"
         },
         {
           "command": "worktreeGraph.disconnectRedmine",
-          "when": "view == worktreeGraph.issues",
+          "when": "view == worktreeGraph.remote",
           "group": "1_connect"
         },
         {
@@ -1992,31 +1971,6 @@
           "group": "1_sync"
         },
         {
-          "command": "worktreeGraph.issues.create",
-          "when": "view == worktreeGraph.issues",
-          "group": "navigation@0"
-        },
-        {
-          "command": "worktreeGraph.pipelines.refresh",
-          "when": "view == worktreeGraph.pipelines",
-          "group": "navigation@3"
-        },
-        {
-          "command": "worktreeGraph.pipelines.trigger",
-          "when": "view == worktreeGraph.pipelines",
-          "group": "navigation@1"
-        },
-        {
-          "command": "worktreeGraph.pipelines.scopeAll",
-          "when": "view == worktreeGraph.pipelines && worktreeGraph.pipelinesScope != all",
-          "group": "navigation@2"
-        },
-        {
-          "command": "worktreeGraph.pipelines.scopeWorktrees",
-          "when": "view == worktreeGraph.pipelines && worktreeGraph.pipelinesScope == all",
-          "group": "navigation@2"
-        },
-        {
           "command": "worktreeGraph.connectGitLab",
           "when": "view == worktreeGraph.worktrees",
           "group": "4_hosting"
@@ -2058,7 +2012,7 @@
         },
         {
           "command": "worktreeGraph.connectJira",
-          "when": "view == worktreeGraph.issues",
+          "when": "view == worktreeGraph.remote",
           "group": "1_connect"
         },
         {
@@ -2145,16 +2099,6 @@
           "command": "worktreeGraph.prepareRelease",
           "when": "view == worktreeGraph.worktrees",
           "group": "5_delivery"
-        },
-        {
-          "command": "worktreeGraph.pullRequests.filter",
-          "when": "view == worktreeGraph.pullRequests",
-          "group": "navigation@1"
-        },
-        {
-          "command": "worktreeGraph.pullRequests.refresh",
-          "when": "view == worktreeGraph.pullRequests",
-          "group": "navigation@2"
         },
         {
           "command": "worktreeGraph.claude.taskMetrics",
@@ -2250,6 +2194,11 @@
           "command": "worktreeGraph.templates.stats",
           "when": "view == worktreeGraph.agents",
           "group": "7_autopilot@5"
+        },
+        {
+          "command": "worktreeGraph.remote.refresh",
+          "when": "view == worktreeGraph.remote",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
@@ -2430,32 +2379,32 @@
         },
         {
           "command": "worktreeGraph.issues.start",
-          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^issue(-linked)?$/",
           "group": "inline@1"
         },
         {
           "command": "worktreeGraph.issues.openUrl",
-          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^issue(-linked)?$/",
           "group": "inline@2"
         },
         {
           "command": "worktreeGraph.issues.start",
-          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^issue(-linked)?$/",
           "group": "1_work@1"
         },
         {
           "command": "worktreeGraph.issues.createWorktree",
-          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^issue(-linked)?$/",
           "group": "1_work@2"
         },
         {
           "command": "worktreeGraph.issues.openUrl",
-          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^issue(-linked)?$/",
           "group": "2_link@1"
         },
         {
           "command": "worktreeGraph.issues.copyLink",
-          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^issue(-linked)?$/",
           "group": "2_link@2"
         },
         {
@@ -2685,57 +2634,57 @@
         },
         {
           "command": "worktreeGraph.pipelines.fix",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline-failed/",
           "group": "inline@1"
         },
         {
           "command": "worktreeGraph.pipelines.retry",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-(failed|canceled|success)/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline-(failed|canceled|success)/",
           "group": "inline@2"
         },
         {
           "command": "worktreeGraph.pipelines.cancel",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-(running|queued)/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline-(running|queued)/",
           "group": "inline@2"
         },
         {
           "command": "worktreeGraph.pipelines.open",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline/",
           "group": "inline@3"
         },
         {
           "command": "worktreeGraph.pipelines.play",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipelineJob-manual-gitlab/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipelineJob-manual-gitlab/",
           "group": "inline@1"
         },
         {
           "command": "worktreeGraph.pipelines.log",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline/",
           "group": "1_view@1"
         },
         {
           "command": "worktreeGraph.pipelines.open",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline/",
           "group": "1_view@2"
         },
         {
           "command": "worktreeGraph.pipelines.retry",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline-/",
           "group": "2_run@1"
         },
         {
           "command": "worktreeGraph.pipelines.retryFailed",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed-github/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline-failed-github/",
           "group": "2_run@2"
         },
         {
           "command": "worktreeGraph.pipelines.cancel",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-(running|queued)/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline-(running|queued)/",
           "group": "2_run@3"
         },
         {
           "command": "worktreeGraph.pipelines.fix",
-          "when": "view == worktreeGraph.pipelines && viewItem =~ /^pipeline-failed/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pipeline-failed/",
           "group": "3_fix@1"
         },
         {
@@ -2785,7 +2734,7 @@
         },
         {
           "command": "worktreeGraph.attempts.fromIssue",
-          "when": "view == worktreeGraph.issues && viewItem =~ /^issue(-linked)?$/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^issue(-linked)?$/",
           "group": "1_work@3"
         },
         {
@@ -2930,67 +2879,67 @@
         },
         {
           "command": "worktreeGraph.pullRequests.openBrowser",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-/",
           "group": "inline@1"
         },
         {
           "command": "worktreeGraph.pullRequests.openWorktree",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-.*-wt/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-.*-wt/",
           "group": "inline@2"
         },
         {
           "command": "worktreeGraph.pullRequests.bringWorktree",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)-nowt/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-(open|draft)-nowt/",
           "group": "inline@2"
         },
         {
           "command": "worktreeGraph.pullRequests.openBrowser",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-/",
           "group": "1_open@1"
         },
         {
           "command": "worktreeGraph.pullRequests.openWorktree",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-.*-wt/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-.*-wt/",
           "group": "1_open@2"
         },
         {
           "command": "worktreeGraph.pullRequests.bringWorktree",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)-nowt/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-(open|draft)-nowt/",
           "group": "1_open@2"
         },
         {
           "command": "worktreeGraph.pullRequests.reviewFiles",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-/",
           "group": "1_open@3"
         },
         {
           "command": "worktreeGraph.pullRequests.reviewWithAgent",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-(open|draft)/",
           "group": "2_review@1"
         },
         {
           "command": "worktreeGraph.pullRequests.analyzeMerge",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-(open|draft)/",
           "group": "2_review@2"
         },
         {
           "command": "worktreeGraph.pullRequests.merge",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-open/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-open/",
           "group": "3_merge@1"
         },
         {
           "command": "worktreeGraph.pullRequests.ready",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-draft/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-draft/",
           "group": "3_merge@2"
         },
         {
           "command": "worktreeGraph.pullRequests.draft",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-open/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-open/",
           "group": "3_merge@3"
         },
         {
           "command": "worktreeGraph.pullRequests.copyLink",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-/",
           "group": "4_copy@1"
         },
         {
@@ -3120,7 +3069,7 @@
         },
         {
           "command": "worktreeGraph.pullRequests.sendFeedback",
-          "when": "view == worktreeGraph.pullRequests && viewItem =~ /^pr-(open|draft)/",
+          "when": "view == worktreeGraph.remote && viewItem =~ /^pr-(open|draft)/",
           "group": "2_review@0"
         },
         {
@@ -3200,38 +3149,138 @@
         },
         {
           "command": "worktreeGraph.redmine.switchProject",
-          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "when": "view == worktreeGraph.remote && viewItem == issueGroup-redmine",
           "group": "inline@1"
         },
         {
           "command": "worktreeGraph.redmine.filter",
-          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "when": "view == worktreeGraph.remote && viewItem == issueGroup-redmine",
           "group": "inline@2"
         },
         {
           "command": "worktreeGraph.redmine.switchProject",
-          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "when": "view == worktreeGraph.remote && viewItem == issueGroup-redmine",
           "group": "1_nav@1"
         },
         {
           "command": "worktreeGraph.redmine.filter",
-          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "when": "view == worktreeGraph.remote && viewItem == issueGroup-redmine",
           "group": "1_nav@2"
         },
         {
           "command": "worktreeGraph.redmine.goToIssue",
-          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "when": "view == worktreeGraph.remote && viewItem == issueGroup-redmine",
           "group": "1_nav@3"
         },
         {
           "command": "worktreeGraph.redmine.openProject",
-          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "when": "view == worktreeGraph.remote && viewItem == issueGroup-redmine",
           "group": "2_link@1"
         },
         {
           "command": "worktreeGraph.disconnectRedmine",
-          "when": "view == worktreeGraph.issues && viewItem == issueGroup-redmine",
+          "when": "view == worktreeGraph.remote && viewItem == issueGroup-redmine",
           "group": "3_connect@1"
+        },
+        {
+          "command": "worktreeGraph.issues.scopeAll",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-issues && worktreeGraph.issuesScope != all",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.issues.scopeAll",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-issues && worktreeGraph.issuesScope != all",
+          "group": "1_section@1"
+        },
+        {
+          "command": "worktreeGraph.issues.scopeMine",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-issues && worktreeGraph.issuesScope == all",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.issues.scopeMine",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-issues && worktreeGraph.issuesScope == all",
+          "group": "1_section@1"
+        },
+        {
+          "command": "worktreeGraph.issues.refresh",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-issues",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.issues.refresh",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-issues",
+          "group": "1_section@2"
+        },
+        {
+          "command": "worktreeGraph.issues.create",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-issues",
+          "group": "inline@0"
+        },
+        {
+          "command": "worktreeGraph.issues.create",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-issues",
+          "group": "1_section@0"
+        },
+        {
+          "command": "worktreeGraph.pipelines.refresh",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-pipelines",
+          "group": "inline@3"
+        },
+        {
+          "command": "worktreeGraph.pipelines.refresh",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-pipelines",
+          "group": "1_section@3"
+        },
+        {
+          "command": "worktreeGraph.pipelines.trigger",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-pipelines",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.pipelines.trigger",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-pipelines",
+          "group": "1_section@1"
+        },
+        {
+          "command": "worktreeGraph.pipelines.scopeAll",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-pipelines && worktreeGraph.pipelinesScope != all",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.pipelines.scopeAll",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-pipelines && worktreeGraph.pipelinesScope != all",
+          "group": "1_section@2"
+        },
+        {
+          "command": "worktreeGraph.pipelines.scopeWorktrees",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-pipelines && worktreeGraph.pipelinesScope == all",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.pipelines.scopeWorktrees",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-pipelines && worktreeGraph.pipelinesScope == all",
+          "group": "1_section@2"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.filter",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-prs",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.filter",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-prs",
+          "group": "1_section@1"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.refresh",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-prs",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreeGraph.pullRequests.refresh",
+          "when": "view == worktreeGraph.remote && viewItem == remoteSection-prs",
+          "group": "1_section@2"
         }
       ],
       "commandPalette": [
