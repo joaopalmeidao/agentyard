@@ -311,7 +311,7 @@
   "config.budget.action.enumDescriptions.0": "Only warns.",
   "config.budget.action.enumDescriptions.1": "Warns and leaves the worktree that exceeded it out of batch tasks.",
   "config.taskTemplates.markdownDescription": "Extra task templates `{ name, description?, prompt }`. Placeholders: `${branch}`, `${base}`, `${file}`, `${selection}`, `${issue}`. Files in `.agentyard/templates/*.md` in the repository also count.",
-  "config.readySummary.enabled.description": "Show the summary (commits, files, +/−) when an agent becomes ready for review.",
+  "config.readySummary.enabled.description": "Open the summary (commits, files, +/−) automatically when an agent becomes ready for review.",
   "config.readySummary.useAgent.markdownDescription": "Also ask the agent for a summary (what changed, risks, what to test) in `.worktree-graph/summary.md`, outside git.",
   "config.env.ports.markdownDescription": "Ports per worktree, e.g. `{ \"base\": 3000, \"step\": 10, \"vars\": [\"PORT\", \"VITE_PORT\", \"API_PORT\"] }`. Each worktree gets a stable block; the 1st variable gets the port, the following ones +1, +2…",
   "config.env.devCommand.description": "Development command run by \"Run Dev\" (e.g. npm run dev), with the worktree's port variables.",

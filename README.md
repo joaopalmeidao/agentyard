@@ -150,7 +150,7 @@ O **Gerar CI** detecta o GitLab e gera `.gitlab/worktree-graph-sync.gitlab-ci.ym
 | `worktreeGraph.agentTerminalLocation` | `panel` | `panel`, `editor`, `editorBeside` (ao lado do código), `split` (dividido com o da worktree) ou `auto` (tarefas no painel, sessões ao lado) |
 | `worktreeGraph.agentTerminalFocus` | `interactive` | agentes com tarefa abrem sem tirar o foco; `always` ou `never` |
 | `worktreeGraph.agentFollowEditor` | `false` | abrir um arquivo de outra worktree traz o terminal de agente dela |
-| `worktreeGraph.claude.onSessionEnd` | `ask` | sessão terminou: `ask` (retomar ou fechar), `close` ou `keep` |
+| `worktreeGraph.claude.onSessionEnd` | `keep` | sessão terminou: `ask` (retomar ou fechar), `close` ou `keep` |
 | `worktreeGraph.claude.answerFromNotification` | `false` | **Permitir**/**Negar** na notificação de permissão (experimental) |
 | `worktreeGraph.claude.connectIde` | `false` | abre o Claude com `--ide` (diffs no editor, seleção, problemas) |
 | `worktreeGraph.claude.ideWorkspace` | `ask` | oferece pôr a worktree no workspace para o `/ide` funcionar |

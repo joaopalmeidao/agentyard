@@ -234,8 +234,9 @@ selecione arquivos e pastas e use **Nova worktree com tarefa sobre estes arquivo
 
 - `worktreeGraph.claude.answerFromNotification` (experimental) põe **Permitir** e **Negar** na
   notificação de um pedido de permissão.
-- Quando uma sessão termina e você não está olhando para o terminal, a extensão oferece **Retomar
-  aqui** (o mesmo terminal, com `--resume`) ou **Fechar terminal** (`worktreeGraph.claude.onSessionEnd`).
+- Quando uma sessão termina, o terminal fica como está. Com `worktreeGraph.claude.onSessionEnd` em
+  `ask`, a extensão oferece **Retomar aqui** (o mesmo terminal, com `--resume`) ou **Fechar
+  terminal** quando você não está olhando para ele; `close` fecha direto.
 - O Claude só se conecta ao VS Code (`/ide`: diffs no editor, seleção e problemas) quando a pasta
   dele está dentro do workspace. Com a extensão do Claude Code instalada, abrir um Claude numa
   worktree fora do workspace oferece adicioná-la como pasta (`worktreeGraph.claude.ideWorkspace`).
@@ -269,9 +270,11 @@ Claude aberto pela extensão; `worktreeGraph.claude.appendSystemPrompt` vai como
 
 A extensão detecta o fim pelo shell integration do terminal ou, se não der, por
 `worktreeGraph.agents.idleMinutes` sem mudança no HEAD e no índice. Se ficaram commits novos e a
-worktree está limpa, aparece **✓ Pronto para revisar**, com o resumo (commits, arquivos, +/−) e
-os botões **Revisar**, **Analisar merge** e **Publicar**.
+worktree está limpa, aparece **✓ Pronto para revisar**, com os botões **Revisar**, **Analisar
+merge** e **Publicar**.
 
+- `worktreeGraph.readySummary.enabled`: abre sozinho o resumo (commits, arquivos, +/−) ao ficar
+  pronto (desligado por padrão).
 - `worktreeGraph.agents.notifyReady`: notificação ao ficar pronto.
 - `worktreeGraph.readySummary.useAgent`: também pede ao agente um resumo (o que mudou, riscos, o
   que testar) em `.worktree-graph/summary.md`.
@@ -285,7 +288,8 @@ e descarte as outras.
 
 ### Sobreposição entre worktrees
 
-O card avisa quando duas worktrees mexem nos mesmos arquivos (risco de conflito entre agentes).
+O card avisa quando duas worktrees mexem nos mesmos arquivos (risco de conflito entre agentes). A
+notificação sai uma vez por par de worktrees; arquivos novos em comum só atualizam o card.
 **Ver sobreposição de arquivos entre worktrees** lista tudo.
 
 ### Orçamento por worktree

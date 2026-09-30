@@ -67,8 +67,8 @@ export function overlapSummary(overlaps: Overlap[]): Map<string, { with: string[
   return m;
 }
 
-/** Chave estável do conjunto de sobreposições de um par (para avisar uma vez por conjunto novo). */
-export const overlapKey = (o: Overlap) => `${o.a}|${o.b}|${o.files.join(',')}`;
+/** Chave do par (para avisar uma vez por par; arquivos novos em comum não avisam de novo). */
+export const overlapKey = (o: Overlap) => `${o.a}|${o.b}`;
 
 // ---------- tarefa em lote ----------
 

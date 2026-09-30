@@ -311,7 +311,7 @@
   "config.budget.action.enumDescriptions.0": "Só avisa.",
   "config.budget.action.enumDescriptions.1": "Avisa e deixa a worktree que estourou de fora das tarefas em lote.",
   "config.taskTemplates.markdownDescription": "Modelos de tarefa extras `{ name, description?, prompt }`. Placeholders: `${branch}`, `${base}`, `${file}`, `${selection}`, `${issue}`. Também valem arquivos `.agentyard/templates/*.md` no repositório.",
-  "config.readySummary.enabled.description": "Mostrar o resumo (commits, arquivos, +/−) quando um agente fica pronto para revisar.",
+  "config.readySummary.enabled.description": "Abrir sozinho o resumo (commits, arquivos, +/−) quando um agente fica pronto para revisar.",
   "config.readySummary.useAgent.markdownDescription": "Também pedir ao agente um resumo (o que mudou, riscos, o que testar) em `.worktree-graph/summary.md`, fora do git.",
   "config.env.ports.markdownDescription": "Portas por worktree, ex.: `{ \"base\": 3000, \"step\": 10, \"vars\": [\"PORT\", \"VITE_PORT\", \"API_PORT\"] }`. Cada worktree ganha um bloco estável; a 1ª variável recebe a porta, as seguintes +1, +2…",
   "config.env.devCommand.description": "Comando de desenvolvimento rodado por \"Rodar dev\" (ex.: npm run dev), com as variáveis de porta da worktree.",

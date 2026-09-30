@@ -1,6 +1,11 @@
 # Changelog
 
 ## Não lançado
+- **Menos notificações**: o plano proposto pelo Claude gera um aviso só (antes vinham também o pedido
+  de permissão do `ExitPlanMode` e o "precisa de você"); sobreposição de arquivos avisa uma vez por
+  par de worktrees, não a cada arquivo novo em comum; o resumo de pronto para revisar não abre mais
+  sozinho (`readySummary.enabled` agora é `false`); sessão do Claude encerrada não pergunta mais
+  o que fazer com o terminal (`claude.onSessionEnd` agora é `keep`).
 - **Hooks do Claude só notificam**: sai o portão no Stop (`claude.stopGate`, `.commands`,
   `.maxRetries` e **Checagens antes de o Claude parar…**), que rodava as checagens e não deixava o
   agente parar, e o `budget.action: block-prompts`, que recusava o prompt da worktree fora do

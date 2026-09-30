@@ -31,7 +31,7 @@ export class ReadySummaryService implements vscode.Disposable {
   constructor(private readonly ctl: Controller, agentFlow: AgentFlow) {
     this.disposables.push(
       agentFlow.watch.onDidFinish(e => {
-        if (e.ready && e.branch && this.ctl.cfg().get<boolean>('readySummary.enabled', true)) void this.show(e.path, e.branch);
+        if (e.ready && e.branch && this.ctl.cfg().get<boolean>('readySummary.enabled', false)) void this.show(e.path, e.branch);
       }),
     );
   }

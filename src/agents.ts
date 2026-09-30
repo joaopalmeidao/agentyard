@@ -101,6 +101,8 @@ export interface OpenAgent {
   bridged?: boolean;
   /** O pedido de permissão está sendo perguntado no VS Code (src/claude/integration.ts). */
   asking?: boolean;
+  /** Quando o Claude propôs o último plano (o aviso do plano cobre o "precisa de você" que vem junto). */
+  planAt?: number;
 }
 
 export interface AgentStateChange {

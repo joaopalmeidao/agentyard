@@ -3870,7 +3870,7 @@
             "%config.claude.onSessionEnd.enumDescriptions.1%",
             "%config.claude.onSessionEnd.enumDescriptions.2%"
           ],
-          "default": "ask",
+          "default": "keep",
           "description": "%config.claude.onSessionEnd.description%"
         },
         "worktreeGraph.claude.connectIde": {
@@ -4191,7 +4191,7 @@
         },
         "worktreeGraph.readySummary.enabled": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "%config.readySummary.enabled.description%"
         },
         "worktreeGraph.readySummary.useAgent": {
