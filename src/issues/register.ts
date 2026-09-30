@@ -3,16 +3,22 @@ import type { Controller } from '../controller';
 import { Issue } from './core';
 import { IssueService } from './service';
 import { t } from '../i18n';
-import { IssueItem, IssueTreeProvider, showIssue } from './view';
+import { isIssueNode, IssueItem, IssueTreeProvider, showIssue } from './view';
+import type { RemoteView } from '../hosting/remoteView';
 
 type Guard = <T extends unknown[]>(fn: (...args: T) => unknown) => (...args: T) => Promise<void>;
 
-/** View "Issues" e seus comandos. Separado de extension.ts para não disputar edições com outras áreas. */
-export function registerIssues(ctx: vscode.ExtensionContext, ctl: Controller, guard: Guard): IssueService {
+/** Seção "Issues" da view do remoto e seus comandos. Separado de extension.ts para não disputar edições com outras áreas. */
+export function registerIssues(ctx: vscode.ExtensionContext, ctl: Controller, guard: Guard, remote: RemoteView): IssueService {
   const svc = new IssueService(ctl);
   ctl.requests.issueTrailers = b => svc.trailers(b);
-  const view = vscode.window.createTreeView('worktreeGraph.issues', { treeDataProvider: new IssueTreeProvider(svc), showCollapseAll: true });
-  ctx.subscriptions.push(svc, view, view.onDidChangeVisibility(e => e.visible && svc.refresh()));
+  remote.add('issues', {
+    provider: new IssueTreeProvider(svc),
+    owns: isIssueNode,
+    describe: () => String(svc.groups.reduce((n, g) => n + g.issues.length, 0)),
+    onVisible: v => v && void svc.refresh(),
+  });
+  ctx.subscriptions.push(svc);
 
   const issueOf = (arg: IssueItem | Issue | undefined): Issue | undefined => (arg && 'issue' in arg ? arg.issue : (arg as Issue | undefined));
   const reg = (id: string, fn: (...args: any[]) => unknown) => ctx.subscriptions.push(vscode.commands.registerCommand(`worktreeGraph.${id}`, guard(fn)));
@@ -45,7 +51,7 @@ export function registerIssues(ctx: vscode.ExtensionContext, ctl: Controller, gu
     await svc.refresh(true);
     const items = svc.groups.flatMap(g => g.issues.map(i => ({ label: `${i.key} ${i.title}`, description: g.title, detail: i.labels.join(' · '), issue: i })));
     if (!items.length) {
-      vscode.window.showInformationMessage(t('No issues found. Connect the remote, Jira or Redmine in the Issues view.'));
+      vscode.window.showInformationMessage(t('No issues found. Connect the remote, Jira or Redmine in the Issues, Pipelines & PRs view.'));
       return;
     }
     const pick = await vscode.window.showQuickPick(items, { title: t('Start work on an issue (with Claude)'), matchOnDescription: true, matchOnDetail: true });

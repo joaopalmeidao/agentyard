@@ -67,6 +67,8 @@ class ActionItem extends vscode.TreeItem {
 
 type Node = IssueGroupItem | IssueItem | ActionItem;
 
+export const isIssueNode = (n: unknown): n is Node => n instanceof IssueGroupItem || n instanceof IssueItem || n instanceof ActionItem;
+
 export class IssueTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.emitter.event;

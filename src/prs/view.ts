@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { createWorktree } from '../actions';
 import type { Controller } from '../controller';
 import { gitUri } from '../diff';
+import type { RemoteView } from '../hosting/remoteView';
 import { t } from '../i18n';
 import {
   fetchSpecFor,
@@ -158,6 +159,9 @@ export class PrService implements vscode.Disposable {
 // ---------------------------------------------------------------- árvore
 
 type Node = GroupItem | PrItem | DetailGroupItem | DetailItem | ActionItem;
+
+const isPrNode = (n: unknown): n is Node =>
+  n instanceof GroupItem || n instanceof PrItem || n instanceof DetailGroupItem || n instanceof DetailItem || n instanceof ActionItem;
 
 class ActionItem extends vscode.TreeItem {
   readonly kind = 'action';
@@ -371,16 +375,28 @@ export class PrTreeProvider implements vscode.TreeDataProvider<Node> {
 
 type PrArg = PrItem | { pr?: PullRequestInfo; ref?: string } | string | undefined;
 
-export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controller, guard: <T extends unknown[]>(fn: (...a: T) => unknown) => (...a: T) => Promise<void>) {
+export function registerPullRequests(
+  ctx: vscode.ExtensionContext,
+  ctl: Controller,
+  guard: <T extends unknown[]>(fn: (...a: T) => unknown) => (...a: T) => Promise<void>,
+  remote: RemoteView,
+) {
   const svc = new PrService(ctl);
   const tree = new PrTreeProvider(svc, ctl);
-  const view = vscode.window.createTreeView('worktreeGraph.pullRequests', { treeDataProvider: tree, showCollapseAll: true });
-  ctx.subscriptions.push(svc, view, view.onDidChangeVisibility(e => svc.setVisible(e.visible)));
-  if (view.visible) svc.setVisible(true);
+  remote.add('prs', {
+    provider: tree,
+    owns: isPrNode,
+    describe: () => {
+      const n = svc.groups.reviewRequested.length;
+      return [String(svc.all().length), n ? t('{0} awaiting my review', n) : ''].filter(Boolean).join(' · ');
+    },
+    onVisible: v => svc.setVisible(v),
+  });
+  ctx.subscriptions.push(svc);
   svc.onDidChange(() => {
+    if (!remote.view) return;
     const n = svc.groups.reviewRequested.length;
-    view.badge = n ? { value: n, tooltip: t('{0} PR(s)/MR(s) awaiting your review', n) } : undefined;
-    view.message = undefined;
+    remote.view.badge = n ? { value: n, tooltip: t('{0} PR(s)/MR(s) awaiting your review', n) } : undefined;
   });
   ctl.onDidChangeRepo?.(() => svc.resetForProject());
 
@@ -574,18 +590,18 @@ export function registerPullRequests(ctx: vscode.ExtensionContext, ctl: Controll
   reg('draft', (arg: PrArg) => draft(arg, true));
   /** Chip de PR no painel: foca a view no PR. */
   reg('reveal', async (ref: string) => {
-    await vscode.commands.executeCommand('worktreeGraph.pullRequests.focus');
+    await remote.focus('prs');
     await svc.refresh();
     const p = svc.find(ref);
     if (!p) return;
     const g = (['mine', 'reviewRequested', 'open', 'recentlyMerged'] as (keyof PrGroups)[]).find(k => svc.groups[k].some(x => x.ref === p.ref)) ?? 'open';
     const b = await svc.browser();
     try {
-      await view.reveal(tree.item(p, g, b), { select: true, focus: true, expand: false });
+      await remote.view?.reveal(tree.item(p, g, b), { select: true, focus: true, expand: false });
     } catch {
       // grupo fechado: a view já está em foco
     }
   });
 
-  return { svc, tree, view, prOf, bring };
+  return { svc, tree, prOf, bring };
 }

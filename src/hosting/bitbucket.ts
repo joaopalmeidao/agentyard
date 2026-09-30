@@ -192,7 +192,7 @@ export class BitbucketServerClient extends BitbucketBase implements HostClient {
   }
 
   async createIssue(): Promise<Issue> {
-    throw new HostError(0, t('Bitbucket Server has no issues; connect Jira in the Issues view.'));
+    throw new HostError(0, t('Bitbucket Server has no issues; connect Jira in the Issues, Pipelines & PRs view.'));
   }
 }
 
